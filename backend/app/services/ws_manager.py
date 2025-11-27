@@ -10,7 +10,8 @@ KEY CONCEPT:
 - For 1v1 chat: max 2 users per room (but each user can have multiple devices)
 """
 
-from typing import Dict, List
+from typing import Dict, List,Set, Optional
+from datetime import datetime
 from fastapi import WebSocket
 
 
@@ -44,9 +45,13 @@ class ConnectionManager:
         }
         """
         self.rooms: Dict[str, List[WebSocket]] = {}
+        self.socket_to_user: Dict[WebSocket, int] = {}
+        self.user_sockets: Dict[int, List[WebSocket]] = {}
+        self.user_rooms: Dict[int, Set[str]] = {}
+        self.user_status: Dict[int, UserStatusType] = {}
+        self.typing_status: Dict[tuple, bool] = {}
 
-
-    async def connect(self, room_id: str, websocket: WebSocket) -> None:
+    async def connect(self, room_id: str, websocket: WebSocket, user_id: Optional[int] = None) -> None:
         """
         Connect a client to a chat room
 
@@ -73,6 +78,16 @@ class ConnectionManager:
         # Step 3: Add this WebSocket to the room's connection list
         self.rooms[room_id].append(websocket)
 
+        if user_id is not None:
+            self.socket_to_user[websocket] = user_id
+            if user_id not in self.user_sockets:
+                self.user_sockets[user_id] = []
+            self.user_sockets[user_id].append(websocket)
+            if user_id not in self.user_rooms:
+                self.user_rooms[user_id] = set()
+            self.user_rooms[user_id].add(room_id)
+            self.user_status[user_id] = UserStatusType.ONLINE
+
         print(f"[WebSocket] Client connected to room {room_id}. Total connections in room: {len(self.rooms[room_id])}")
 
 
@@ -92,6 +107,7 @@ class ConnectionManager:
             await manager.disconnect("123", websocket)
             # This websocket is removed from self.rooms["123"]
         """
+        user_id = self.socket_to_user.get(websocket)
         # Step 1: Remove this WebSocket from the room's list
         if room_id in self.rooms:
             if websocket in self.rooms[room_id]:
@@ -102,6 +118,19 @@ class ConnectionManager:
             if len(self.rooms[room_id]) == 0:
                 del self.rooms[room_id]
                 print(f"[WebSocket] Room {room_id} deleted (no active connections)")
+        
+        if user_id is not None:
+            if user_id in self.user_sockets and websocket in self.user_sockets[user_id]:
+                self.user_sockets[user_id].remove(websocket)
+                if len(self.user_sockets[user_id]) == 0:
+                    del self.user_sockets[user_id]
+                    self.user_status[user_id] = UserStatusType.OFFLINE
+            
+            if user_id in self.user_rooms:
+                self.user_rooms[user_id].discard(room_id)
+            
+            if websocket in self.socket_to_user:
+                del self.socket_to_user[websocket]
 
 
     async def broadcast(self, room_id: str, message: dict) -> None:
@@ -153,12 +182,35 @@ class ConnectionManager:
                 # Convert message dict to JSON and send
                 await websocket.send_json(message)
                 print(f"[WebSocket] Message sent to one connection in room {room_id}")
-
             except Exception as e:
                 # If sending fails (e.g., connection broken), remove this WebSocket
                 print(f"[WebSocket] Error sending to connection in room {room_id}: {e}")
                 await self.disconnect(room_id, websocket)
 
+
+    async def broadcast_to_room_except(self, room_id: str, message: dict, exclude_user_id: int) -> None:
+        if room_id not in self.rooms:
+            return
+        for websocket in self.rooms[room_id][:]:
+            socket_user = self.socket_to_user.get(websocket)
+            if socket_user != exclude_user_id:
+                try:
+                    await websocket.send_json(message)
+                except:
+                    await self.disconnect(room_id, websocket)
+
+    async def set_typing(self, room_id: str, user_id: int, is_typing: bool) -> None:
+        typing_key = (room_id, user_id)
+        if self.typing_status.get(typing_key) != is_typing:
+            self.typing_status[typing_key] = is_typing
+            await self.broadcast_to_room_except(
+                room_id,
+                {
+                    "event_type": WSEventType.TYPING.value,
+                    "data": {"room_id": int(room_id), "user_id": user_id, "is_typing": is_typing}
+                },
+                exclude_user_id=user_id
+            )
 
     def get_room_connection_count(self, room_id: str) -> int:
         """

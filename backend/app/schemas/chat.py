@@ -7,8 +7,35 @@ This file defines all data structures for chat functionality:
 """
 
 from datetime import datetime
+from typing import Optional, List
+from enum import Enum
 from pydantic import BaseModel, Field
 
+
+class EmotionType(str, Enum):
+    HAPPY = "happy"
+    WARM = "warm"
+    NEUTRAL = "neutral"
+    ANXIOUS = "anxious"
+    UNCERTAIN = "uncertain"
+    SAD = "sad"
+    EXCITED = "excited"
+    STRESSED = "stressed"
+    FRIENDLY = "friendly"
+    DISTANT = "distant"
+
+
+class MatchMode(str, Enum):
+    HUMAN_ANONYMOUS = "human_anonymous"
+    HUMAN_NON_ANONYMOUS = "human_non_anonymous"
+    AI_CHAT = "ai_chat"
+
+
+class UserStatusType(str, Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
+    AWAY = "away"
+    BUSY = "busy"
 
 # ============================================================================
 # Room Models
@@ -43,6 +70,29 @@ class Room(BaseModel):
     user1_id: int = Field(..., description="First user ID", example=1)
     user2_id: int = Field(..., description="Second user ID", example=2)
 
+class RoomCreateExtended(BaseModel):
+    user1_id: int
+    user2_id: int
+    is_anonymous: bool = False
+
+
+class RoomExtended(BaseModel):
+    id: int
+    user1_id: int
+    user2_id: int
+    is_anonymous: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    user1_revealed: bool = True  
+    user2_revealed: bool = True  
+
+
+class RoomListItem(BaseModel):
+    room_id: int
+    other_user_id: int
+    other_user_name: Optional[str] = None  # None when anoumyous
+    is_anonymous: bool
+    last_message: Optional[str] = None
+    last_message_time: Optional[datetime] = None
 
 # ============================================================================
 # Message Models
@@ -96,3 +146,56 @@ class MessageOut(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+# New models - Matching
+class MatchRequest(BaseModel):
+    """
+    Example:
+    {
+        "user_id": 1,
+        "current_emotion": "happy",
+        "mode": "human_anonymous",
+        "preferred_emotions": ["warm", "friendly"]
+    }
+    """
+    user_id: int
+    current_emotion: EmotionType
+    mode: MatchMode
+    preferred_emotions: Optional[List[EmotionType]] = None
+
+
+class MatchResponse(BaseModel):
+    matched: bool
+    room_id: Optional[int] = None
+    matched_user_id: Optional[int] = None
+    is_anonymous: bool = True
+    match_type: MatchMode
+
+
+class MatchQueueEntry(BaseModel):
+    user_id: int
+    current_emotion: EmotionType
+    mode: MatchMode
+    preferred_emotions: Optional[List[EmotionType]] = None
+    queued_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# New models - Anonymous
+class AnonymousSettings(BaseModel):
+    room_id: int
+    user1_anonymous: bool = True
+    user2_anonymous: bool = True
+
+
+class RevealIdentityRequest(BaseModel):
+    room_id: int
+    user_id: int
+
+
+class RevealIdentityResponse(BaseModel):
+    success: bool
+    message: str
+    revealed_user_id: Optional[int] = None
+    revealed_username: Optional[str] = None
+
+

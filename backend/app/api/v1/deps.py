@@ -12,7 +12,9 @@ CURRENT STATUS:
 - We provide a placeholder DB dependency
 - The DB team will replace this with real database connection later
 """
-
+from typing import Generator
+from app.services.ws_manager import ConnectionManager
+from app.services.matching_service import MatchingService, matching_service
 
 class DummyDB:
     """
@@ -60,6 +62,17 @@ def get_db():
     """
     yield DummyDB()
 
+_ws_manager: ConnectionManager = None
+
+def get_ws_manager() -> ConnectionManager:
+    global _ws_manager
+    if _ws_manager is None:
+        _ws_manager = ConnectionManager()
+    return _ws_manager
+
+
+def get_matching_service() -> MatchingService:
+    return matching_service
 
 # ============================================================================
 # TEACHING SUMMARY

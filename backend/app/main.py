@@ -6,9 +6,27 @@ This is where we start the FastAPI server and register all routes.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+from pathlib import Path
 # Import routers
-from app.api.v1.routers import chat_http, chat_ws
+from app.api.v1.routers import chat_http, chat_ws, match
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("=" * 60)
+    print("🚀 EmotiConnect Chat API Starting...")
+    print("=" * 60)
+    print("📝 API Documentation: http://localhost:8000/docs")
+    print("🔌 WebSocket Chat: ws://localhost:8000/ws/rooms/{room_id}")
+    print("💬 HTTP Chat API: http://localhost:8000/api/v1/chat")
+    print("🎯 Matching API: http://localhost:8000/api/v1/match")
+    print("=" * 60)
+    
+    yield
+    
+    print("\n👋 EmotiConnect Chat API Shutting down...")
+
 
 # ============================================================================
 # Create FastAPI Application
@@ -16,8 +34,9 @@ from app.api.v1.routers import chat_http, chat_ws
 
 app = FastAPI(
     title="EmotiConnect Chat API",
-    description="Real-time chat module with WebSocket support",
-    version="1.0.0"
+    description="Real-time chat module with emotion-aware messaging.",
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # ============================================================================
@@ -38,15 +57,24 @@ app.add_middleware(
 
 # HTTP REST API routes (/chat/rooms, /chat/rooms/{id}/messages, etc.)
 app.include_router(chat_http.router, prefix="/api/v1")
-
 # WebSocket routes (/ws/rooms/{id})
 app.include_router(chat_ws.router)
+app.include_router(match.router, prefix="/api/v1")
+
+# static path
+BASE_DIR = Path(__file__).resolve().parent.parent          
+STATIC_DIR = BASE_DIR / "static"                         
+app.mount(
+    "/static",                                             
+    StaticFiles(directory=str(STATIC_DIR), html=True),     
+    name="static",
+)
 
 # ============================================================================
 # Health Check Endpoint
 # ============================================================================
 
-@app.get("/")
+@app.get("/", tags=["health"])
 def root():
     """
     Health check endpoint
@@ -66,7 +94,7 @@ def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health_check():
     """
     Health check for monitoring
@@ -96,6 +124,8 @@ async def startup_event():
     print("📝 API Documentation: http://localhost:8000/docs")
     print("🔌 WebSocket Endpoint: ws://localhost:8000/ws/rooms/{room_id}")
     print("💬 HTTP API: http://localhost:8000/api/v1/chat")
+    print("🌐 Chat test page:  http://localhost:8000/static/chat_test.html")
+    print("🌐 Match test page:  http://localhost:8000/static/match_test.html")
     print("=" * 60)
 
 
