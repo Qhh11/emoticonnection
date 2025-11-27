@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmotiConnect Chat Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            height: 85vh;
+        }
+
+        /* User Selector */
+        .user-selector {
+            width: 200px;
+            background: #f8f9fa;
+            border-right: 2px solid #e0e0e0;
+            padding: 20px;
+        }
+
+        .user-selector h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .user-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .user-btn:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .user-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Contact List */
+        .contact-list {
+            width: 250px;
+            background: white;
+            border-right: 2px solid #e0e0e0;
+        }
+
+        .contact-header {
+            padding: 20px;
+            background: #667eea;
+            color: white;
+        }
+
+        .contact-header h3 {
+            font-size: 16px;
+        }
+
+        .current-user {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .contacts {
+            overflow-y: auto;
+            height: calc(100% - 80px);
+        }
+
+        .contact-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .contact-item:hover {
+            background: #f5f5f5;
+        }
+
+        .contact-item.active {
+            background: #e8eaf6;
+            border-left: 3px solid #667eea;
+        }
+
+        .contact-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .contact-status {
+            font-size: 11px;
+            color: #999;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: white;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .chat-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .chat-status {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        .chat-status.connected {
+            color: #4caf50;
+        }
+
+        .chat-status.disconnected {
+            color: #f44336;
+        }
+
+        .no-chat {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.sent {
+            text-align: right;
+        }
+
+        .message.received {
+            text-align: left;
+        }
+
+        .message-bubble {
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 60%;
+            word-wrap: break-word;
+        }
+
+        .message.sent .message-bubble {
+            background: #667eea;
+            color: white;
+        }
+
+        .message.received .message-bubble {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 2px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .input-area input:focus {
+            border-color: #667eea;
+        }
+
+        .input-area button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .input-area button:hover {
+            background: #5568d3;
+        }
+
+        .input-area button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- User Identity Selector -->
+        <div class="user-selector">
+            <h3>🎭 Your Identity</h3>
+            <button class="user-btn active" onclick="selectUser(1)">User 1</button>
+            <button class="user-btn" onclick="selectUser(2)">User 2</button>
+            <button class="user-btn" onclick="selectUser(3)">User 3</button>
+            <button class="user-btn" onclick="selectUser(4)">User 4</button>
+        </div>
+
+        <!-- Contact List -->
+        <div class="contact-list">
+            <div class="contact-header">
+                <h3>Contacts</h3>
+                <div class="current-user" id="currentUserDisplay">You are: User 1</div>
+            </div>
+            <div class="contacts" id="contactList">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header hidden" id="chatHeader">
+                <div class="chat-title" id="chatTitle">Select a contact</div>
+                <div class="chat-status" id="chatStatus">Disconnected</div>
+            </div>
+
+            <div class="no-chat" id="noChat">
+                👈 Select a contact to start chatting
+            </div>
+
+            <div class="messages hidden" id="messages"></div>
+
+            <div class="input-area hidden" id="inputArea">
+                <input
+                    type="text"
+                    id="messageInput"
+                    placeholder="Type a message..."
+                    onkeypress="if(event.key==='Enter') sendMessage()"
+                >
+                <button onclick="sendMessage()" id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ====================================================================
+        // State
+        // ====================================================================
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const WS_BASE = 'ws://localhost:8000';
+
+        let currentUserId = 1;
+        let currentChatUserId = null;
+        let currentRoomId = null;
+        let currentWebSocket = null;
+
+        const allUsers = [
+            { id: 1, name: 'User 1' },
+            { id: 2, name: 'User 2' },
+            { id: 3, name: 'User 3' },
+            { id: 4, name: 'User 4' }
+        ];
+
+        // ====================================================================
+        // Initialize
+        // ====================================================================
+        updateContactList();
+
+        // ====================================================================
+        // Select User Identity
+        // ====================================================================
+        function selectUser(userId) {
+            if (currentWebSocket) {
+                currentWebSocket.close();
+            }
+
+            currentUserId = userId;
+            currentChatUserId = null;
+            currentRoomId = null;
+
+            // Update UI
+            document.querySelectorAll('.user-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i + 1 === userId);
+            });
+
+            document.getElementById('currentUserDisplay').textContent = `You are: User ${userId}`;
+            updateContactList();
+
+            // Reset chat
+            resetChat();
+        }
+
+        // ====================================================================
+        // Update Contact List
+        // ====================================================================
+        function updateContactList() {
+            const contactList = document.getElementById('contactList');
+            contactList.innerHTML = '';
+
+            allUsers.filter(u => u.id !== currentUserId).forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'contact-item';
+                div.onclick = () => openChat(user.id, user.name);
+                div.innerHTML = `
+                    <div class="contact-name">${user.name}</div>
+                    <div class="contact-status">Click to chat</div>
+                `;
+                contactList.appendChild(div);
+            });
+        }
+
+        // ====================================================================
+        // Open Chat
+        // ====================================================================
+        async function openChat(userId, userName) {
+            console.log(`Opening chat: User ${currentUserId} with User ${userId}`);
+
+            if (currentWebSocket) {
+                currentWebSocket.close();
+            }
+
+            currentChatUserId = userId;
+
+            // Update active contact
+            document.querySelectorAll('.contact-item').forEach((item, i) => {
+                const contactUserId = allUsers.filter(u => u.id !== currentUserId)[i].id;
+                item.classList.toggle('active', contactUserId === userId);
+            });
+
+            // Show chat UI
+            document.getElementById('chatHeader').classList.remove('hidden');
+            document.getElementById('noChat').classList.add('hidden');
+            document.getElementById('messages').classList.remove('hidden');
+            document.getElementById('inputArea').classList.remove('hidden');
+            document.getElementById('chatTitle').textContent = `Chat with ${userName}`;
+            document.getElementById('chatStatus').textContent = 'Connecting...';
+            document.getElementById('chatStatus').className = 'chat-status';
+            document.getElementById('messages').innerHTML = '';
+
+            try {
+                // Get or create room
+                const room = await fetch(`${API_BASE}/chat/rooms`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user1_id: currentUserId, user2_id: userId })
+                }).then(r => r.json());
+
+                currentRoomId = room.id;
+                console.log(`Room ID: ${currentRoomId}`);
+
+                // Load history
+                const messages = await fetch(`${API_BASE}/chat/rooms/${currentRoomId}/messages`)
+                    .then(r => r.ok ? r.json() : []);
+
+                messages.forEach(msg => {
+                    displayMessage(msg, msg.sender_id === currentUserId);
+                });
+
+                // Connect WebSocket
+                connectWebSocket(currentRoomId);
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('chatStatus').textContent = 'Connection failed';
+                alert('Failed to open chat. Is the server running?');
+            }
+        }
+
+        // ====================================================================
+        // Connect WebSocket
+        // ====================================================================
+        function connectWebSocket(roomId) {
+            const wsUrl = `${WS_BASE}/ws/rooms/${roomId}`;
+            console.log('Connecting to:', wsUrl);
+
+            currentWebSocket = new WebSocket(wsUrl);
+
+            currentWebSocket.onopen = () => {
+                console.log('✅ Connected to room', roomId);
+                document.getElementById('chatStatus').textContent = '✓ Connected';
+                document.getElementById('chatStatus').className = 'chat-status connected';
+            };
+
+            currentWebSocket.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                console.log('📩 Received:', message);
+
+                // Only display if from other user (avoid duplicate)
+                if (message.sender_id !== currentUserId) {
+                    displayMessage(message, false);
+                }
+            };
+
+            currentWebSocket.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+                document.getElementById('chatStatus').textContent = '✗ Error';
+                document.getElementById('chatStatus').className = 'chat-status disconnected';
+            };
+
+            currentWebSocket.onclose = () => {
+                console.log('🔌 Disconnected');
+                document.getElementById('chatStatus').textContent = 'Disconnected';
+                document.getElementById('chatStatus').className = 'chat-status disconnected';
+            };
+        }
+
+        // ====================================================================
+        // Send Message
+        // ====================================================================
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+
+            if (!content) return;
+
+            if (!currentWebSocket || currentWebSocket.readyState !== WebSocket.OPEN) {
+                alert('Not connected! Please wait or reconnect.');
+                return;
+            }
+
+            const message = {
+                sender_id: currentUserId,
+                content: content
+            };
+
+            console.log('📤 Sending:', message);
+            currentWebSocket.send(JSON.stringify(message));
+
+            // Display locally
+            displayMessage({
+                sender_id: currentUserId,
+                content: content,
+                created_at: new Date().toISOString()
+            }, true);
+
+            input.value = '';
+        }
+
+        // ====================================================================
+        // Display Message
+        // ====================================================================
+        function displayMessage(message, isSent) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = message.content;
+
+            const time = document.createElement('div');
+            time.className = 'message-time';
+            time.textContent = new Date(message.created_at).toLocaleTimeString();
+
+            messageDiv.appendChild(bubble);
+            messageDiv.appendChild(time);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // ====================================================================
+        // Reset Chat
+        // ====================================================================
+        function resetChat() {
+            document.getElementById('chatHeader').classList.add('hidden');
+            document.getElementById('noChat').classList.remove('hidden');
+            document.getElementById('messages').classList.add('hidden');
+            document.getElementById('inputArea').classList.add('hidden');
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Cleanup
+        window.onbeforeunload = () => {
+            if (currentWebSocket) currentWebSocket.close();
+        };
+    </script>
+</body>
+</html>

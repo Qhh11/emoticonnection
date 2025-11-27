@@ -1,0 +1,14 @@
+# FastAPI - Modern web framework for building APIs
+fastapi==0.109.0
+
+# Uvicorn - ASGI server to run FastAPI
+uvicorn[standard]==0.27.0
+
+# Pydantic - Data validation using Python type hints
+pydantic==2.5.3
+
+# Python-multipart - For form data parsing (required by FastAPI)
+python-multipart==0.0.6
+
+# WebSockets - WebSocket support for real-time communication
+websockets==12.0
