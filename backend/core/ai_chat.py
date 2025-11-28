@@ -33,7 +33,7 @@ class AIChatService:
         
         # 初始化 Gemini 模型
         self.model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash-exp", 
+            model_name="gemini-flash-latest", 
             system_instruction=self.system_instruction
         )
 
@@ -53,3 +53,5 @@ class AIChatService:
         # 异步发送消息
         response = await chat.send_message_async(message)
         return response.text
+
+

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.api import ai_chat
+from backend.api import ai_chat, emotion
 
 app = FastAPI(title="EmotionConnect API")
 
@@ -25,6 +25,7 @@ app.add_middleware(
 # prefix="/api/ai-chat": 路由前缀
 # tags=["ai-chat"]: 用于 API 文档分类
 app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
+app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
 
 @app.get("/")
 async def root():

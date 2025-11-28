@@ -48,3 +48,5 @@ async def chat(request: ChatRequest):
     except Exception as e:
         # 异常处理，返回 500 错误
         raise HTTPException(status_code=500, detail=str(e))
+
+
