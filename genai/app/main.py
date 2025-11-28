@@ -5,7 +5,7 @@ from typing import List, Optional
 from venv import logger
 
 # Third-party imports
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -53,6 +53,9 @@ def call_gemini_api(prompt: str) -> str:
     except Exception as e:
         logger.error(f"Error calling Gemini API: {e}")
         raise
+
+
+
 
 if __name__ == "__main__":
     sample_prompt = "Write a short story about a robot learning to love."
