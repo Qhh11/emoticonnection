@@ -98,23 +98,54 @@ class RoomListItem(BaseModel):
 # Message Models
 # ============================================================================
 
+class MessageType(str, Enum):
+    TEXT = "text"
+    EMOJI = "emoji"
+    IMAGE = "image"
+    VIDEO = "video"
+
+
 class MessageCreate(BaseModel):
     """
     Request model for creating a message
 
-    Example JSON:
+    Example JSON for text:
     {
         "sender_id": 1,
+        "message_type": "text",
         "content": "Hello, how are you?"
+    }
+
+    Example JSON for emoji:
+    {
+        "sender_id": 1,
+        "message_type": "emoji",
+        "content": "😊"
+    }
+
+    Example JSON for image/video:
+    {
+        "sender_id": 1,
+        "message_type": "image",
+        "content": "/static/uploads/abc123.jpg",
+        "media_url": "/static/uploads/abc123.jpg"
     }
     """
     sender_id: int = Field(..., description="Sender user ID", example=1)
+    message_type: MessageType = Field(
+        default=MessageType.TEXT,
+        description="Type of message: text, emoji, image, or video"
+    )
     content: str = Field(
         ...,
-        description="Message content",
+        description="Message content (text/emoji) or media URL (image/video)",
         min_length=1,
         max_length=5000,
         example="Hello, how are you?"
+    )
+    media_url: Optional[str] = Field(
+        default=None,
+        description="URL to uploaded media file (for image/video messages)"
     )
 
 
@@ -126,19 +157,39 @@ class MessageOut(BaseModel):
     - REST API returning message history
     - WebSocket broadcasting new messages
 
-    Example JSON:
+    Example JSON for text:
     {
         "id": 456,
         "room_id": 123,
         "sender_id": 1,
+        "message_type": "text",
         "content": "Hello, how are you?",
         "created_at": "2025-01-25T10:30:00Z"
+    }
+
+    Example JSON for image:
+    {
+        "id": 457,
+        "room_id": 123,
+        "sender_id": 1,
+        "message_type": "image",
+        "content": "Check this out!",
+        "media_url": "/static/uploads/abc123.jpg",
+        "created_at": "2025-01-25T10:31:00Z"
     }
     """
     id: int = Field(..., description="Unique message ID", example=456)
     room_id: int = Field(..., description="Room ID this message belongs to", example=123)
     sender_id: int = Field(..., description="Sender user ID", example=1)
+    message_type: MessageType = Field(
+        default=MessageType.TEXT,
+        description="Type of message: text, emoji, image, or video"
+    )
     content: str = Field(..., description="Message content", example="Hello, how are you?")
+    media_url: Optional[str] = Field(
+        default=None,
+        description="URL to uploaded media file (for image/video messages)"
+    )
     created_at: datetime = Field(..., description="Message creation time (ISO 8601 format)")
 
     class Config:

@@ -32,3 +32,7 @@ pip-delete-this-directory.txt
 
 # Logs
 *.log
+
+# Uploaded media files (keep the directory structure but ignore content)
+backend/static/uploads/*
+!backend/static/uploads/.gitkeep

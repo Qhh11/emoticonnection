@@ -7,8 +7,11 @@ uvicorn[standard]==0.27.0
 # Pydantic - Data validation using Python type hints
 pydantic==2.5.3
 
-# Python-multipart - For form data parsing (required by FastAPI)
+# Python-multipart - For form data parsing and file uploads (required by FastAPI)
 python-multipart==0.0.6
 
 # WebSockets - WebSocket support for real-time communication
 websockets==12.0
+
+# aiofiles - Async file operations (for media upload handling)
+aiofiles==23.2.1

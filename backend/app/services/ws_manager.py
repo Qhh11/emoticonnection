@@ -10,9 +10,25 @@ KEY CONCEPT:
 - For 1v1 chat: max 2 users per room (but each user can have multiple devices)
 """
 
-from typing import Dict, List,Set, Optional
+from typing import Dict, List, Set, Optional
 from datetime import datetime
 from fastapi import WebSocket
+from enum import Enum
+
+
+class UserStatusType(str, Enum):
+    """User online status"""
+    ONLINE = "online"
+    OFFLINE = "offline"
+    AWAY = "away"
+    BUSY = "busy"
+
+
+class WSEventType(str, Enum):
+    """WebSocket event types"""
+    MESSAGE = "message"
+    TYPING = "typing"
+    USER_STATUS = "user_status"
 
 
 class ConnectionManager:

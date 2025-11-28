@@ -122,11 +122,17 @@ def _get_room_by_id(room_id: int) -> dict | None:
     return None
 
 
-def _create_message(room_id: int, sender_id: int, content: str) -> dict:
+def _create_message(
+    room_id: int,
+    sender_id: int,
+    content: str,
+    message_type: str = "text",
+    media_url: str = None
+) -> dict:
     """
-    Create a new message
+    Create a new message with support for different message types
 
-    TODO: Replace with: chat_repo.create_message(room_id, sender_id, content)
+    TODO: Replace with: chat_repo.create_message(room_id, sender_id, content, message_type, media_url)
     """
     global _next_message_id
 
@@ -134,7 +140,9 @@ def _create_message(room_id: int, sender_id: int, content: str) -> dict:
         "id": _next_message_id,
         "room_id": room_id,
         "sender_id": sender_id,
+        "message_type": message_type,
         "content": content,
+        "media_url": media_url,
         "created_at": datetime.utcnow()
     }
     _messages.append(message)
@@ -281,11 +289,13 @@ def send_message(
     if not room:
         raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
-    # Create the message
+    # Create the message with new message type support
     message = _create_message(
         room_id=room_id,
         sender_id=message_data.sender_id,
-        content=message_data.content
+        content=message_data.content,
+        message_type=message_data.message_type.value,
+        media_url=message_data.media_url
     )
 
     # Convert dict to MessageOut model and return

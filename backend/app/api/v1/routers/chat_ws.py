@@ -48,17 +48,36 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: int):
     3. Client disconnects → manager.disconnect()
 
     MESSAGE FORMAT (from client):
+    Text message:
     {
         "sender_id": 1,
+        "message_type": "text",
         "content": "Hello, how are you?"
+    }
+
+    Emoji message:
+    {
+        "sender_id": 1,
+        "message_type": "emoji",
+        "content": "😊"
+    }
+
+    Image/Video message:
+    {
+        "sender_id": 1,
+        "message_type": "image",
+        "content": "Check this out!",
+        "media_url": "/static/uploads/abc123.jpg"
     }
 
     BROADCAST FORMAT (to all clients):
     {
-        "id": -1,  // Placeholder (TODO: save to DB and get real ID)
+        "id": 456,
         "room_id": 123,
         "sender_id": 1,
+        "message_type": "text",
         "content": "Hello, how are you?",
+        "media_url": null,
         "created_at": "2025-01-25T10:30:00Z"
     }
 
@@ -98,7 +117,9 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: int):
                 saved_message = chat_http._create_message(
                     room_id=room_id,
                     sender_id=message_create.sender_id,
-                    content=message_create.content
+                    content=message_create.content,
+                    message_type=message_create.message_type.value,
+                    media_url=message_create.media_url
                 )
 
                 # Create MessageOut with real message ID

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
 # Import routers
-from app.api.v1.routers import chat_http, chat_ws, match
+from app.api.v1.routers import chat_http, chat_ws, match, media
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,13 +60,15 @@ app.include_router(chat_http.router, prefix="/api/v1")
 # WebSocket routes (/ws/rooms/{id})
 app.include_router(chat_ws.router)
 app.include_router(match.router, prefix="/api/v1")
+# Media upload routes (/media/upload, /media/info, etc.)
+app.include_router(media.router, prefix="/api/v1")
 
 # static path
 BASE_DIR = Path(__file__).resolve().parent.parent          
 STATIC_DIR = BASE_DIR / "static"                         
 app.mount(
     "/static",                                             
-    StaticFiles(directory=str(STATIC_DIR), html=True),     
+    StaticFiles(directory=str(STATIC_DIR)),     
     name="static",
 )
 
