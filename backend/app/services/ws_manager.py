@@ -227,33 +227,3 @@ class ConnectionManager:
         return len(self.rooms.get(room_id, []))
 
 
-# ============================================================================
-# TEACHING SUMMARY
-# ============================================================================
-"""
-KEY CONCEPTS YOU LEARNED:
-
-1. **WebSocket Lifecycle**:
-   - accept() -> connection established
-   - send_json() -> send data to client
-   - receive_text() / receive_json() -> receive data from client
-   - disconnect -> clean up connection
-
-2. **Room-based Architecture**:
-   - Each room has its own list of connections
-   - Rooms are identified by room_id (string)
-   - Connections are added/removed dynamically
-
-3. **Broadcasting Pattern**:
-   - One message is sent to multiple recipients
-   - Essential for real-time chat
-   - For 1v1 chat: broadcast to max 2 users (sender + receiver)
-
-4. **Error Handling**:
-   - Always use try-except when sending messages
-   - Broken connections should be removed automatically
-   - Clean up empty rooms to save memory
-
-NEXT STEP:
-We'll learn how to use this ConnectionManager in actual WebSocket endpoints!
-"""
