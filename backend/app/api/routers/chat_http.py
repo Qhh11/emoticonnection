@@ -20,7 +20,7 @@ from app.schemas.chat import (
     RoomCreateExtended, RoomExtended, RoomListItem,
     AnonymousSettings, RevealIdentityRequest, RevealIdentityResponse
 )
-from app.api.v1.deps import get_db, DummyDB
+from app.api.deps import get_db, DummyDB
 
 
 

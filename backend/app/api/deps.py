@@ -74,27 +74,3 @@ def get_ws_manager() -> ConnectionManager:
 def get_matching_service() -> MatchingService:
     return matching_service
 
-# ============================================================================
-# TEACHING SUMMARY
-# ============================================================================
-"""
-KEY CONCEPTS:
-
-1. **Dependency Injection**:
-   - FastAPI automatically calls get_db() when a route needs it
-   - The route doesn't need to know HOW to get the DB
-   - Easy to swap implementations (dummy -> real DB)
-
-2. **Generator Pattern (yield)**:
-   - Allows setup before and cleanup after route execution
-   - Common pattern for database connections
-   - Ensures resources are properly cleaned up
-
-3. **Separation of Concerns**:
-   - We focus on chat logic
-   - DB team focuses on database implementation
-   - Clear interface between modules
-
-NEXT:
-Now we'll implement the REST API routes that use these dependencies!
-"""

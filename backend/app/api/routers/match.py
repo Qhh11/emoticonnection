@@ -6,7 +6,7 @@ Emotion-based Matching API
 from fastapi import APIRouter, Depends
 
 from app.schemas.chat import MatchRequest, MatchResponse, EmotionType
-from app.api.v1.deps import get_matching_service
+from app.api.deps import get_matching_service
 from app.services.matching_service import MatchingService
 
 

@@ -19,7 +19,7 @@ from app.services.ws_manager import ConnectionManager
 
 # Import in-memory storage from chat_http to save messages
 # In production, this would be replaced with database calls
-from app.api.v1.routers import chat_http
+from app.api.routers import chat_http
 
 # ============================================================================
 # Initialize Router and ConnectionManager
