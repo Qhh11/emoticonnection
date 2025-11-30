@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmotiConnect Chat Test (Enhanced)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            height: 85vh;
+        }
+
+        /* User Selector */
+        .user-selector {
+            width: 200px;
+            background: #f8f9fa;
+            border-right: 2px solid #e0e0e0;
+            padding: 20px;
+        }
+
+        .user-selector h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .user-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .user-btn:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .user-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Contact List */
+        .contact-list {
+            width: 250px;
+            background: white;
+            border-right: 2px solid #e0e0e0;
+        }
+
+        .contact-header {
+            padding: 20px;
+            background: #667eea;
+            color: white;
+        }
+
+        .contact-header h3 {
+            font-size: 16px;
+        }
+
+        .current-user {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .contacts {
+            overflow-y: auto;
+            height: calc(100% - 80px);
+        }
+
+        .contact-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .contact-item:hover {
+            background: #f5f5f5;
+        }
+
+        .contact-item.active {
+            background: #e8eaf6;
+            border-left: 3px solid #667eea;
+        }
+
+        .contact-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .contact-status {
+            font-size: 11px;
+            color: #999;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: white;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .chat-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .chat-status {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        .chat-status.connected {
+            color: #4caf50;
+        }
+
+        .chat-status.disconnected {
+            color: #f44336;
+        }
+
+        .no-chat {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.sent {
+            text-align: right;
+        }
+
+        .message.received {
+            text-align: left;
+        }
+
+        .message-bubble {
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 60%;
+            word-wrap: break-word;
+        }
+
+        .message.sent .message-bubble {
+            background: #667eea;
+            color: white;
+        }
+
+        .message.received .message-bubble {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .message-content {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message-content.emoji {
+            font-size: 48px;
+            line-height: 1;
+        }
+
+        .message-media {
+            margin-top: 8px;
+        }
+
+        .message-media img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .message-media video {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .toolbar button {
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .toolbar button:hover {
+            background: #f0f4ff;
+            border-color: #667eea;
+        }
+
+        .toolbar button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .emoji-picker {
+            display: none;
+            padding: 15px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .emoji-picker.show {
+            display: block;
+        }
+
+        .emoji-category {
+            margin-bottom: 15px;
+        }
+
+        .emoji-category h4 {
+            font-size: 12px;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+        }
+
+        .emoji-item {
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            text-align: center;
+            border-radius: 5px;
+            transition: all 0.2s;
+        }
+
+        .emoji-item:hover {
+            background: #f0f4ff;
+            transform: scale(1.2);
+        }
+
+        .media-preview {
+            display: none;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .media-preview.show {
+            display: block;
+        }
+
+        .media-preview img,
+        .media-preview video {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+
+        .media-preview-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .uploading-indicator {
+            display: none;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .uploading-indicator.show {
+            display: block;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .input-area input:focus {
+            border-color: #667eea;
+        }
+
+        .input-area .send-btn {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .input-area .send-btn:hover {
+            background: #5568d3;
+        }
+
+        .input-area .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- User Identity Selector -->
+        <div class="user-selector">
+            <h3>🎭 Your Identity</h3>
+            <button class="user-btn active" onclick="selectUser(1)">User 1</button>
+            <button class="user-btn" onclick="selectUser(2)">User 2</button>
+            <button class="user-btn" onclick="selectUser(3)">User 3</button>
+            <button class="user-btn" onclick="selectUser(4)">User 4</button>
+        </div>
+
+        <!-- Contact List -->
+        <div class="contact-list">
+            <div class="contact-header">
+                <h3>Contacts</h3>
+                <div class="current-user" id="currentUserDisplay">You are: User 1</div>
+            </div>
+            <div class="contacts" id="contactList">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header hidden" id="chatHeader">
+                <div class="chat-title" id="chatTitle">Select a contact</div>
+                <div class="chat-status" id="chatStatus">Disconnected</div>
+            </div>
+
+            <div class="no-chat" id="noChat">
+                👈 Select a contact to start chatting
+            </div>
+
+            <div class="messages hidden" id="messages"></div>
+
+            <div class="input-area hidden" id="inputArea">
+                <!-- Emoji Picker -->
+                <div id="emojiPicker" class="emoji-picker">
+                    <div class="emoji-category">
+                        <h4>😊 Smileys & People</h4>
+                        <div class="emoji-grid">
+                            <span class="emoji-item" data-emoji="😀">😀</span>
+                            <span class="emoji-item" data-emoji="😃">😃</span>
+                            <span class="emoji-item" data-emoji="😄">😄</span>
+                            <span class="emoji-item" data-emoji="😁">😁</span>
+                            <span class="emoji-item" data-emoji="😊">😊</span>
+                            <span class="emoji-item" data-emoji="😇">😇</span>
+                            <span class="emoji-item" data-emoji="🙂">🙂</span>
+                            <span class="emoji-item" data-emoji="🙃">🙃</span>
+                            <span class="emoji-item" data-emoji="😉">😉</span>
+                            <span class="emoji-item" data-emoji="😌">😌</span>
+                            <span class="emoji-item" data-emoji="😍">😍</span>
+                            <span class="emoji-item" data-emoji="🥰">🥰</span>
+                            <span class="emoji-item" data-emoji="😘">😘</span>
+                            <span class="emoji-item" data-emoji="😗">😗</span>
+                            <span class="emoji-item" data-emoji="😙">😙</span>
+                            <span class="emoji-item" data-emoji="😚">😚</span>
+                            <span class="emoji-item" data-emoji="😋">😋</span>
+                            <span class="emoji-item" data-emoji="😛">😛</span>
+                            <span class="emoji-item" data-emoji="😝">😝</span>
+                            <span class="emoji-item" data-emoji="😜">😜</span>
+                            <span class="emoji-item" data-emoji="🤪">🤪</span>
+                            <span class="emoji-item" data-emoji="🤨">🤨</span>
+                            <span class="emoji-item" data-emoji="🧐">🧐</span>
+                            <span class="emoji-item" data-emoji="🤓">🤓</span>
+                            <span class="emoji-item" data-emoji="😎">😎</span>
+                            <span class="emoji-item" data-emoji="🤩">🤩</span>
+                            <span class="emoji-item" data-emoji="🥳">🥳</span>
+                            <span class="emoji-item" data-emoji="😏">😏</span>
+                            <span class="emoji-item" data-emoji="😒">😒</span>
+                            <span class="emoji-item" data-emoji="😞">��</span>
+                            <span class="emoji-item" data-emoji="😔">😔</span>
+                            <span class="emoji-item" data-emoji="😟">😟</span>
+                            <span class="emoji-item" data-emoji="😕">😕</span>
+                            <span class="emoji-item" data-emoji="🙁">🙁</span>
+                            <span class="emoji-item" data-emoji="☹️">☹️</span>
+                            <span class="emoji-item" data-emoji="😣">😣</span>
+                            <span class="emoji-item" data-emoji="😖">😖</span>
+                            <span class="emoji-item" data-emoji="😫">😫</span>
+                            <span class="emoji-item" data-emoji="😩">😩</span>
+                            <span class="emoji-item" data-emoji="🥺">🥺</span>
+                        </div>
+                    </div>
+                    <div class="emoji-category">
+                        <h4>❤️ Hearts</h4>
+                        <div class="emoji-grid">
+                            <span class="emoji-item" data-emoji="❤️">❤️</span>
+                            <span class="emoji-item" data-emoji="🧡">🧡</span>
+                            <span class="emoji-item" data-emoji="💛">💛</span>
+                            <span class="emoji-item" data-emoji="💚">💚</span>
+                            <span class="emoji-item" data-emoji="💙">💙</span>
+                            <span class="emoji-item" data-emoji="💜">💜</span>
+                            <span class="emoji-item" data-emoji="🖤">🖤</span>
+                            <span class="emoji-item" data-emoji="🤍">🤍</span>
+                            <span class="emoji-item" data-emoji="🤎">🤎</span>
+                            <span class="emoji-item" data-emoji="💔">💔</span>
+                            <span class="emoji-item" data-emoji="💕">💕</span>
+                            <span class="emoji-item" data-emoji="💞">💞</span>
+                            <span class="emoji-item" data-emoji="💓">💓</span>
+                            <span class="emoji-item" data-emoji="💗">💗</span>
+                            <span class="emoji-item" data-emoji="💖">💖</span>
+                            <span class="emoji-item" data-emoji="💘">💘</span>
+                        </div>
+                    </div>
+                    <div class="emoji-category">
+                        <h4>👍 Gestures</h4>
+                        <div class="emoji-grid">
+                            <span class="emoji-item" data-emoji="👍">👍</span>
+                            <span class="emoji-item" data-emoji="👎">👎</span>
+                            <span class="emoji-item" data-emoji="👊">👊</span>
+                            <span class="emoji-item" data-emoji="✊">✊</span>
+                            <span class="emoji-item" data-emoji="🤛">🤛</span>
+                            <span class="emoji-item" data-emoji="🤜">🤜</span>
+                            <span class="emoji-item" data-emoji="👏">👏</span>
+                            <span class="emoji-item" data-emoji="🙌">🙌</span>
+                            <span class="emoji-item" data-emoji="👐">👐</span>
+                            <span class="emoji-item" data-emoji="🤲">🤲</span>
+                            <span class="emoji-item" data-emoji="🤝">🤝</span>
+                            <span class="emoji-item" data-emoji="🙏">🙏</span>
+                            <span class="emoji-item" data-emoji="✌️">✌️</span>
+                            <span class="emoji-item" data-emoji="🤞">🤞</span>
+                            <span class="emoji-item" data-emoji="🤟">🤟</span>
+                            <span class="emoji-item" data-emoji="🤘">🤘</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Media Preview -->
+                <div id="mediaPreview" class="media-preview">
+                    <div id="mediaPreviewContent"></div>
+                    <div class="media-preview-actions">
+                        <button onclick="clearMediaPreview()">❌ Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Uploading Indicator -->
+                <div id="uploadingIndicator" class="uploading-indicator">
+                    ⏳ Uploading media...
+                </div>
+
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <button id="emojiBtn" onclick="toggleEmojiPicker()">😊 Emoji</button>
+                    <button onclick="triggerImageUpload()">🖼️ Image</button>
+                    <button onclick="triggerVideoUpload()">🎥 Video</button>
+                    <input type="file" id="imageUpload" accept="image/*" style="display: none;" onchange="handleFileSelect(event, 'image')">
+                    <input type="file" id="videoUpload" accept="video/*" style="display: none;" onchange="handleFileSelect(event, 'video')">
+                </div>
+
+                <!-- Message Input -->
+                <div class="input-row">
+                    <input
+                        type="text"
+                        id="messageInput"
+                        placeholder="Type a message..."
+                        onkeypress="if(event.key==='Enter') sendMessage()"
+                    >
+                    <button class="send-btn" onclick="sendMessage()" id="sendBtn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ====================================================================
+        // State
+        // ====================================================================
+        const API_BASE = 'http://localhost:8000/api';
+        const WS_BASE = 'ws://localhost:8000';
+
+        let currentUserId = 1;
+        let currentChatUserId = null;
+        let currentRoomId = null;
+        let currentWebSocket = null;
+        let currentMediaUrl = null;
+        let currentMediaType = null;
+
+        const allUsers = [
+            { id: 1, name: 'User 1' },
+            { id: 2, name: 'User 2' },
+            { id: 3, name: 'User 3' },
+            { id: 4, name: 'User 4' }
+        ];
+
+        // ====================================================================
+        // Initialize
+        // ====================================================================
+        updateContactList();
+        initEmojiPicker();
+
+        // ====================================================================
+        // Select User Identity
+        // ====================================================================
+        function selectUser(userId) {
+            if (currentWebSocket) {
+                currentWebSocket.close();
+            }
+
+            currentUserId = userId;
+            currentChatUserId = null;
+            currentRoomId = null;
+
+            // Update UI
+            document.querySelectorAll('.user-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i + 1 === userId);
+            });
+
+            document.getElementById('currentUserDisplay').textContent = `You are: User ${userId}`;
+            updateContactList();
+
+            // Reset chat
+            resetChat();
+        }
+
+        // ====================================================================
+        // Update Contact List
+        // ====================================================================
+        function updateContactList() {
+            const contactList = document.getElementById('contactList');
+            contactList.innerHTML = '';
+
+            allUsers.filter(u => u.id !== currentUserId).forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'contact-item';
+                div.onclick = () => openChat(user.id, user.name);
+                div.innerHTML = `
+                    <div class="contact-name">${user.name}</div>
+                    <div class="contact-status">Click to chat</div>
+                `;
+                contactList.appendChild(div);
+            });
+        }
+
+        // ====================================================================
+        // Open Chat
+        // ====================================================================
+        async function openChat(userId, userName) {
+            console.log(`Opening chat: User ${currentUserId} with User ${userId}`);
+
+            if (currentWebSocket) {
+                currentWebSocket.close();
+            }
+
+            currentChatUserId = userId;
+
+            // Update active contact
+            document.querySelectorAll('.contact-item').forEach((item, i) => {
+                const contactUserId = allUsers.filter(u => u.id !== currentUserId)[i].id;
+                item.classList.toggle('active', contactUserId === userId);
+            });
+
+            // Show chat UI
+            document.getElementById('chatHeader').classList.remove('hidden');
+            document.getElementById('noChat').classList.add('hidden');
+            document.getElementById('messages').classList.remove('hidden');
+            document.getElementById('inputArea').classList.remove('hidden');
+            document.getElementById('chatTitle').textContent = `Chat with ${userName}`;
+            document.getElementById('chatStatus').textContent = 'Connecting...';
+            document.getElementById('chatStatus').className = 'chat-status';
+            document.getElementById('messages').innerHTML = '';
+
+            try {
+                // Get or create room
+                const room = await fetch(`${API_BASE}/chat/rooms`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user1_id: currentUserId, user2_id: userId })
+                }).then(r => r.json());
+
+                currentRoomId = room.id;
+                console.log(`Room ID: ${currentRoomId}`);
+
+                // Load history
+                const messages = await fetch(`${API_BASE}/chat/rooms/${currentRoomId}/messages`)
+                    .then(r => r.ok ? r.json() : []);
+
+                messages.forEach(msg => {
+                    displayMessage(msg, msg.sender_id === currentUserId);
+                });
+
+                // Connect WebSocket
+                connectWebSocket(currentRoomId);
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('chatStatus').textContent = 'Connection failed';
+                alert('Failed to open chat. Is the server running?');
+            }
+        }
+
+        // ====================================================================
+        // Connect WebSocket
+        // ====================================================================
+        function connectWebSocket(roomId) {
+            const wsUrl = `${WS_BASE}/ws/rooms/${roomId}`;
+            console.log('Connecting to:', wsUrl);
+
+            currentWebSocket = new WebSocket(wsUrl);
+
+            currentWebSocket.onopen = () => {
+                console.log('✅ Connected to room', roomId);
+                document.getElementById('chatStatus').textContent = '✓ Connected';
+                document.getElementById('chatStatus').className = 'chat-status connected';
+            };
+
+            currentWebSocket.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                console.log('📩 Received:', message);
+
+                // Only display if from other user (avoid duplicate)
+                if (message.sender_id !== currentUserId) {
+                    displayMessage(message, false);
+                }
+            };
+
+            currentWebSocket.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+                document.getElementById('chatStatus').textContent = '✗ Error';
+                document.getElementById('chatStatus').className = 'chat-status disconnected';
+            };
+
+            currentWebSocket.onclose = () => {
+                console.log('🔌 Disconnected');
+                document.getElementById('chatStatus').textContent = 'Disconnected';
+                document.getElementById('chatStatus').className = 'chat-status disconnected';
+            };
+        }
+
+        // ====================================================================
+        // Send Message
+        // ====================================================================
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+
+            if (!content && !currentMediaUrl) return;
+
+            if (!currentWebSocket || currentWebSocket.readyState !== WebSocket.OPEN) {
+                alert('Not connected! Please wait or reconnect.');
+                return;
+            }
+
+            const message = {
+                sender_id: currentUserId,
+                message_type: currentMediaUrl ? currentMediaType : 'text',
+                content: content || 'Sent a file'
+            };
+
+            if (currentMediaUrl) {
+                message.media_url = currentMediaUrl;
+            }
+
+            console.log('📤 Sending:', message);
+            currentWebSocket.send(JSON.stringify(message));
+
+            // Display locally
+            displayMessage({
+                sender_id: currentUserId,
+                message_type: message.message_type,
+                content: message.content,
+                media_url: message.media_url,
+                created_at: new Date().toISOString()
+            }, true);
+
+            input.value = '';
+            clearMediaPreview();
+        }
+
+        // ====================================================================
+        // Display Message
+        // ====================================================================
+        function displayMessage(message, isSent) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+
+            // Message content
+            const content = document.createElement('div');
+            content.className = 'message-content';
+
+            // Only show emoji in large size if it's ONLY emoji (no text mixed in)
+            const emojiOnlyRegex = /^[\p{Emoji}\s]+$/u;
+            const strippedContent = message.content.replace(/\s/g, ''); // Remove spaces
+            if (strippedContent.length <= 5 && emojiOnlyRegex.test(message.content)) {
+                content.className = 'message-content emoji';
+            }
+
+            content.textContent = message.content;
+            bubble.appendChild(content);
+
+            // Media content
+            if (message.media_url) {
+                const media = document.createElement('div');
+                media.className = 'message-media';
+
+                // Ensure absolute URL for media
+                console.log('🔍 Original media_url:', message.media_url);
+                console.log('🌐 window.location.origin:', window.location.origin);
+                const mediaUrl = message.media_url.startsWith('http')
+                    ? message.media_url
+                    : `${window.location.origin}${message.media_url}`;
+                console.log('✅ Final mediaUrl:', mediaUrl);
+
+                if (message.message_type === 'image') {
+                    const img = document.createElement('img');
+                    img.src = mediaUrl;
+                    img.alt = 'Image';
+                    img.onclick = () => window.open(mediaUrl, '_blank');
+                    media.appendChild(img);
+                } else if (message.message_type === 'video') {
+                    const video = document.createElement('video');
+                    video.src = mediaUrl;
+                    video.controls = true;
+                    media.appendChild(video);
+                }
+
+                bubble.appendChild(media);
+            }
+
+            const time = document.createElement('div');
+            time.className = 'message-time';
+            time.textContent = new Date(message.created_at).toLocaleTimeString();
+
+            messageDiv.appendChild(bubble);
+            messageDiv.appendChild(time);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // ====================================================================
+        // Emoji Picker
+        // ====================================================================
+        function initEmojiPicker() {
+            document.querySelectorAll('.emoji-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const emoji = this.getAttribute('data-emoji');
+                    const input = document.getElementById('messageInput');
+                    input.value += emoji;
+                    input.focus();
+                });
+            });
+        }
+
+        function toggleEmojiPicker() {
+            const picker = document.getElementById('emojiPicker');
+            const btn = document.getElementById('emojiBtn');
+            picker.classList.toggle('show');
+            btn.classList.toggle('active');
+        }
+
+        // ====================================================================
+        // Media Upload
+        // ====================================================================
+        function triggerImageUpload() {
+            document.getElementById('imageUpload').click();
+        }
+
+        function triggerVideoUpload() {
+            document.getElementById('videoUpload').click();
+        }
+
+        async function handleFileSelect(event, type) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            console.log(`📎 Selected ${type}:`, file.name);
+
+            // Show uploading indicator
+            document.getElementById('uploadingIndicator').classList.add('show');
+
+            // Upload to server
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/media/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+
+                const result = await response.json();
+                console.log('✅ Upload successful:', result);
+                console.log('📍 media_url from server:', result.media_url);
+
+                // Store media info
+                currentMediaUrl = result.media_url;
+                currentMediaType = result.media_type;
+                console.log('📦 Stored media_url:', currentMediaUrl);
+
+                // Show preview
+                showMediaPreview(result);
+
+            } catch (error) {
+                console.error('❌ Upload error:', error);
+                alert('Failed to upload file. Please try again.');
+            } finally {
+                // Hide uploading indicator
+                document.getElementById('uploadingIndicator').classList.remove('show');
+                // Clear file input
+                event.target.value = '';
+            }
+        }
+
+        function showMediaPreview(uploadResult) {
+            const previewContent = document.getElementById('mediaPreviewContent');
+            previewContent.innerHTML = '';
+
+            // Convert relative URL to absolute URL
+            const mediaUrl = uploadResult.media_url.startsWith('http')
+                ? uploadResult.media_url
+                : `${window.location.origin}${uploadResult.media_url}`;
+
+            if (uploadResult.media_type === 'image') {
+                const img = document.createElement('img');
+                img.src = mediaUrl;
+                previewContent.appendChild(img);
+            } else if (uploadResult.media_type === 'video') {
+                const video = document.createElement('video');
+                video.src = mediaUrl;
+                video.controls = true;
+                previewContent.appendChild(video);
+            }
+
+            const info = document.createElement('p');
+            info.style.marginTop = '10px';
+            info.style.fontSize = '12px';
+            info.textContent = `${uploadResult.filename} (${(uploadResult.file_size / 1024).toFixed(1)} KB)`;
+            previewContent.appendChild(info);
+
+            document.getElementById('mediaPreview').classList.add('show');
+        }
+
+        function clearMediaPreview() {
+            document.getElementById('mediaPreview').classList.remove('show');
+            document.getElementById('mediaPreviewContent').innerHTML = '';
+            currentMediaUrl = null;
+            currentMediaType = null;
+        }
+
+        // ====================================================================
+        // Reset Chat
+        // ====================================================================
+        function resetChat() {
+            document.getElementById('chatHeader').classList.add('hidden');
+            document.getElementById('noChat').classList.remove('hidden');
+            document.getElementById('messages').classList.add('hidden');
+            document.getElementById('inputArea').classList.add('hidden');
+            document.getElementById('messages').innerHTML = '';
+            clearMediaPreview();
+            document.getElementById('emojiPicker').classList.remove('show');
+            document.getElementById('emojiBtn').classList.remove('active');
+        }
+
+        // Cleanup
+        window.onbeforeunload = () => {
+            if (currentWebSocket) currentWebSocket.close();
+        };
+    </script>
+</body>
+</html>
