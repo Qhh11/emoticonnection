@@ -5,9 +5,9 @@ Emotion-based Matching API
 
 from fastapi import APIRouter, Depends
 
-from app.schemas.chat import MatchRequest, MatchResponse, EmotionType
-from app.api.deps import get_matching_service
-from app.services.matching_service import MatchingService
+from app.modules.chat.schemas.chat import MatchRequest, MatchResponse, EmotionType
+from app.modules.chat.deps import get_matching_service
+from app.modules.chat.services.matching_service import MatchingService
 
 
 router = APIRouter(prefix="/match", tags=["matching"])

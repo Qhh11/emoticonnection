@@ -13,8 +13,8 @@ CURRENT STATUS:
 - The DB team will replace this with real database connection later
 """
 from typing import Generator
-from app.services.ws_manager import ConnectionManager
-from app.services.matching_service import MatchingService, matching_service
+from app.modules.chat.services.ws_manager import ConnectionManager
+from app.modules.chat.services.matching_service import MatchingService, matching_service
 
 class DummyDB:
     """

@@ -14,12 +14,15 @@ HOW IT WORKS:
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 
-from app.schemas.chat import MessageCreate, MessageOut
-from app.services.ws_manager import ConnectionManager
+from app.modules.chat.schemas.chat import MessageCreate, MessageOut
+from app.modules.chat.services.ws_manager import ConnectionManager
 
 # Import in-memory storage from chat_http to save messages
 # In production, this would be replaced with database calls
-from app.api.routers import chat_http
+from app.modules.chat.api import chat_http
+
+# Import AI emotion analysis service
+from app.modules.ai.core.emotion import EmotionService
 
 # ============================================================================
 # Initialize Router and ConnectionManager
@@ -110,19 +113,39 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: int):
                 message_create = MessageCreate(**message_dict)
 
                 # ============================================================
-                # STEP 2.5: Save message to storage (for history)
+                # STEP 2.4: AI Emotion Analysis (BEFORE saving message)
+                # ============================================================
+                # Analyze emotion first so it can be saved with the message
+                emotion_result = None
+                if message_create.message_type.value == "text" and message_create.content:
+                    try:
+                        emotion_service = EmotionService()
+                        if emotion_service.model is not None:
+                            # Call async analyze_emotion method
+                            emotion_result = await emotion_service.analyze_emotion(message_create.content)
+                            print(f"[AI] Emotion analyzed: {emotion_result}")
+                    except Exception as e:
+                        print(f"[AI] Emotion analysis failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Continue without emotion if analysis fails
+
+                # ============================================================
+                # STEP 2.5: Save message to storage (WITH emotion)
                 # ============================================================
                 # Use the _create_message function from chat_http to save message
                 # This ensures WebSocket messages are also saved to history
+                # Now with emotion included!
                 saved_message = chat_http._create_message(
                     room_id=room_id,
                     sender_id=message_create.sender_id,
                     content=message_create.content,
                     message_type=message_create.message_type.value,
-                    media_url=message_create.media_url
+                    media_url=message_create.media_url,
+                    emotion=emotion_result
                 )
 
-                # Create MessageOut with real message ID
+                # Create MessageOut with real message ID (emotion already included)
                 message_out = MessageOut(**saved_message)
 
                 # ============================================================

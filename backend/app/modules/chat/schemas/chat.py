@@ -190,6 +190,10 @@ class MessageOut(BaseModel):
         default=None,
         description="URL to uploaded media file (for image/video messages)"
     )
+    emotion: Optional[str] = Field(
+        default=None,
+        description="AI-analyzed emotion of the message (only visible to receiver)"
+    )
     created_at: datetime = Field(..., description="Message creation time (ISO 8601 format)")
 
     class Config:

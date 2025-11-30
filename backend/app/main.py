@@ -9,8 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
-# Import routers
-from app.api.routers import chat_http, chat_ws, match, media
+# Import API routes from modular structure
+from app.modules.chat.api import chat_http, chat_ws, match, media
+from app.modules.ai.api import ai_chat, emotion
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +22,8 @@ async def lifespan(app: FastAPI):
     print("🔌 WebSocket Chat: ws://localhost:8000/ws/rooms/{room_id}")
     print("💬 HTTP Chat API: http://localhost:8000/api/chat")
     print("🎯 Matching API: http://localhost:8000/api/match")
+    print("🤖 AI Chat API: http://localhost:8000/api/ai-chat")
+    print("😊 Emotion API: http://localhost:8000/api/emotion")
     print("=" * 60)
     
     yield
@@ -62,6 +65,9 @@ app.include_router(chat_ws.router)
 app.include_router(match.router, prefix="/api")
 # Media upload routes (/media/upload, /media/info, etc.)
 app.include_router(media.router, prefix="/api")
+# AI Chat routes (from teammate)
+app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
+app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
 
 # static path
 BASE_DIR = Path(__file__).resolve().parent.parent          
@@ -126,6 +132,8 @@ async def startup_event():
     print("📝 API Documentation: http://localhost:8000/docs")
     print("🔌 WebSocket Endpoint: ws://localhost:8000/ws/rooms/{room_id}")
     print("💬 HTTP API: http://localhost:8000/api/chat")
+    print("🤖 AI Chat API: http://localhost:8000/api/ai-chat")
+    print("😊 Emotion API: http://localhost:8000/api/emotion")
     print("🌐 Chat test page:  http://localhost:8000/static/chat_test.html")
     print("🌐 Match test page:  http://localhost:8000/static/match_test.html")
     print("=" * 60)

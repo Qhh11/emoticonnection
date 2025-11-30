@@ -5,8 +5,8 @@ Matching Service - Emotion-based User Matching
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 
-from app.schemas.chat import (
-    MatchRequest, MatchResponse, MatchQueueEntry, 
+from app.modules.chat.schemas.chat import (
+    MatchRequest, MatchResponse, MatchQueueEntry,
     MatchMode, EmotionType
 )
 
@@ -124,7 +124,7 @@ class MatchingService:
         is_anonymous = request.mode == MatchMode.HUMAN_ANONYMOUS
         
         # IMPORTANT: Create room in chat system
-        from app.api.routers import chat_http
+        from app.modules.chat.api import chat_http 
         room = chat_http._get_or_create_room(
             user1_id=request.user_id,
             user2_id=matched_entry.user_id,

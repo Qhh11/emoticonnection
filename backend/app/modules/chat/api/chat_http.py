@@ -15,12 +15,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 # Import our data models
-from app.schemas.chat import (
+from app.modules.chat.schemas.chat import (
     RoomCreate, Room, MessageCreate, MessageOut,
     RoomCreateExtended, RoomExtended, RoomListItem,
     AnonymousSettings, RevealIdentityRequest, RevealIdentityResponse
 )
-from app.api.deps import get_db, DummyDB
+from app.modules.chat.deps import get_db, DummyDB
 
 
 
@@ -127,12 +127,13 @@ def _create_message(
     sender_id: int,
     content: str,
     message_type: str = "text",
-    media_url: str = None
+    media_url: str = None,
+    emotion: str = None
 ) -> dict:
     """
     Create a new message with support for different message types
 
-    TODO: Replace with: chat_repo.create_message(room_id, sender_id, content, message_type, media_url)
+    TODO: Replace with: chat_repo.create_message(room_id, sender_id, content, message_type, media_url, emotion)
     """
     global _next_message_id
 
@@ -143,6 +144,7 @@ def _create_message(
         "message_type": message_type,
         "content": content,
         "media_url": media_url,
+        "emotion": emotion,
         "created_at": datetime.utcnow()
     }
     _messages.append(message)
