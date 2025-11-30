@@ -124,7 +124,7 @@ class MatchingService:
         is_anonymous = request.mode == MatchMode.HUMAN_ANONYMOUS
         
         # IMPORTANT: Create room in chat system
-        from app.api.v1.routers import chat_http
+        from app.api.routers import chat_http
         room = chat_http._get_or_create_room(
             user1_id=request.user_id,
             user2_id=matched_entry.user_id,
