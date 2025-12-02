@@ -288,7 +288,7 @@ EmotionConnect/
 
 * Python 3.9+
 * Node.js 16+
-* PostgreSQL
+* MongoDB 5.0+
 * Qdrant (可选，用于向量检索)
 
 ## 安装步骤
