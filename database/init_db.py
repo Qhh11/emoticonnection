@@ -14,7 +14,7 @@ def create_indexes():
     
     # ========== Users Collection ==========
     db.users.create_index([("username", ASCENDING)], unique=True)
-    db.users.create_index([("email", ASCENDING)], unique=True, sparse=True)
+    db.users.create_index([("email", ASCENDING)], unique=True, partialFilterExpression={"email": {"$type": "string"}})
     db.users.create_index([("created_at", DESCENDING)])
     print("✅ Users indexes created")
     
