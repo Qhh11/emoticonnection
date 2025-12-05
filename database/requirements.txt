@@ -5,6 +5,7 @@ motor>=3.3.0  # 异步 MongoDB 驱动
 # 数据验证
 pydantic>=2.5.0
 pydantic[email]>=2.5.0
+pydantic_core>=2.41.5
 
 # 环境变量
 python-dotenv>=1.0.0
