@@ -8,3 +8,7 @@ google-generativeai>=0.3.0
 
 # python-dotenv - For loading environment variables from .env file
 python-dotenv>=1.0.0
+
+# MongoDB async driver
+motor>=3.3.0
+pymongo>=4.6.0

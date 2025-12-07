@@ -61,12 +61,12 @@ class Room(BaseModel):
 
     Example JSON:
     {
-        "id": 123,
+        "id": "507f1f77bcf86cd799439011",
         "user1_id": 1,
         "user2_id": 2
     }
     """
-    id: int = Field(..., description="Unique room ID", example=123)
+    id: str = Field(..., description="Unique room ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439011")
     user1_id: int = Field(..., description="First user ID", example=1)
     user2_id: int = Field(..., description="Second user ID", example=2)
 
@@ -77,19 +77,19 @@ class RoomCreateExtended(BaseModel):
 
 
 class RoomExtended(BaseModel):
-    id: int
+    id: str  # MongoDB ObjectId as string
     user1_id: int
     user2_id: int
     is_anonymous: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    user1_revealed: bool = True  
+    user1_revealed: bool = True
     user2_revealed: bool = True  
 
 
 class RoomListItem(BaseModel):
-    room_id: int
+    room_id: str  # MongoDB ObjectId as string
     other_user_id: int
-    other_user_name: Optional[str] = None  # None when anoumyous
+    other_user_name: Optional[str] = None  # None when anonymous
     is_anonymous: bool
     last_message: Optional[str] = None
     last_message_time: Optional[datetime] = None
@@ -178,8 +178,8 @@ class MessageOut(BaseModel):
         "created_at": "2025-01-25T10:31:00Z"
     }
     """
-    id: int = Field(..., description="Unique message ID", example=456)
-    room_id: int = Field(..., description="Room ID this message belongs to", example=123)
+    id: str = Field(..., description="Unique message ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439014")
+    room_id: str = Field(..., description="Room ID this message belongs to (MongoDB ObjectId)", example="507f1f77bcf86cd799439012")
     sender_id: int = Field(..., description="Sender user ID", example=1)
     message_type: MessageType = Field(
         default=MessageType.TEXT,

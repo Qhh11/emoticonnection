@@ -5,9 +5,9 @@ This is the REAL-TIME chat implementation!
 Users connect via WebSocket and messages are broadcasted instantly.
 
 HOW IT WORKS:
-1. User connects to ws://localhost:8000/ws/rooms/123
+1. User connects to ws://localhost:8000/ws/rooms/{room_id}
 2. User sends JSON: {"sender_id": 1, "content": "Hello"}
-3. Server broadcasts to all users in room 123
+3. Server broadcasts to all users in room
 4. Both users receive the message in real-time!
 """
 
@@ -16,10 +16,8 @@ import json
 
 from app.modules.chat.schemas.chat import MessageCreate, MessageOut
 from app.modules.chat.services.ws_manager import ConnectionManager
-
-# Import in-memory storage from chat_http to save messages
-# In production, this would be replaced with database calls
-from app.modules.chat.api import chat_http
+from app.modules.chat.repository.chat_repository import ChatRepository
+from app.database.mongodb import get_database
 
 # Import AI emotion analysis service
 from app.modules.ai.core.emotion import EmotionService
@@ -39,7 +37,7 @@ manager = ConnectionManager()
 # ============================================================================
 
 @router.websocket("/ws/rooms/{room_id}")
-async def websocket_chat_endpoint(websocket: WebSocket, room_id: int):
+async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
     """
     WebSocket endpoint for real-time chat
 
@@ -131,14 +129,15 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: int):
                         # Continue without emotion if analysis fails
 
                 # ============================================================
-                # STEP 2.5: Save message to storage (WITH emotion)
+                # STEP 2.5: Save message to MongoDB (WITH emotion)
                 # ============================================================
-                # Use the _create_message function from chat_http to save message
+                # Create repository instance and save message to database
                 # This ensures WebSocket messages are also saved to history
                 # Now with emotion included!
-                saved_message = chat_http._create_message(
-                    room_id=room_id,
-                    sender_id=message_create.sender_id,
+                repo = ChatRepository(get_database())
+                saved_message = await repo.create_message(
+                    session_id=room_id,
+                    sender_id=str(message_create.sender_id),
                     content=message_create.content,
                     message_type=message_create.message_type.value,
                     media_url=message_create.media_url,

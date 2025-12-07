@@ -36,3 +36,7 @@ pip-delete-this-directory.txt
 # Uploaded media files (keep the directory structure but ignore content)
 backend/static/uploads/*
 !backend/static/uploads/.gitkeep
+
+# MongoDB data files (local database)
+mongodb_data/
+mongodb.log

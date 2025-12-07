@@ -12,9 +12,14 @@ from pathlib import Path
 # Import API routes from modular structure
 from app.modules.chat.api import chat_http, chat_ws, match, media
 from app.modules.ai.api import ai_chat, emotion
+# Import database connection management
+from app.database.mongodb import connect_to_mongodb, close_mongodb_connection
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Connect to MongoDB on startup
+    await connect_to_mongodb()
+
     print("=" * 60)
     print("🚀 EmotiConnect Chat API Starting...")
     print("=" * 60)
@@ -25,9 +30,11 @@ async def lifespan(app: FastAPI):
     print("🤖 AI Chat API: http://localhost:8000/api/ai-chat")
     print("😊 Emotion API: http://localhost:8000/api/emotion")
     print("=" * 60)
-    
+
     yield
-    
+
+    # Close MongoDB connection on shutdown
+    await close_mongodb_connection()
     print("\n👋 EmotiConnect Chat API Shutting down...")
 
 
@@ -126,6 +133,9 @@ async def startup_event():
     - Loading configuration
     - Starting background tasks
     """
+    # Connect to MongoDB
+    await connect_to_mongodb()
+
     print("=" * 60)
     print("🚀 EmotiConnect Chat API Starting...")
     print("=" * 60)
@@ -148,5 +158,8 @@ async def shutdown_event():
     - Closing database connections
     - Cleaning up resources
     """
+    # Close MongoDB connection
+    await close_mongodb_connection()
+
     print("\n👋 EmotiConnect Chat API Shutting down...")
 
