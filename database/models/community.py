@@ -11,8 +11,8 @@ from .user import PyObjectId
 
 class CommunityPost(BaseModel):
     """树洞社区帖子"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId = Field(..., description="发帖用户 ID（匿名）")
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: Optional[str] = Field(..., description="发帖用户 ID（匿名）")
     
     # 帖子内容
     content: str = Field(..., min_length=1, max_length=5000, description="帖子内容")
@@ -41,15 +41,13 @@ class CommunityPost(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class PostComment(BaseModel):
     """帖子评论"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    post_id: PyObjectId = Field(..., description="所属帖子 ID")
-    user_id: PyObjectId = Field(..., description="评论用户 ID")
+    id: Optional[str] = Field(default=None, alias="_id")
+    post_id: Optional[str] = Field(..., description="所属帖子 ID")
+    user_id: Optional[str] = Field(..., description="评论用户 ID")
     
     # 评论内容
     content: str = Field(..., min_length=1, max_length=1000)
@@ -68,19 +66,15 @@ class PostComment(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class PostLike(BaseModel):
     """点赞记录"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    post_id: Optional[PyObjectId] = Field(None)
-    comment_id: Optional[PyObjectId] = Field(None)
-    user_id: PyObjectId = Field(...)
+    id: Optional[str] = Field(default=None, alias="_id")
+    post_id: Optional[str] = Field(None)
+    comment_id: Optional[str] = Field(None)
+    user_id: Optional[str] = Field(...)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}

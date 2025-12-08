@@ -26,8 +26,8 @@ class MediaAttachment(BaseModel):
 
 class DiaryEntry(BaseModel):
     """情绪日记条目"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId = Field(..., description="用户 ID")
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: Optional[str] = Field(..., description="用户 ID")
     
     # 日记内容
     content: str = Field(..., min_length=1, description="日记文本内容")
@@ -52,8 +52,6 @@ class DiaryEntry(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
         schema_extra = {
             "example": {
                 "user_id": "507f1f77bcf86cd799439011",

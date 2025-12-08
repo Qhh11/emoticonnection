@@ -55,7 +55,7 @@ class UserPreferences(BaseModel):
 
 class User(BaseModel):
     """用户主模型"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[str] = Field(default=None, alias="_id")
     username: str = Field(..., min_length=3, max_length=30)
     email: Optional[EmailStr] = None
     hashed_password: str = Field(...)

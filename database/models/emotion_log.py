@@ -11,8 +11,8 @@ from .user import PyObjectId
 
 class EmotionLog(BaseModel):
     """情绪日志（细粒度记录）"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId = Field(...)
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: Optional[str] = Field(...)
     
     # 情绪数据
     primary_emotion: str = Field(...)
@@ -28,14 +28,12 @@ class EmotionLog(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class EmotionAnalytics(BaseModel):
     """情绪分析报告（周报/月报）"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId = Field(...)
+    id: Optional[str] = Field(default=None, alias="_id")
+    user_id: Optional[str] = Field(...)
     
     # 报告周期
     period_type: str = Field(..., description="weekly/monthly")
@@ -61,5 +59,3 @@ class EmotionAnalytics(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}

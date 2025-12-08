@@ -11,14 +11,14 @@ from .user import PyObjectId
 
 class ChatSession(BaseModel):
     """聊天会话"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[str] = Field(default=None, alias="_id")
     
     # 会话类型
     session_type: str = Field(..., description="ai/peer")
     
     # 参与者
-    user_id: PyObjectId = Field(..., description="发起用户 ID")
-    peer_user_id: Optional[PyObjectId] = Field(None, description="对方用户 ID（Peer Chat）")
+    user_id: str = Field(..., description="发起用户 ID")
+    peer_user_id: Optional[str] = Field(None, description="对方用户 ID（Peer Chat）")
     
     # AI 模式（仅 AI Chat）
     ai_mode: Optional[str] = Field(None, description="venting/analytic/chill/stabilize/mindfulness")
@@ -40,17 +40,15 @@ class ChatSession(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 
 class ChatMessage(BaseModel):
     """聊天消息"""
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    session_id: PyObjectId = Field(..., description="所属会话 ID")
+    id: Optional[str] = Field(default=None, alias="_id")
+    session_id: Optional[str] = Field(..., description="所属会话 ID")
     
     # 发送者信息
-    sender_id: PyObjectId = Field(..., description="发送者 ID")
+    sender_id: Optional[str] = Field(..., description="发送者 ID")
     sender_type: str = Field(..., description="user/ai/peer")
     
     # 消息内容
@@ -67,5 +65,3 @@ class ChatMessage(BaseModel):
     
     class Config:
         allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
