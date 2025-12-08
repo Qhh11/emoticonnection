@@ -14,6 +14,7 @@ from app.modules.chat.api import chat_http, chat_ws, match, media
 from app.modules.ai.api import ai_chat, emotion
 # Import database connection management
 from app.database.mongodb import connect_to_mongodb, close_mongodb_connection
+from app.modules.post.api import post_http
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,8 +45,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="EmotiConnect Chat API",
-    description="Real-time chat module with emotion-aware messaging.",
-    version="2.0.0",
+    description="Real-time chat and social feed with emotion-aware messaging.",
+    version="2.1.0",
     lifespan=lifespan
 )
 
@@ -75,7 +76,8 @@ app.include_router(media.router, prefix="/api")
 # AI Chat routes (from teammate)
 app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
 app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
-
+# Post/Feed routes
+app.include_router(post_http.router, prefix="/api")
 # static path
 BASE_DIR = Path(__file__).resolve().parent.parent          
 STATIC_DIR = BASE_DIR / "static"                         
@@ -99,10 +101,14 @@ def root():
     Returns basic API information
     """
     return {
-        "message": "EmotiConnect Chat API is running!",
-        "version": "1.0.0",
+        "message": "EmotiConnect API is running!",
+        "version": "2.1.0",
         "endpoints": {
-            "http_api": "/api/v1/chat",
+            "chat_api": "/api/chat",
+            "posts_api": "/api/posts",
+            "ai_chat": "/api/ai-chat",
+            "emotion": "/api/emotion",
+            "matching": "/api/match",
             "websocket": "/ws/rooms/{room_id}",
             "docs": "/docs"
         }

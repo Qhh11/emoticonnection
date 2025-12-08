@@ -1,0 +1,1 @@
+from app.modules.post.repository.post_repository import PostRepository

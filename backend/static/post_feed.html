@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmotiConnect - Feed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* User Settings */
+        .user-settings {
+            background: white;
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .user-settings input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        /* Create Post */
+        .create-post {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .create-post textarea {
+            width: 100%;
+            min-height: 100px;
+            border: 1px solid #eee;
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 16px;
+            resize: none;
+            margin-bottom: 15px;
+        }
+
+        .create-post textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .post-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .option-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .option-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .option-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .emotion-select {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Tags Filter */
+        .tags-section {
+            background: white;
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .tags-section h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .trending-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            padding: 6px 14px;
+            background: #f0f0f0;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tag:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .tag.active {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Posts Feed */
+        .feed {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .post-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .post-author {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .post-author.anonymous {
+            color: #888;
+            font-style: italic;
+        }
+
+        .post-time {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .post-content {
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .post-emotion {
+            display: inline-block;
+            padding: 4px 10px;
+            background: #e8f4fd;
+            color: #1976d2;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        .post-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 15px;
+        }
+
+        .post-tag {
+            padding: 4px 10px;
+            background: #f5f0ff;
+            color: #764ba2;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .post-media {
+            margin-bottom: 15px;
+        }
+
+        .post-media img {
+            width: 100%;
+            border-radius: 12px;
+        }
+
+        .post-actions {
+            display: flex;
+            gap: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            font-size: 14px;
+            padding: 5px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            color: #667eea;
+        }
+
+        .action-btn.liked {
+            color: #e53935;
+        }
+
+        /* Comments Section */
+        .comments-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .comment {
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .comment:last-child {
+            border-bottom: none;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .comment-content {
+            font-size: 14px;
+            color: #555;
+            margin-top: 4px;
+        }
+
+        .comment-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .comment-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .comment-input button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: white;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 16px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 EmotiConnect Feed</h1>
+
+        <!-- User Settings -->
+        <div class="user-settings">
+            <label>Your User ID:</label>
+            <input type="number" id="currentUserId" value="1" min="1">
+        </div>
+
+        <!-- Create Post -->
+        <div class="create-post">
+            <textarea id="postContent" placeholder="What's on your mind? Use #hashtags to add tags..."></textarea>
+            
+            <div class="post-options">
+                <button class="option-btn active" id="anonymousToggle" onclick="toggleAnonymous()">
+                    🎭 Anonymous
+                </button>
+                <select class="emotion-select" id="emotionSelect">
+                    <option value="">Select Emotion...</option>
+                    <option value="happy">😊 Happy</option>
+                    <option value="grateful">🙏 Grateful</option>
+                    <option value="calm">😌 Calm</option>
+                    <option value="anxious">😰 Anxious</option>
+                    <option value="sad">😢 Sad</option>
+                    <option value="excited">🎉 Excited</option>
+                    <option value="stressed">😫 Stressed</option>
+                </select>
+            </div>
+            
+            <button class="submit-btn" onclick="createPost()">Share Post</button>
+        </div>
+
+        <!-- Trending Tags -->
+        <div class="tags-section">
+            <h3>🔥 Trending Tags</h3>
+            <div class="trending-tags" id="trendingTags">
+                <span class="tag" onclick="filterByTag('')">All</span>
+            </div>
+        </div>
+
+        <!-- Feed -->
+        <div class="feed" id="feed">
+            <div class="loading">Loading posts...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/posts';
+        let isAnonymous = true;
+        let currentTag = '';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTrendingTags();
+            loadFeed();
+        });
+
+        function getCurrentUserId() {
+            return parseInt(document.getElementById('currentUserId').value) || 1;
+        }
+
+        function toggleAnonymous() {
+            isAnonymous = !isAnonymous;
+            const btn = document.getElementById('anonymousToggle');
+            btn.classList.toggle('active', isAnonymous);
+            btn.textContent = isAnonymous ? '🎭 Anonymous' : '👤 Public';
+        }
+
+        async function createPost() {
+            const content = document.getElementById('postContent').value.trim();
+            if (!content) {
+                alert('Please enter some content');
+                return;
+            }
+
+            const emotion = document.getElementById('emotionSelect').value;
+
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        author_id: getCurrentUserId(),
+                        content: content,
+                        post_type: 'text',
+                        is_anonymous: isAnonymous,
+                        emotion: emotion || null
+                    })
+                });
+
+                if (response.ok) {
+                    document.getElementById('postContent').value = '';
+                    document.getElementById('emotionSelect').value = '';
+                    loadFeed();
+                    loadTrendingTags();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.detail);
+                }
+            } catch (e) {
+                console.error('Error creating post:', e);
+                alert('Failed to create post');
+            }
+        }
+
+        async function loadTrendingTags() {
+            try {
+                const response = await fetch(`${API_BASE}/tags/trending?limit=8`);
+                const data = await response.json();
+                
+                const container = document.getElementById('trendingTags');
+                container.innerHTML = `<span class="tag ${!currentTag ? 'active' : ''}" onclick="filterByTag('')">All</span>`;
+                
+                data.tags.forEach(tag => {
+                    container.innerHTML += `
+                        <span class="tag ${currentTag === tag.tag ? 'active' : ''}" 
+                              onclick="filterByTag('${tag.tag}')">
+                            #${tag.tag} (${tag.post_count})
+                        </span>
+                    `;
+                });
+            } catch (e) {
+                console.error('Error loading tags:', e);
+            }
+        }
+
+        function filterByTag(tag) {
+            currentTag = tag;
+            loadFeed();
+            loadTrendingTags();
+        }
+
+        async function loadFeed() {
+            const feedEl = document.getElementById('feed');
+            feedEl.innerHTML = '<div class="loading">Loading posts...</div>';
+
+            try {
+                let url = `${API_BASE}?viewer_id=${getCurrentUserId()}&page_size=20`;
+                if (currentTag) {
+                    url += `&tag=${currentTag}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.posts.length === 0) {
+                    feedEl.innerHTML = '<div class="empty-state">No posts yet. Be the first to share!</div>';
+                    return;
+                }
+
+                feedEl.innerHTML = data.posts.map(post => renderPost(post)).join('');
+            } catch (e) {
+                console.error('Error loading feed:', e);
+                feedEl.innerHTML = '<div class="empty-state">Failed to load posts</div>';
+            }
+        }
+
+        function renderPost(post) {
+            const authorName = post.is_anonymous ? '🎭 Anonymous' : (post.author_name || `User ${post.author_id}`);
+            const authorClass = post.is_anonymous ? 'anonymous' : '';
+            const timeAgo = formatTimeAgo(new Date(post.created_at));
+            
+            let tagsHtml = '';
+            if (post.tags && post.tags.length > 0) {
+                tagsHtml = `
+                    <div class="post-tags">
+                        ${post.tags.map(t => `<span class="post-tag">#${t}</span>`).join('')}
+                    </div>
+                `;
+            }
+
+            let emotionHtml = '';
+            if (post.emotion || post.ai_emotion) {
+                emotionHtml = `<div class="post-emotion">Feeling: ${post.emotion || post.ai_emotion}</div>`;
+            }
+
+            let mediaHtml = '';
+            if (post.media_urls && post.media_urls.length > 0) {
+                mediaHtml = `
+                    <div class="post-media">
+                        ${post.media_urls.map(url => `<img src="${url}" alt="Post media">`).join('')}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="post-card" data-post-id="${post.id}">
+                    <div class="post-header">
+                        <span class="post-author ${authorClass}">${authorName}</span>
+                        <span class="post-time">${timeAgo}</span>
+                    </div>
+                    <div class="post-content">${escapeHtml(post.content)}</div>
+                    ${emotionHtml}
+                    ${tagsHtml}
+                    ${mediaHtml}
+                    <div class="post-actions">
+                        <button class="action-btn ${post.is_liked ? 'liked' : ''}" 
+                                onclick="toggleLike('${post.id}', ${post.is_liked})">
+                            ${post.is_liked ? '❤️' : '🤍'} ${post.like_count}
+                        </button>
+                        <button class="action-btn" onclick="toggleComments('${post.id}')">
+                            💬 ${post.comment_count}
+                        </button>
+                    </div>
+                    <div class="comments-section" id="comments-${post.id}" style="display: none;">
+                        <div class="comments-list" id="comments-list-${post.id}"></div>
+                        <div class="comment-input">
+                            <input type="text" id="comment-input-${post.id}" 
+                                   placeholder="Write a comment...">
+                            <button onclick="addComment('${post.id}')">Send</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function toggleLike(postId, isLiked) {
+            const endpoint = isLiked ? 'unlike' : 'like';
+            try {
+                const response = await fetch(`${API_BASE}/${postId}/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: getCurrentUserId() })
+                });
+
+                if (response.ok) {
+                    loadFeed();
+                }
+            } catch (e) {
+                console.error('Error toggling like:', e);
+            }
+        }
+
+        async function toggleComments(postId) {
+            const section = document.getElementById(`comments-${postId}`);
+            const isVisible = section.style.display !== 'none';
+            
+            if (isVisible) {
+                section.style.display = 'none';
+            } else {
+                section.style.display = 'block';
+                loadComments(postId);
+            }
+        }
+
+        async function loadComments(postId) {
+            const listEl = document.getElementById(`comments-list-${postId}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/${postId}/comments`);
+                const data = await response.json();
+
+                if (data.comments.length === 0) {
+                    listEl.innerHTML = '<div class="comment">No comments yet</div>';
+                    return;
+                }
+
+                listEl.innerHTML = data.comments.map(c => `
+                    <div class="comment">
+                        <span class="comment-author">${c.is_anonymous ? '🎭 Anonymous' : c.author_name}</span>
+                        <div class="comment-content">${escapeHtml(c.content)}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Error loading comments:', e);
+            }
+        }
+
+        async function addComment(postId) {
+            const input = document.getElementById(`comment-input-${postId}`);
+            const content = input.value.trim();
+            
+            if (!content) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/${postId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        author_id: getCurrentUserId(),
+                        content: content,
+                        is_anonymous: isAnonymous
+                    })
+                });
+
+                if (response.ok) {
+                    input.value = '';
+                    loadComments(postId);
+                    loadFeed();
+                }
+            } catch (e) {
+                console.error('Error adding comment:', e);
+            }
+        }
+
+        function formatTimeAgo(date) {
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
