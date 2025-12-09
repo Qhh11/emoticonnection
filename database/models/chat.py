@@ -3,10 +3,8 @@
 Collections: chat_sessions, chat_messages
 """
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field
-from bson import ObjectId
-from .user import PyObjectId
 
 
 class ChatSession(BaseModel):

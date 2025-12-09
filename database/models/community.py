@@ -5,8 +5,6 @@ Collections: community_posts, post_comments
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
-from bson import ObjectId
-from .user import PyObjectId
 
 
 class CommunityPost(BaseModel):

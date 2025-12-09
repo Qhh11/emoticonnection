@@ -1,13 +1,13 @@
 import bcrypt
+from typing import Optional, Dict, Any
 from bson import ObjectId
-from typing import Optional
 from config.mongodb_config import get_sync_database  # :contentReference[oaicite:2]{index=2}
 from models.user import User  # 你的用户模型 :contentReference[oaicite:3]{index=3}
 
 
 db = get_sync_database()
 users = db.users
-
+VALID_FIELDS = set(User.model_fields.keys()) - {"id"}
 
 # -------------------------
 # 工具函数：哈希密码
@@ -40,6 +40,8 @@ def create_user(user_data: User) -> str:
 
 def create_user_with_password(username: str, password: str, email: Optional[str]=None, nickname: Optional[str]="") -> str:
     hashed_pw = hash_password(password)
+    if nickname == "":
+        nickname = username
     user = User(
         username=username,
         hashed_password=hashed_pw,
@@ -48,6 +50,65 @@ def create_user_with_password(username: str, password: str, email: Optional[str]
     )
     return create_user(user)
 
+def update_user(user_id: str, updates: Dict[str, Any]) -> bool:
+    """
+    更新用户部分字段。
+    :param user_id: 用户的 MongoDB _id（字符串）
+    :param updates: 要更新的字段 dict，例如：
+        {
+            "nickname": "new name",
+            "preferences": {"theme": "dark"},
+            "mbti": {"type": "INTJ"}
+        }
+    :return: 是否成功更新（True/False）
+    """
+
+    # 1. 转换 user_id 为 ObjectId
+    try:
+        obj_id = ObjectId(user_id)
+    except:
+        raise ValueError("Invalid user_id format")
+    
+    # 2. 验证更新字段是否合法
+    for key in updates.keys():
+        if key not in VALID_FIELDS:
+            raise ValueError(f"Invalid field '{key}' — not allowed to update")
+
+    # 3. 处理嵌套字典（展开成 MongoDB 支持的 dot-notation）
+    #    例如 {"preferences": {"theme": "dark"}} →
+    #         {"preferences.theme": "dark"}
+    def flatten_dict(prefix, value, out_dict):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                flatten_dict(f"{prefix}.{k}", v, out_dict)
+        else:
+            out_dict[prefix] = value
+
+    update_doc = {}
+    for k, v in updates.items():
+        if isinstance(v, dict):
+            flatten_dict(k, v, update_doc)
+        else:
+            update_doc[k] = v
+
+    # 4. 过滤掉 None（除非你想要覆盖成 None）
+    update_doc = {k: v for k, v in update_doc.items() if v is not None}
+
+    if not update_doc:
+        return False  # 没有有效更新
+
+    # 5. 执行 MongoDB 更新
+    result = users.update_one(
+        {"_id": obj_id},
+        {"$set": update_doc}
+    )
+
+    return result.modified_count > 0
+
+def update_user_password(user_id: str, new_password: str) -> bool:
+    """更新用户密码"""
+    hashed_pw = hash_password(new_password)
+    return update_user(user_id, {"hashed_password": hashed_pw})
 
 # -------------------------
 # 数据库查询：按 username 查用户

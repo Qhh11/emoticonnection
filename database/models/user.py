@@ -5,38 +5,7 @@ Collection: users
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, EmailStr
-from bson import ObjectId
-from pydantic_core import core_schema
-from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler
-from pydantic.json_schema import JsonSchemaValue
 
-
-class PyObjectId(ObjectId):
-    """Pydantic v2-compatible ObjectId type"""
-
-    @classmethod
-    def __get_pydantic_core_schema__(cls, source_type, handler: GetCoreSchemaHandler):
-        # When field expects string, validate and convert to ObjectId
-        return core_schema.no_info_after_validator_function(
-            cls.validate,
-            core_schema.str_schema(),
-        )
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls,
-        core_schema: core_schema.CoreSchema,
-        handler: GetJsonSchemaHandler
-    ) -> JsonSchemaValue:
-        json_schema = handler(core_schema)
-        json_schema.update(type="string")
-        return json_schema
 
 class MBTIProfile(BaseModel):
     """MBTI 档案"""
@@ -88,8 +57,6 @@ class User(BaseModel):
     
     class Config:
         validate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
         json_schema_extra = {
             "example": {
                 "username": "user123",

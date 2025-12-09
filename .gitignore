@@ -1,0 +1,9 @@
+# 忽略 Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略测试文件夹
+test/
+tests/

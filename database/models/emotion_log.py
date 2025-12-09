@@ -5,8 +5,6 @@ Collections: emotion_logs, emotion_analytics
 from datetime import datetime
 from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
-from bson import ObjectId
-from .user import PyObjectId
 
 
 class EmotionLog(BaseModel):
@@ -21,7 +19,7 @@ class EmotionLog(BaseModel):
     
     # 来源
     source: str = Field(..., description="diary/chat/community")
-    source_id: Optional[PyObjectId] = Field(None, description="来源记录 ID")
+    source_id: Optional[str] = Field(None, description="来源记录 ID")
     
     # 时间
     recorded_at: datetime = Field(default_factory=datetime.utcnow)
