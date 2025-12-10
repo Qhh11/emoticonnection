@@ -9,11 +9,15 @@ from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from weaviate_client import get_weaviate_client
 
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+client = get_weaviate_client()
+
+print("Weaviate is ready:", client.is_ready())
 
 def check_environment_variables():
     if not GEMINI_API_KEY :
@@ -55,9 +59,3 @@ def call_gemini_api(prompt: str) -> str:
         raise
 
 
-
-
-if __name__ == "__main__":
-    sample_prompt = "Write a short story about a robot learning to love."
-    result = call_gemini_api(sample_prompt)
-    print("Generated Content:\n", result)
