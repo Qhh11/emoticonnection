@@ -9,7 +9,7 @@ from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from weaviate_client import  WeaviateManager
+from app.weaviate_client import WeaviateManager
 
 load_dotenv()
 
