@@ -19,7 +19,11 @@ def check_environment_variables():
     
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-weaviate_manager = WeaviateManager()
+# Only initialize WeaviateManager if running this script directly
+# Not when imported by other modules like server.py
+weaviate_manager = None
+if __name__ == "__main__":
+    weaviate_manager = WeaviateManager()
 
 check_environment_variables() 
 
