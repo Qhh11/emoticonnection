@@ -12,9 +12,13 @@ from google.genai import types
 import weaviate.classes.query as wq # Weaviate v4 query helper
 from weaviate.classes.query import Filter
 
-
-from weaviate_client import WeaviateManager 
-from model import ConversationRecord 
+# Local imports - support both direct execution and module imports
+try:
+    from weaviate_client import WeaviateManager 
+    from model import ConversationRecord
+except ImportError:
+    from app.weaviate_client import WeaviateManager 
+    from app.model import ConversationRecord 
 
 
 logging.basicConfig(level=logging.INFO)
@@ -71,7 +75,6 @@ def generate_weekly_report(user_id: str, start_time_iso: str) -> str:
         user_id (str): The 'userId' field in Weaviate.
         start_time_iso (str): ISO 8601 formatted date string (e.g., '2023-10-25T00:00:00Z').
     """
-    # 1. 检查连接
     if weaviate_manager is None or weaviate_manager.client is None:
         raise RuntimeError("WeaviateManager is not initialized or connected.")
     
@@ -96,7 +99,6 @@ def generate_weekly_report(user_id: str, start_time_iso: str) -> str:
             logger.info("No conversation history found.")
             return "No conversation history found for this period. Unable to generate report."
 
-        # 4. 格式化数据
         history_lines = []
         for obj in response.objects:
             props = obj.properties

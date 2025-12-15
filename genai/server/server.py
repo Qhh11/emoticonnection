@@ -16,7 +16,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.weaviate_client import WeaviateManager
-from app.main import call_gemini_api
+from app.main import call_gemini_api, generate_weekly_report
 
 # Load environment variables
 load_dotenv()
@@ -208,6 +208,78 @@ def ingest_data():
         
     except Exception as e:
         logger.error(f"Error in ingest_data endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/reports/weekly', methods=['POST'])
+def get_weekly_report():
+    """
+    Generate a weekly report for a user based on their conversation history.
+    
+    Request body:
+        {
+            "user_id": "test_user_123",
+            "start_time": "2023-10-01T00:00:00Z"
+        }
+    
+    Returns:
+        {
+            "success": true,
+            "data": {
+                "user_id": "test_user_123",
+                "start_time": "2023-10-01T00:00:00Z",
+                "report": "Generated weekly report content..."
+            }
+        }
+    """
+    try:
+        if not weaviate_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Weaviate is not connected'
+            }), 503
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        user_id = data.get('user_id')
+        start_time = data.get('start_time')
+        
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required field: user_id'
+            }), 400
+        
+        if not start_time:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required field: start_time (ISO 8601 format, e.g., 2023-10-01T00:00:00Z)'
+            }), 400
+        
+        # Generate weekly report
+        logger.info(f"Generating weekly report for user {user_id} since {start_time}")
+        report = generate_weekly_report(user_id, start_time)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'user_id': user_id,
+                'start_time': start_time,
+                'report': report
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in get_weekly_report endpoint: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
