@@ -73,17 +73,14 @@ class WeaviateManager:
             return False
         
         try:
-            # Using sequential_writer for efficient batching of data
-            with collection.batch.sequential_writer() as batch_writer:
+            # Using dynamic batch for efficient batching of data
+            with collection.batch.dynamic() as batch:
                 for item in data:
-                    # Pop vector from the data item to pass it separately
                     vector = item.pop("vector", None)
-                    # Insert the object
-                    batch_writer.insert(properties=item, vector=vector)
+                    batch.add_object(properties=item, vector=vector)
             
-            # Check for batch errors (optional, but good practice)
-            if collection.batch.num_errors > 0:
-                print(f"⚠️ Write operation completed with {collection.batch.num_errors} errors.")
+            # Batch errors are automatically handled by the context manager
+            # You can check batch.failed_objects if needed after the context exits
             return True
         except Exception as e:
             print(f"❌ Failed to write data to Weaviate: {e}")

@@ -13,12 +13,11 @@ class ConversationRecord:
 
     def to_weaviate_dict(self) -> Dict[str, Any]:
         """Converts the class instance into a dictionary suitable for Weaviate ingestion."""
+        ts_str = self.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
         return {
-            "userId": self.user_id,
-            "timestamp": self.timestamp.isoformat() + "Z", # Weaviate prefers ISO 8601 format with Z
-            "userQuery": self.query_text,
-            "llmResponse": self.response_text,
-            "sentimentAnalysis": self.sentiment,
-            # Weaviate will automatically combine 'userQuery' and 'llmResponse' 
-            # to generate the vector if the collection is configured to do so.
-        }
+        "userId": self.user_id,
+        "timestamp": ts_str,  
+        "userQuery": self.query_text,
+        "llmResponse": self.response_text,
+        "sentimentAnalysis": self.sentiment,
+    }
