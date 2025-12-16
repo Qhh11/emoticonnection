@@ -17,8 +17,12 @@ import json
 from app.modules.chat.schemas.chat import MessageCreate, MessageOut
 from app.modules.chat.services.ws_manager import ConnectionManager
 from app.modules.chat.repository.chat_repository import ChatRepository
-from app.database.mongodb import get_database
-
+# Use unified database configuration
+import sys
+from pathlib import Path
+database_path = Path(__file__).resolve().parents[5] / "database"
+sys.path.insert(0, str(database_path))
+from config.mongodb_config import get_database  # type: ignore
 # Import AI emotion analysis service
 from app.modules.ai.core.emotion import EmotionService
 
@@ -108,7 +112,7 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                 message_dict = json.loads(data)
 
                 # Validate using Pydantic model
-                message_create = MessageCreate(**message_dict)
+                message_create: MessageCreate = MessageCreate(**message_dict)
 
                 # ============================================================
                 # STEP 2.4: AI Emotion Analysis (BEFORE saving message)
@@ -145,7 +149,7 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                 )
 
                 # Create MessageOut with real message ID (emotion already included)
-                message_out = MessageOut(**saved_message)
+                message_out: MessageOut = MessageOut(**saved_message)
 
                 # ============================================================
                 # STEP 3: Broadcast message to all users in room

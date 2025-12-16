@@ -20,7 +20,12 @@ from app.modules.post.schemas.post import (
     TagInfo, TrendingTagsResponse
 )
 from app.modules.post.repository.post_repository import PostRepository
-from app.database.mongodb import get_database
+# Use unified database configuration
+import sys
+from pathlib import Path
+database_path = Path(__file__).resolve().parents[5] / "database"
+sys.path.insert(0, str(database_path))
+from config.mongodb_config import get_database  # type: ignore
 
 # Import AI emotion analysis service
 from app.modules.ai.core.emotion import EmotionService

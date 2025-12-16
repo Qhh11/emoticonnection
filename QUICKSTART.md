@@ -17,84 +17,146 @@ EmotiConnect is a real-time chat application with AI-powered emotion analysis. T
 ## Project Structure
 
 ```
-backend/
-├── app/
-│   ├── database/                    # MongoDB integration (NEW)
-│   │   ├── mongodb.py              # Database connection
-│   │   └── models.py               # Extended models
-│   ├── modules/
-│   │   ├── chat/                   # Peer chat module
-│   │   │   ├── api/                # HTTP + WebSocket endpoints
-│   │   │   ├── repository/         # Database operations (NEW)
-│   │   │   ├── schemas/            # Request/response models
-│   │   │   └── services/           # WebSocket manager, matching
-│   │   └── ai/                     # AI module
-│   │       ├── api/                # AI chat + emotion endpoints
-│   │       └── core/               # AI services
-│   └── main.py                     # FastAPI application
-├── static/
-│   ├── chat_main.html              # Main page
-│   ├── ai_chat.html                # AI chat interface
-│   ├── peer_chat.html              # Peer chat interface
-│   └── uploads/                    # Media uploads (gitignored)
-├── requirements.txt
-└── .env
+emoticonnection/
+├── database/                        # Unified database layer (team-shared)
+│   ├── config/
+│   │   └── mongodb_config.py       # MongoDB connection & lifecycle
+│   ├── models/                     # Database models (Pydantic)
+│   │   ├── chat.py                 # ChatSession, ChatMessage (enhanced)
+│   │   ├── user.py                 # User model
+│   │   ├── community.py            # Post, Comment models
+│   │   └── emotion_log.py          # Emotion analytics
+│   ├── crud/                       # Synchronous CRUD operations
+│   │   ├── chat_session_crud.py
+│   │   ├── chat_message_crud.py
+│   │   └── user_crud.py
+│   ├── .env                        # Database config (gitignored)
+│   └── init_db.py                  # Database initialization script
+│
+├── backend/
+│   ├── app/
+│   │   ├── modules/
+│   │   │   ├── chat/               # Chat module
+│   │   │   │   ├── api/            # HTTP + WebSocket endpoints
+│   │   │   │   ├── repository/     # Async repository (FastAPI)
+│   │   │   │   ├── schemas/        # Request/response models
+│   │   │   │   └── services/       # WebSocket manager, matching
+│   │   │   ├── post/               # Post/Feed module
+│   │   │   │   ├── api/            # HTTP endpoints
+│   │   │   │   ├── repository/     # Async repository
+│   │   │   │   └── schemas/        # Request/response models
+│   │   │   └── ai/                 # AI module
+│   │   │       ├── api/            # AI chat + emotion endpoints
+│   │   │       └── core/           # AI services (Gemini)
+│   │   └── main.py                 # FastAPI application
+│   ├── static/
+│   │   ├── chat_main.html          # Main page
+│   │   ├── ai_chat.html            # AI chat interface
+│   │   ├── peer_chat.html          # Peer chat interface
+│   │   └── uploads/                # Media uploads (gitignored)
+│   ├── requirements.txt
+│   ├── .env                        # Backend config (gitignored)
+│   └── .venv/                      # Python virtual environment
+│
+└── mongodb_data/                   # Local MongoDB data (gitignored)
 ```
+
+### Architecture Notes
+
+**Unified Database Layer (`database/`)**:
+- Shared by all team members
+- Contains models enhanced with backend-required fields (media_url, emotion, is_anonymous)
+- Provides both sync CRUD (for scripts) and async support (via repositories)
+
+**Backend Repositories**:
+- Async wrappers around database operations
+- Located in each module's `repository/` folder
+- Optimized for FastAPI's async framework
+
+**Separation of Concerns**:
+- `database/models/` - Database schema (team-shared)
+- `backend/app/modules/*/schemas/` - API request/response models (module-specific)
+- `backend/app/modules/*/repository/` - Async database operations (module-specific)
 
 ---
 
 ## Setup Instructions
 
-### 1. Install MongoDB
+This project assumes you installed MongoDB Community Edition by downloading the **macOS archive (.tgz)** from the official website.
 
-Choose one of the following methods:
+#### **Installation Steps**
 
-#### Option A: Homebrew (macOS - Recommended)
-```bash
-# Add MongoDB tap
-brew tap mongodb/brew
+1. **Download MongoDB Community Server:**
+    https://www.mongodb.com/try/download/community
 
-# Install MongoDB Community Edition
-brew install mongodb-community@8.0
+2. **Extract the archive** and move it into `/usr/local/mongodb`:
 
-# Start MongoDB service
-brew services start mongodb-community
+   ```
+   sudo mkdir -p /usr/local/mongodb
+   sudo mv ~/Downloads/mongodb-macos-x86_64--*/ /usr/local/mongodb/
+   ```
+
+3. **Add MongoDB to your PATH** (adjust directory name accordingly):
+
+   ```
+   echo 'export PATH=/usr/local/mongodb/mongodb-macos-x86_64--8.2.2/bin:$PATH' >> ~/.bash_profile
+   source ~/.bash_profile
+   ```
+
+4. **Verify installation:**
+
+   ```
+   mongod --version
+   ```
+
+------
+
+### 2. Create MongoDB Data Directory
+
+MongoDB requires a directory to store data files.
+
 ```
-
-#### Option B: Manual Download (if Homebrew fails)
-```bash
-# Download MongoDB from official site
-# Visit: https://www.mongodb.com/try/download/community
-
-# Extract to a directory (e.g., /usr/local/mongodb/)
-# Create data directory
 mkdir -p /Users/YOUR_USERNAME/emoticonnection/mongodb_data
-
-# Start MongoDB manually
-/path/to/mongodb/bin/mongod --dbpath /Users/YOUR_USERNAME/emoticonnection/mongodb_data
 ```
 
-#### Option C: Docker
-```bash
-docker run -d -p 27017:27017 --name mongodb mongo
+------
+
+### 3. Start MongoDB Server
+
+Start MongoDB manually using the downloaded binaries:
+
+```
+mongod --dbpath /Users/YOUR_USERNAME/emoticonnection/mongodb_data
 ```
 
-### 2. Verify MongoDB is Running
+If the server starts correctly, you should see:
 
-```bash
-# Check if MongoDB is listening on port 27017
-lsof -i :27017
+```
+Waiting for connections on port 27017
+```
 
-# Connect to MongoDB shell to verify
+Keep this terminal window open.
+
+------
+
+### 4. Connect to MongoDB
+
+In a second terminal:
+
+```
 mongosh
-
-# Expected output:
-# Current Mongosh Log ID: ...
-# Connecting to: mongodb://127.0.0.1:27017
-# Using MongoDB: 8.x.x
 ```
 
-### 3. Setup Python Environment
+Expected output:
+
+```
+Connecting to: mongodb://127.0.0.1:27017
+Using MongoDB: 8.2.x
+```
+
+You are now connected to the local database instance.
+
+### 5. Setup Python Environment
 
 ```bash
 # Navigate to backend
@@ -108,7 +170,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
+### 6. Configure Environment Variables
 
 ```bash
 # Create .env file from example
@@ -186,49 +248,88 @@ Expected console output:
 This project uses the **Repository Pattern** to separate database operations from API logic:
 
 ```
-API Layer (chat_http.py, chat_ws.py)
+API Layer (chat_http.py, chat_ws.py, post_http.py)
          ↓
-Repository Layer (chat_repository.py)
+Repository Layer (chat_repository.py, post_repository.py)
          ↓
-MongoDB (chat_sessions, chat_messages)
+Unified Database Config (database/config/mongodb_config.py)
+         ↓
+MongoDB (chat_sessions, chat_messages, posts, etc.)
 ```
 
 **Benefits**:
 - Clean separation of concerns
 - Easy to test and maintain
-- Can switch databases without changing API code
+- Async repositories optimized for FastAPI
+- Unified database configuration across all modules
 
-### Extended Models
+### Two-Layer Architecture
 
-The project includes **extended database models** (`backend/app/database/models.py`) that support additional features:
+**Database Layer** (`database/`):
+- **Purpose**: Team-shared database models and configuration
+- **Type**: Synchronous operations (for scripts, initialization)
+- **Used by**: Database team, initialization scripts
 
-- `message_type`: "text" | "emoji" | "image" | "video" | "audio"
-- `media_url`: URL for image/video files
-- `emotion`: AI-analyzed emotion for text messages
+**Repository Layer** (`backend/app/modules/*/repository/`):
+- **Purpose**: FastAPI-specific async database operations
+- **Type**: Asynchronous operations (for API endpoints)
+- **Used by**: Chat module, Post module, and other backend modules
 
-These fields extend beyond the base database schema to support all backend features.
+### Enhanced Database Models
+
+The database models in `database/models/chat.py` have been **enhanced** to support all backend features:
+
+**ChatMessage enhancements**:
+- `message_type`: "text" | "emoji" | "image" | "video" | "audio" | "system"
+- `media_url`: URL for image/video files (backend requirement)
+- `emotion`: AI-analyzed emotion for text messages (backend requirement)
+
+**ChatSession enhancements**:
+- `is_anonymous`: Anonymous chat mode flag (backend requirement)
+- `user1_revealed`, `user2_revealed`: Identity reveal status (backend requirement)
 
 ### MongoDB Collections
 
 #### Collection: `chat_sessions`
 Stores chat room information:
 - `_id`: MongoDB ObjectId (exposed as `id` in API)
-- `user_id`, `peer_user_id`: User identifiers
-- `is_anonymous`: Anonymous mode flag
-- `user1_revealed`, `user2_revealed`: Identity reveal status
+- `user_id`, `peer_user_id`: User identifiers (string)
+- `is_anonymous`: Anonymous mode flag (boolean)
+- `user1_revealed`, `user2_revealed`: Identity reveal status (boolean)
 - `status`: "active" | "ended" | "reported"
 - `started_at`, `ended_at`: Timestamps
 
 #### Collection: `chat_messages`
-Stores all messages:
+Stores all chat messages:
 - `_id`: MongoDB ObjectId (exposed as `id` in API)
-- `session_id`: Reference to chat_sessions
-- `sender_id`: User who sent the message
+- `session_id`: Reference to chat_sessions (string)
+- `sender_id`: User who sent the message (string)
 - `content`: Message text
-- `message_type`: "text" | "emoji" | "image" | "video" | "audio"
+- `message_type`: "text" | "emoji" | "image" | "video" | "audio" | "system"
 - `media_url`: URL for media files (images/videos)
 - `emotion`: AI-analyzed emotion (for text messages)
+- `safety_flag`: "safe" | "warning" | "danger"
 - `created_at`: Timestamp
+- `is_deleted`: Soft delete flag
+
+#### Collection: `posts`
+Stores social feed posts:
+- `_id`: MongoDB ObjectId (exposed as `id` in API)
+- `author_id`: User who created the post (int)
+- `content`: Post text
+- `post_type`: "text" | "image" | "video" | "mixed"
+- `media_urls`: Array of media file URLs
+- `is_anonymous`: Anonymous post flag
+- `visibility`: "public" | "anonymous" | "friends_only"
+- `tags`: Array of tags
+- `emotion`, `ai_emotion`: User-specified and AI-analyzed emotions
+- `created_at`: Timestamp
+
+#### Collection: `post_comments`
+Stores comments on posts (created when comments exist)
+
+#### Collection: `post_likes`
+Stores likes on posts (created when likes exist)
 
 ---
 

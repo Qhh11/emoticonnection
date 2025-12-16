@@ -221,7 +221,7 @@ class MatchRequest(BaseModel):
 
 class MatchResponse(BaseModel):
     matched: bool
-    room_id: Optional[int] = None
+    room_id: Optional[str] = None  # MongoDB ObjectId as string
     matched_user_id: Optional[int] = None
     is_anonymous: bool = True
     match_type: MatchMode
@@ -237,13 +237,13 @@ class MatchQueueEntry(BaseModel):
 
 # New models - Anonymous
 class AnonymousSettings(BaseModel):
-    room_id: int
+    room_id: str  # MongoDB ObjectId as string
     user1_anonymous: bool = True
     user2_anonymous: bool = True
 
 
 class RevealIdentityRequest(BaseModel):
-    room_id: int
+    room_id: str  # MongoDB ObjectId as string
     user_id: int
 
 

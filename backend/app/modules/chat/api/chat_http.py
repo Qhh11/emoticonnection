@@ -20,7 +20,12 @@ from app.modules.chat.schemas.chat import (
     AnonymousSettings, RevealIdentityRequest, RevealIdentityResponse
 )
 from app.modules.chat.repository.chat_repository import ChatRepository
-from app.database.mongodb import get_database
+# Use unified database configuration
+import sys
+from pathlib import Path
+database_path = Path(__file__).resolve().parents[5] / "database"
+sys.path.insert(0, str(database_path))
+from config.mongodb_config import get_database  # type: ignore
 
 
 
@@ -293,10 +298,10 @@ async def get_user_rooms(user_id: int, repo: ChatRepository = Depends(get_chat_r
 
     for room in rooms:
         # Parse user IDs from string (they're stored as strings in MongoDB)
-        room_user1_id = int(room["user1_id"]) if isinstance(room["user1_id"], str) and room["user1_id"].isdigit() else room["user1_id"]
-        room_user2_id = int(room["user2_id"]) if isinstance(room["user2_id"], str) and room["user2_id"].isdigit() else room["user2_id"]
+        room_user1_id: int = int(room["user1_id"]) if isinstance(room["user1_id"], str) and room["user1_id"].isdigit() else int(room["user1_id"])
+        room_user2_id: int = int(room["user2_id"]) if isinstance(room["user2_id"], str) and room["user2_id"].isdigit() else int(room["user2_id"])
 
-        other_user_id = (
+        other_user_id: int = (
             room_user2_id
             if room_user1_id == user_id
             else room_user1_id
