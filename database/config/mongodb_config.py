@@ -1,11 +1,15 @@
-"""
-MongoDB 数据库连接配置
-"""
+"""MongoDB 数据库连接配置"""
+
 import os
+from pathlib import Path
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
+# Prefer `database/.env` when starting from repo root.
+_database_env = Path(__file__).resolve().parents[1] / ".env"
+if _database_env.exists():
+    load_dotenv(dotenv_path=_database_env)
 load_dotenv()
 
 # MongoDB 连接配置

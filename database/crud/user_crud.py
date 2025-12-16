@@ -1,8 +1,12 @@
 import bcrypt
 from typing import Optional, Dict, Any
 from bson import ObjectId
-from config.mongodb_config import get_sync_database  # :contentReference[oaicite:2]{index=2}
-from models.user import User  # 你的用户模型 :contentReference[oaicite:3]{index=3}
+try:
+    from database.config.mongodb_config import get_sync_database
+    from database.models.user import User
+except ImportError:  # pragma: no cover
+    from config.mongodb_config import get_sync_database
+    from models.user import User
 
 
 db = get_sync_database()
@@ -28,17 +32,22 @@ def verify_password(password: str, hashed_password: str) -> bool:
 # -------------------------
 # 数据库插入：注册用户
 # -------------------------
-def create_user(user_data: User) -> str:
+def create_user(user_data: User) -> Optional[str]:
     """写入 MongoDB，一个新的用户"""
     if users.find_one({"username": user_data.username}):
         print("User already exists")
-        return
+        return None
 
     user_dict = user_data.dict(by_alias=True, exclude={"id"})  
     result = users.insert_one(user_dict)
     return str(result.inserted_id)
 
-def create_user_with_password(username: str, password: str, email: Optional[str]=None, nickname: Optional[str]="") -> str:
+def create_user_with_password(
+    username: str,
+    password: str,
+    email: Optional[str] = None,
+    nickname: Optional[str] = "",
+) -> Optional[str]:
     hashed_pw = hash_password(password)
     if nickname == "":
         nickname = username
