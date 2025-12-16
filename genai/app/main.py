@@ -88,7 +88,7 @@ def generate_weekly_report(user_id: str, start_time_iso: str) -> str:
         
         response = conversations_collection.query.fetch_objects(
             filters=(
-                Filter.by_property("userId").equal(user_id) & 
+                (Filter.by_property("userId1").equal(user_id) | Filter.by_property("userId2").equal(user_id)) & 
                 Filter.by_property("timestamp").greater_or_equal(start_time_iso)
             ),
             limit=100,
@@ -147,7 +147,8 @@ def insert_fake_data():
     manager = WeaviateManager()
     
     record = ConversationRecord(
-        user_id="test_user_123",
+        user_id1="test_user_123",
+        user_id2="test_user_456",
         timestamp=datetime.now(timezone.utc),
         query_text="Hey, I struggled with sleeping this week.",
         response_text="I'm sorry to hear that. Have you tried meditation?",
