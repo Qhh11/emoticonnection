@@ -40,3 +40,8 @@ backend/static/uploads/*
 # MongoDB data files (local database)
 mongodb_data/
 mongodb.log
+
+
+# test folders
+test/
+tests/

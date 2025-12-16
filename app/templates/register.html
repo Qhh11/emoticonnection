@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EmotionConnect - Register </title>
+  </head>
+  <body>
+    <h1>Register</h1>
+
+    {% if error %}
+      <p style="color: #b00020;">{{ error }}</p>
+    {% endif %}
+
+    {% if success %}
+      <p style="color: #006400;">{{ success }}</p>
+    {% endif %}
+
+    <form method="post" action="/register">
+      <div>
+        <label>Username</label><br />
+        <input name="username" required />
+      </div>
+      <div style="margin-top: 8px;">
+        <label>Password</label><br />
+        <input name="password" type="password" required />
+      </div>
+      <div style="margin-top: 8px;">
+        <label>Email (optional)</label><br />
+        <input name="email" type="email" />
+      </div>
+      <div style="margin-top: 12px;">
+        <button type="submit">Register</button>
+      </div>
+    </form>
+
+    <p style="margin-top: 16px;">
+      Already have an account? <a href="/login">Log in here</a>
+    </p>
+  </body>
+</html>
