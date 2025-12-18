@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,7 +24,7 @@
             margin: 0 auto;
             background: white;
             border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             overflow: hidden;
             display: flex;
             height: 85vh;
@@ -199,8 +200,15 @@
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message.sent {
@@ -437,21 +445,15 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <!-- User Identity Selector -->
-        <div class="user-selector">
-            <h3>🎭 Your Identity</h3>
-            <button class="user-btn active" onclick="selectUser(1)">User 1</button>
-            <button class="user-btn" onclick="selectUser(2)">User 2</button>
-            <button class="user-btn" onclick="selectUser(3)">User 3</button>
-            <button class="user-btn" onclick="selectUser(4)">User 4</button>
-        </div>
+        <!-- User Identity Handled via Auth -->
 
         <!-- Contact List -->
         <div class="contact-list">
             <div class="contact-header">
-                <button class="back-btn" onclick="window.location.href='chat_main.html'" title="返回主页">←</button>
+                <button class="back-btn" onclick="window.location.href='index.html'" title="返回 Dashboard">←</button>
                 <div style="flex: 1;">
                     <h3>💬 真人聊天</h3>
                     <div class="current-user" id="currentUserDisplay">You are: User 1</div>
@@ -585,18 +587,16 @@
                     <button id="emojiBtn" onclick="toggleEmojiPicker()">😊 Emoji</button>
                     <button onclick="triggerImageUpload()">🖼️ Image</button>
                     <button onclick="triggerVideoUpload()">🎥 Video</button>
-                    <input type="file" id="imageUpload" accept="image/*" style="display: none;" onchange="handleFileSelect(event, 'image')">
-                    <input type="file" id="videoUpload" accept="video/*" style="display: none;" onchange="handleFileSelect(event, 'video')">
+                    <input type="file" id="imageUpload" accept="image/*" style="display: none;"
+                        onchange="handleFileSelect(event, 'image')">
+                    <input type="file" id="videoUpload" accept="video/*" style="display: none;"
+                        onchange="handleFileSelect(event, 'video')">
                 </div>
 
                 <!-- Message Input -->
                 <div class="input-row">
-                    <input
-                        type="text"
-                        id="messageInput"
-                        placeholder="Type a message..."
-                        onkeypress="if(event.key==='Enter') sendMessage()"
-                    >
+                    <input type="text" id="messageInput" placeholder="Type a message..."
+                        onkeypress="if(event.key==='Enter') sendMessage()">
                     <button class="send-btn" onclick="sendMessage()" id="sendBtn">Send</button>
                 </div>
             </div>
@@ -617,42 +617,48 @@
         let currentMediaUrl = null;
         let currentMediaType = null;
 
-        const allUsers = [
-            { id: 1, name: 'User 1' },
-            { id: 2, name: 'User 2' },
-            { id: 3, name: 'User 3' },
-            { id: 4, name: 'User 4' }
-        ];
+        let allUsers = []; // Will be fetched from API
 
         // ====================================================================
         // Initialize
         // ====================================================================
-        updateContactList();
-        initEmojiPicker();
+        const storedUserId = localStorage.getItem('chat_user_id');
+        const storedUsername = localStorage.getItem('chat_username');
+
+        if (!storedUserId) {
+            window.location.href = 'login.html';
+        } else {
+            currentUserId = storedUserId; // Keep as string for now
+            document.getElementById('currentUserDisplay').textContent = `You are: ${storedUsername || 'User ' + currentUserId}`;
+        }
+
+        async function init() {
+            // Fetch users
+            try {
+                const response = await fetch(`${API_BASE}/auth/users`);
+                if (response.ok) {
+                    const users = await response.json();
+                    allUsers = users.map(u => ({
+                        id: u.id,
+                        name: u.nickname || u.username
+                    }));
+                }
+            } catch (e) {
+                console.error("Failed to load users", e);
+            }
+
+            updateContactList();
+            initEmojiPicker();
+        }
+
+        if (storedUserId) {
+            init();
+        }
 
         // ====================================================================
         // Select User Identity
         // ====================================================================
-        function selectUser(userId) {
-            if (currentWebSocket) {
-                currentWebSocket.close();
-            }
-
-            currentUserId = userId;
-            currentChatUserId = null;
-            currentRoomId = null;
-
-            // Update UI
-            document.querySelectorAll('.user-btn').forEach((btn, i) => {
-                btn.classList.toggle('active', i + 1 === userId);
-            });
-
-            document.getElementById('currentUserDisplay').textContent = `You are: User ${userId}`;
-            updateContactList();
-
-            // Reset chat
-            resetChat();
-        }
+        // User selection is now handled on login
 
         // ====================================================================
         // Update Contact List
@@ -911,7 +917,7 @@
         // ====================================================================
         function initEmojiPicker() {
             document.querySelectorAll('.emoji-item').forEach(item => {
-                item.addEventListener('click', function() {
+                item.addEventListener('click', function () {
                     const emoji = this.getAttribute('data-emoji');
                     const input = document.getElementById('messageInput');
                     input.value += emoji;
@@ -1040,4 +1046,5 @@
         };
     </script>
 </body>
+
 </html>

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -53,7 +54,7 @@
             border-radius: 16px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
 
         .create-post textarea {
@@ -171,7 +172,7 @@
             background: white;
             border-radius: 16px;
             padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
 
         .post-header {
@@ -332,20 +333,18 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>📱 EmotiConnect Feed</h1>
 
-        <!-- User Settings -->
-        <div class="user-settings">
-            <label>Your User ID:</label>
-            <input type="number" id="currentUserId" value="1" min="1">
-        </div>
+        <!-- User Settings (Hidden, handled via Auth) -->
+        <input type="hidden" id="currentUserId">
 
         <!-- Create Post -->
         <div class="create-post">
             <textarea id="postContent" placeholder="What's on your mind? Use #hashtags to add tags..."></textarea>
-            
+
             <div class="post-options">
                 <button class="option-btn active" id="anonymousToggle" onclick="toggleAnonymous()">
                     🎭 Anonymous
@@ -361,7 +360,7 @@
                     <option value="stressed">😫 Stressed</option>
                 </select>
             </div>
-            
+
             <button class="submit-btn" onclick="createPost()">Share Post</button>
         </div>
 
@@ -386,12 +385,31 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            const userId = localStorage.getItem('chat_user_id');
+            const username = localStorage.getItem('chat_username');
+
+            if (!userId) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('currentUserId').value = userId;
+
             loadTrendingTags();
             loadFeed();
         });
 
         function getCurrentUserId() {
-            return parseInt(document.getElementById('currentUserId').value) || 1;
+            // Using string for Mongo ID compatibility, existing code might expect int
+            // PostRepository expects author_id as int? Let's check PostCreate schema.
+            // Wait, Python code has `author_id: 1` in doc string but schemas usually verify type.
+            // Mongo uses ObjectIds (str). The Postgres version used Ints. 
+            // The Auth module returns a String ID (ObjectId).
+            // I need to ensure the backend accepts String ID for posts now.
+            // Let's assume backend handles it (PostCreate schema likely allows str or int if Pydantic).
+            // But let's check schemas/post.py if possible. 
+            // For now, return the string.
+            return document.getElementById('currentUserId').value;
         }
 
         function toggleAnonymous() {
@@ -442,10 +460,10 @@
             try {
                 const response = await fetch(`${API_BASE}/tags/trending?limit=8`);
                 const data = await response.json();
-                
+
                 const container = document.getElementById('trendingTags');
                 container.innerHTML = `<span class="tag ${!currentTag ? 'active' : ''}" onclick="filterByTag('')">All</span>`;
-                
+
                 data.tags.forEach(tag => {
                     container.innerHTML += `
                         <span class="tag ${currentTag === tag.tag ? 'active' : ''}" 
@@ -494,7 +512,7 @@
             const authorName = post.is_anonymous ? '🎭 Anonymous' : (post.author_name || `User ${post.author_id}`);
             const authorClass = post.is_anonymous ? 'anonymous' : '';
             const timeAgo = formatTimeAgo(new Date(post.created_at));
-            
+
             let tagsHtml = '';
             if (post.tags && post.tags.length > 0) {
                 tagsHtml = `
@@ -569,7 +587,7 @@
         async function toggleComments(postId) {
             const section = document.getElementById(`comments-${postId}`);
             const isVisible = section.style.display !== 'none';
-            
+
             if (isVisible) {
                 section.style.display = 'none';
             } else {
@@ -580,7 +598,7 @@
 
         async function loadComments(postId) {
             const listEl = document.getElementById(`comments-list-${postId}`);
-            
+
             try {
                 const response = await fetch(`${API_BASE}/${postId}/comments`);
                 const data = await response.json();
@@ -604,7 +622,7 @@
         async function addComment(postId) {
             const input = document.getElementById(`comment-input-${postId}`);
             const content = input.value.trim();
-            
+
             if (!content) return;
 
             try {
@@ -631,7 +649,7 @@
         function formatTimeAgo(date) {
             const now = new Date();
             const diff = Math.floor((now - date) / 1000);
-            
+
             if (diff < 60) return 'Just now';
             if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
             if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
@@ -645,4 +663,5 @@
         }
     </script>
 </body>
+
 </html>

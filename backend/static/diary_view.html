@@ -159,7 +159,7 @@
     <div class="container">
         <div class="header">
             <h1>📔 My Emotional Diary</h1>
-            <a href="ai_chat.html" class="back-btn">← Back to Chat</a>
+            <a href="index.html" class="back-btn">← Back to Dashboard</a>
         </div>
 
         <div class="diary-grid" id="diaryList">
@@ -185,7 +185,7 @@
 
         async function loadDiaries() {
             if (!userId) {
-                document.getElementById('diaryList').innerHTML = '<p style="color:white">Please start a chat first to create a user profile.</p>';
+                window.location.href = 'login.html';
                 return;
             }
 

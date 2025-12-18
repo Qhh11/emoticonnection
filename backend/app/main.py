@@ -22,6 +22,7 @@ from config.mongodb_config import connect_to_mongodb, close_mongodb_connection  
 from app.modules.chat.api import chat_http, chat_ws, match, media
 from app.modules.ai.api import ai_chat, emotion
 from app.modules.post.api import post_http
+from app.modules.auth.api import auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -85,6 +86,8 @@ app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
 app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
 # Post/Feed routes
 app.include_router(post_http.router, prefix="/api")
+# Auth routes
+app.include_router(auth.router, prefix="/api")
 # static path
 BASE_DIR = Path(__file__).resolve().parent.parent          
 STATIC_DIR = BASE_DIR / "static"                         
@@ -112,6 +115,7 @@ def root():
         "version": "2.1.0",
         "endpoints": {
             "chat_api": "/api/chat",
+            "auth_api": "/api/auth",
             "posts_api": "/api/posts",
             "ai_chat": "/api/ai-chat",
             "emotion": "/api/emotion",

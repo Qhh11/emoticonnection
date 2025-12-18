@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EmotionConnect - Log in</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+    }
+
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 24px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 24px;
+      color: #333;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: opacity 0.2s;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .error {
+      color: #d32f2f;
+      margin-bottom: 10px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .link {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .link a {
+      color: #00f2fe;
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Welcome Back</h1>
+    <div id="errorMsg" class="error"></div>
+    <form id="loginForm">
+      <input name="username" placeholder="Username" required />
+      <input name="password" type="password" placeholder="Password" required />
+      <button type="submit" id="btnSubmit">Log in</button>
+    </form>
+    <div class="link">
+      Don't have an account? <a href="register.html">Register here</a>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8000/api/auth';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const btn = document.getElementById('btnSubmit');
+      const errorMsg = document.getElementById('errorMsg');
+
+      btn.disabled = true;
+      btn.textContent = 'Logging in...';
+      errorMsg.style.display = 'none';
+
+      const payload = {
+        username: form.username.value,
+        password: form.password.value
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // Save user info
+          localStorage.setItem('chat_user_id', data.user_id);
+          localStorage.setItem('chat_username', data.nickname || payload.username);
+
+          // Redirect
+          window.location.href = 'index.html';
+        } else {
+          throw new Error(data.message || 'Login failed'); // Should be detail from HTTPException usually
+        }
+      } catch (error) {
+        // If 401, response.ok is false. data will contain "detail"
+        // Our API returns detail for errors via HTTPException
+        console.error(error);
+        // Try to read error details if available in catch? 
+        // Wait, if !response.ok, I threw Error(data.detail) if I parsed it.
+        // Let's improve valid error handling
+        errorMsg.textContent = "Invalid username or password";
+        errorMsg.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Log in';
+      }
+    });
+  </script>
+</body>
+
+</html>
