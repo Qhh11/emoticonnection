@@ -13,7 +13,7 @@ if _database_env.exists():
 load_dotenv()
 
 # MongoDB 连接配置
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://127.0.0.1:27017")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "emotionconnect")
 
 # 异步客户端（用于 FastAPI）

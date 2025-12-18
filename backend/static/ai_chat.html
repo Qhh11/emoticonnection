@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,16 +22,91 @@
             padding: 20px;
         }
 
-        .chat-container {
+        .main-container {
+            display: flex;
+            width: 100%;
+            max-width: 1000px;
+            height: 700px;
             background: white;
             border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 800px;
-            width: 100%;
-            height: 600px;
+            overflow: hidden;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: #f1f3f4;
             display: flex;
             flex-direction: column;
+            border-right: 1px solid #e0e0e0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .new-chat-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+        }
+
+        .session-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .session-item {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 14px;
+            color: #333;
+            white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .session-item:hover {
+            background: #e6e6e6;
+        }
+
+        .session-item.active {
+            background: #daeaf5;
+            color: #1a73e8;
+            font-weight: 500;
+        }
+
+        .session-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        /* Chat Area Styles */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .chat-header {
@@ -172,10 +248,14 @@
         }
 
         @keyframes typing {
-            0%, 60%, 100% {
+
+            0%,
+            60%,
+            100% {
                 opacity: 0.3;
                 transform: translateY(0);
             }
+
             30% {
                 opacity: 1;
                 transform: translateY(-6px);
@@ -238,49 +318,67 @@
         }
     </style>
 </head>
+
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <button class="back-btn" onclick="window.location.href='chat_main.html'">←</button>
-            <div>
-                <h2>🤖 AI Companion</h2>
+    <div class="main-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button class="new-chat-btn" onclick="createNewChat()">
+                    <span>+</span> New Chat
+                </button>
             </div>
-            <div class="status">Online</div>
-        </div>
-
-        <div class="messages" id="messages">
-            <div class="welcome-message">
-                <h3>Hello! I'm your EmotiConnect AI assistant</h3>
-                <p>I'm here to listen and provide emotional support</p>
+            <div class="session-list" id="sessionList">
+                <!-- Sessions will be loaded here -->
             </div>
         </div>
 
-        <div class="input-area">
-            <input
-                type="text"
-                id="messageInput"
-                placeholder="Share your feelings..."
-                onkeypress="if(event.key==='Enter') sendMessage()"
-            >
-            <button id="sendButton" onclick="sendMessage()">Send</button>
+        <!-- Chat Area -->
+        <div class="chat-container">
+            <div class="chat-header">
+                <button class="back-btn" onclick="window.location.href='chat_main.html'">←</button>
+                <div>
+                    <h2>🤖 AI Companion</h2>
+                </div>
+                <div class="status">Online</div>
+            </div>
+
+            <div class="messages" id="messages">
+                <div class="welcome-message">
+                    <h3>Hello! I'm your EmotiConnect AI assistant</h3>
+                    <p>I'm here to listen and provide emotional support</p>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="Share your feelings..."
+                    onkeypress="if(event.key==='Enter') sendMessage()">
+                <button id="sendButton" onclick="sendMessage()">Send</button>
+            </div>
         </div>
     </div>
 
     <script>
-        // Chat history
+        // Chat state
         let chatHistory = [];
+        let currentSessionId = null;
 
         const messagesDiv = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
+        const sessionListDiv = document.getElementById('sessionList');
+
+        // Generate persistent user ID for testing
+        const userId = localStorage.getItem('chat_user_id') || 'user_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('chat_user_id', userId);
+
+        // API Base URL
+        const API_BASE = 'http://localhost:8000/api/ai-chat';
 
         // Add message to UI
-        function addMessage(role, content) {
-            // Remove welcome message
+        function addMessage(role, content, timestamp = new Date()) {
             const welcome = messagesDiv.querySelector('.welcome-message');
-            if (welcome) {
-                welcome.remove();
-            }
+            if (welcome) welcome.remove();
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
@@ -297,7 +395,7 @@
 
             const time = document.createElement('div');
             time.className = 'message-time';
-            time.textContent = new Date().toLocaleTimeString('en-US', {
+            time.textContent = new Date(timestamp).toLocaleTimeString('en-US', {
                 hour: '2-digit',
                 minute: '2-digit'
             });
@@ -317,25 +415,100 @@
             const indicator = document.createElement('div');
             indicator.className = 'message ai';
             indicator.id = 'typing-indicator';
-
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = '🤖';
-
-            const typing = document.createElement('div');
-            typing.className = 'typing-indicator active';
-            typing.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
-
-            indicator.appendChild(avatar);
-            indicator.appendChild(typing);
+            indicator.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="typing-indicator active">
+                    <div class="typing-dots"><span></span><span></span><span></span></div>
+                </div>
+            `;
             messagesDiv.appendChild(indicator);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function hideTypingIndicator() {
             const indicator = document.getElementById('typing-indicator');
-            if (indicator) {
-                indicator.remove();
+            if (indicator) indicator.remove();
+        }
+
+        // Load Sessions
+        async function loadSessions() {
+            try {
+                const response = await fetch(`${API_BASE}/sessions?user_id=${userId}`);
+                const sessions = await response.json();
+
+                sessionListDiv.innerHTML = '';
+                sessions.forEach(session => {
+                    const el = document.createElement('div');
+                    el.className = `session-item ${session.id === currentSessionId ? 'active' : ''}`;
+                    el.onclick = () => loadSession(session.id);
+
+                    const date = new Date(session.created_at || Date.now()).toLocaleDateString();
+                    el.innerHTML = `
+                        <div>Chat ${session.id.substr(-4)}</div>
+                        <div class="session-time">${date}</div>
+                    `;
+                    sessionListDiv.appendChild(el);
+                });
+            } catch (error) {
+                console.error('Failed to load sessions:', error);
+            }
+        }
+
+        // Create New Chat
+        async function createNewChat() {
+            try {
+                const response = await fetch(`${API_BASE}/sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        message: "start", // Dummy message required by validation but ignored by this endpoint
+                        history: []
+                    })
+                });
+                const session = await response.json();
+                currentSessionId = session.id;
+
+                // Clear UI
+                messagesDiv.innerHTML = `
+                    <div class="welcome-message">
+                        <h3>Hello! I'm your EmotiConnect AI assistant</h3>
+                        <p>I'm here to listen and provide emotional support</p>
+                    </div>
+                `;
+                chatHistory = [];
+
+                await loadSessions();
+            } catch (error) {
+                console.error('Failed to create session:', error);
+            }
+        }
+
+        // Load Specific Session
+        async function loadSession(sessionId) {
+            if (sessionId === currentSessionId) return;
+            currentSessionId = sessionId;
+
+            // Highlight active session
+            loadSessions(); // Re-render list to update active class
+
+            try {
+                const response = await fetch(`${API_BASE}/sessions/${sessionId}/messages`);
+                const messages = await response.json();
+
+                messagesDiv.innerHTML = '';
+                chatHistory = []; // Reset history for context window if needed, or rebuild it
+
+                messages.forEach(msg => {
+                    const role = msg.sender_type === 'user' ? 'user' : 'ai';
+                    addMessage(role, msg.content, msg.created_at);
+
+                    // Rebuild history logic if needed for context
+                    // chatHistory.push({role: role === 'user' ? 'user' : 'model', parts: [msg.content]});
+                });
+
+            } catch (error) {
+                console.error('Failed to load messages:', error);
             }
         }
 
@@ -344,68 +517,61 @@
             const message = messageInput.value.trim();
             if (!message) return;
 
-            // Disable input
             messageInput.disabled = true;
             sendButton.disabled = true;
 
-            // Show user message
             addMessage('user', message);
             messageInput.value = '';
-
-            // Show typing indicator
             showTypingIndicator();
 
             try {
-                // Call AI API
-                const response = await fetch('http://localhost:8000/api/ai-chat/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        history: chatHistory
-                    })
-                });
+                const payload = {
+                    user_id: userId,
+                    message: message,
+                    history: chatHistory
+                };
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (currentSessionId) {
+                    payload.session_id = currentSessionId;
                 }
 
+                const response = await fetch(`${API_BASE}/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
                 const data = await response.json();
-
-                // Hide typing indicator
                 hideTypingIndicator();
-
-                // Show AI response
                 addMessage('ai', data.response);
 
-                // Update chat history
-                chatHistory.push({
-                    role: 'user',
-                    parts: [message]
-                });
-                chatHistory.push({
-                    role: 'model',
-                    parts: [data.response]
-                });
+                // If this was the first message and success, we might want to refresh session list
+                // to show the new session if we didn't have an ID before (though createNewChat handles explicit creation)
+                // If we started without explicit session ID, the backend created one.
+                // We don't easily know the new ID unless the chat response returns it (which it currently doesn't, just text).
+                // Enhancement: ChatResponse could include session_id.
+                // For now, simple reload of list might catch it if we want.
+                loadSessions();
 
             } catch (error) {
                 hideTypingIndicator();
                 console.error('Error:', error);
                 addMessage('ai', 'Sorry, I encountered an issue. Please try again later.');
             } finally {
-                // Re-enable input
                 messageInput.disabled = false;
                 sendButton.disabled = false;
                 messageInput.focus();
             }
         }
 
-        // Focus input after page loads
+        // Init
         window.onload = () => {
             messageInput.focus();
+            loadSessions();
         };
     </script>
 </body>
+
 </html>

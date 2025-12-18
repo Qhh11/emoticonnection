@@ -85,6 +85,8 @@ class ChatRepository:
 
         return self._session_to_dict(new_session)
 
+
+
     async def get_session_by_id(self, session_id: str) -> Optional[Dict]:
         """Get session by ID"""
         try:
@@ -139,7 +141,8 @@ class ChatRepository:
         content: str,
         message_type: str = "text",
         media_url: Optional[str] = None,
-        emotion: Optional[str] = None
+        emotion: Optional[str] = None,
+        sender_type: str = "user"
     ) -> Dict:
         """
         Create a new message
@@ -165,7 +168,7 @@ class ChatRepository:
         new_message = {
             "session_id": session_oid,
             "sender_id": sender_oid,
-            "sender_type": "user",  # Can be "user", "peer", or "ai"
+            "sender_type": sender_type,
             "content": content,
             "message_type": message_type,
             "media_url": media_url,

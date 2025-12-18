@@ -9,16 +9,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
-# Import API routes from modular structure
-from app.modules.chat.api import chat_http, chat_ws, match, media
-from app.modules.ai.api import ai_chat, emotion
 # Import database connection management (unified config)
 import sys
 from pathlib import Path
 # Add database folder to Python path to import unified config
 database_path = Path(__file__).resolve().parent.parent.parent / "database"
 sys.path.insert(0, str(database_path))
+
 from config.mongodb_config import connect_to_mongodb, close_mongodb_connection  # type: ignore
+
+# Import API routes from modular structure
+from app.modules.chat.api import chat_http, chat_ws, match, media
+from app.modules.ai.api import ai_chat, emotion
 from app.modules.post.api import post_http
 
 @asynccontextmanager

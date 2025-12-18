@@ -9,7 +9,7 @@ This file implements REST API endpoints for:
 Database: MongoDB (via ChatRepository)
 """
 
-from typing import List
+from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 
@@ -65,7 +65,7 @@ async def _get_or_create_room(repo: ChatRepository, user1_id: int, user2_id: int
     )
 
 
-async def _get_room_by_id(repo: ChatRepository, room_id: str) -> dict | None:
+async def _get_room_by_id(repo: ChatRepository, room_id: str) -> Optional[dict]:
     """
     Get room by ID
     Now using MongoDB via ChatRepository
