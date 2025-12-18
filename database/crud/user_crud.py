@@ -152,3 +152,11 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
 
     print("User authenticated successfully")
     return user  # 登录成功，返回用户文档
+
+# -------------------------
+# 获取用户列表 (用于聊天联系人)
+# -------------------------
+def get_all_users(limit: int = 50) -> list:
+    """返回所有用户的简略信息"""
+    cursor = users.find({}, {"hashed_password": 0, "email": 0}).limit(limit)
+    return list(cursor)

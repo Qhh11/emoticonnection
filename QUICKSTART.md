@@ -5,8 +5,11 @@
 EmotiConnect is a real-time chat application with AI-powered emotion analysis. This branch (`chat-ai-integration`) integrates the Chat module and AI module with MongoDB for persistent storage.
 
 ### Key Features
+- **Dashboard**: Central hub for all features
+- **Authentication**: User login and registration system
 - **Real-time Peer Chat**: WebSocket-based instant messaging
 - **AI Chat**: Emotional support chatbot powered by Google Gemini
+- **AI Diary**: Daily emotional summary and journaling
 - **Emotion Analysis**: AI analyzes message emotions (text messages only)
 - **Multiple Message Types**: Text, emoji, images, videos, audio
 - **Anonymous Chat**: Optional anonymous mode with identity reveal
@@ -16,26 +19,30 @@ EmotiConnect is a real-time chat application with AI-powered emotion analysis. T
 
 ## Project Structure
 
-```
 emoticonnection/
 ├── database/                        # Unified database layer (team-shared)
 │   ├── config/
 │   │   └── mongodb_config.py       # MongoDB connection & lifecycle
 │   ├── models/                     # Database models (Pydantic)
-│   │   ├── chat.py                 # ChatSession, ChatMessage (enhanced)
+│   │   ├── chat.py                 # ChatSession, ChatMessage
 │   │   ├── user.py                 # User model
 │   │   ├── community.py            # Post, Comment models
+│   │   ├── diary.py                # Diary model
 │   │   └── emotion_log.py          # Emotion analytics
 │   ├── crud/                       # Synchronous CRUD operations
 │   │   ├── chat_session_crud.py
 │   │   ├── chat_message_crud.py
-│   │   └── user_crud.py
+│   │   ├── user_crud.py
+│   │   └── diary_crud.py
 │   ├── .env                        # Database config (gitignored)
 │   └── init_db.py                  # Database initialization script
 │
 ├── backend/
 │   ├── app/
 │   │   ├── modules/
+│   │   │   ├── auth/               # Authentication module
+│   │   │   │   ├── api/            # Login/Register endpoints
+│   │   │   │   └── schemas/        # Auth schemas
 │   │   │   ├── chat/               # Chat module
 │   │   │   │   ├── api/            # HTTP + WebSocket endpoints
 │   │   │   │   ├── repository/     # Async repository (FastAPI)
@@ -50,16 +57,20 @@ emoticonnection/
 │   │   │       └── core/           # AI services (Gemini)
 │   │   └── main.py                 # FastAPI application
 │   ├── static/
-│   │   ├── chat_main.html          # Main page
+│   │   ├── index.html              # Dashboard (Main Entry)
+│   │   ├── login.html              # Login page
+│   │   ├── register.html           # Register page
 │   │   ├── ai_chat.html            # AI chat interface
 │   │   ├── peer_chat.html          # Peer chat interface
+│   │   ├── diary_view.html         # Diary interface
 │   │   └── uploads/                # Media uploads (gitignored)
+│   ├── tests/                      # Testing scripts
 │   ├── requirements.txt
+│   ├── start.sh                    # Startup script
 │   ├── .env                        # Backend config (gitignored)
 │   └── .venv/                      # Python virtual environment
 │
 └── mongodb_data/                   # Local MongoDB data (gitignored)
-```
 
 ### Architecture Notes
 
@@ -156,18 +167,27 @@ Using MongoDB: 8.2.x
 
 You are now connected to the local database instance.
 
-### 5. Setup Python Environment
+### 5. Setup Python Environment and Run
+We have simplified this process with a startup script.
 
 ```bash
 # Navigate to backend
 cd backend
 
-# Create virtual environment
+# Make script executable (first time only)
+chmod +x start.sh
+
+# Run the startup script (installs dependencies and starts server)
+./start.sh
+```
+
+**Manual Setup (Alternative):**
+```bash
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install dependencies (includes motor and pymongo for MongoDB)
 pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 6. Configure Environment Variables
@@ -209,34 +229,29 @@ docker start mongodb
 ```
 
 ### 2. Start Backend Server
+Use the helper script:
 
+```bash
+cd backend
+./start.sh
+```
+
+Or manually:
 ```bash
 cd backend
 source .venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Expected console output:
-```
-✅ Connected to MongoDB: emotionconnect
-============================================================
-🚀 EmotiConnect Chat API Starting...
-============================================================
-📝 API Documentation: http://localhost:8000/docs
-🔌 WebSocket Chat: ws://localhost:8000/ws/rooms/{room_id}
-💬 HTTP Chat API: http://localhost:8000/api/chat
-🎯 Matching API: http://localhost:8000/api/match
-🤖 AI Chat API: http://localhost:8000/api/ai-chat
-😊 Emotion API: http://localhost:8000/api/emotion
-============================================================
-```
+### 3. Open Application in Browser
 
 ### 3. Open Application in Browser
 
-- **Main Page**: http://localhost:8000/static/chat_main.html
+- **Dashboard (Main Page)**: http://localhost:8000/static/index.html
+- **Login**: http://localhost:8000/static/login.html
+- **Community Chat**: http://localhost:8000/static/peer_chat.html
 - **AI Chat**: http://localhost:8000/static/ai_chat.html
-- **Peer Chat**: http://localhost:8000/static/peer_chat.html
-- **Match Test**: http://localhost:8000/static/match_test.html
+- **Diary View**: http://localhost:8000/static/diary_view.html
 - **API Documentation**: http://localhost:8000/docs
 
 ---
