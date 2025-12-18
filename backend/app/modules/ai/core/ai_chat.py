@@ -58,3 +58,63 @@ class AIChatService:
         return response.text
 
 
+
+    async def generate_diary_summary(self, history: list) -> dict:
+        """
+        Generate a diary entry based on chat history.
+        """
+        if not history:
+            return {"title": "Empty Diary", "content": "No conversation to record today.", "mood": "Neutral"}
+
+        # Construct prompt
+        conversation_text = ""
+        for msg in history:
+            role = "Me" if msg.get("role") == "user" else "AI Companion"
+            # Handle parts list or string
+            content = msg.get("parts", [""])[0] if isinstance(msg.get("parts"), list) else msg.get("parts", "")
+            conversation_text += f"{role}: {content}\n"
+
+        prompt = f"""
+        Based on the following conversation, write a personal diary entry from the perspective of the user ("Me").
+        
+        The diary should:
+        1. Capture the emotions and main thoughts discussed.
+        2. Be written in a reflective, personal tone.
+        3. Be concise (around 100-200 words).
+        
+        Also provide:
+        1. A short, creative title for this entry.
+        2. A single word mood describing the user's state (e.g., Anxious, Relieved, Happy, Sad).
+
+        Output strictly in JSON format:
+        {{
+            "title": "...",
+            "content": "...",
+            "mood": "..."
+        }}
+
+        Conversation:
+        {conversation_text}
+        """
+        
+        try:
+            # Use raw model generation instead of chat for this task
+            response = await self.model.generate_content_async(prompt)
+            
+            # Clean response text to ensure it's valid JSON (remove markdown ticks)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+            
+            import json
+            return json.loads(text)
+        except Exception as e:
+            print(f"Error generating diary: {e}")
+            return {
+                "title": "A Day to Remember", 
+                "content": "I had a conversation today, but I'm having trouble putting it into words right now.",
+                "mood": "Reflective"
+            }

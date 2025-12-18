@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from app.modules.ai.core.ai_chat import AIChatService
 from app.modules.ai.repository.ai_repository import AIChatRepository
+from app.modules.ai.repository.diary_repository import DiaryRepository
 from config.mongodb_config import get_database
 
 router = APIRouter()
@@ -13,6 +14,10 @@ def get_ai_repo() -> AIChatRepository:
     """Dependency to get AIChatRepository instance"""
     db = get_database()
     return AIChatRepository(db)
+def get_diary_repo() -> DiaryRepository:
+    """Dependency to get DiaryRepository instance"""
+    db = get_database()
+    return DiaryRepository(db)
 
 # 定义请求和响应的数据模型
 
@@ -37,6 +42,10 @@ class ChatResponse(BaseModel):
     聊天响应模型
     """
     response: str # AI 的回复内容
+
+class DiaryGenerateRequest(BaseModel):
+    session_id: str
+    user_id: str
 
 @router.post("/", response_model=ChatResponse)
 async def chat(request: ChatRequest, repo: AIChatRepository = Depends(get_ai_repo)):
@@ -100,3 +109,53 @@ async def create_new_session(request: ChatRequest, repo: AIChatRepository = Depe
 async def get_session_history(session_id: str, repo: AIChatRepository = Depends(get_ai_repo)):
     """Get message history for a session"""
     return await repo.get_session_messages(session_id)
+
+
+# ============================================================================
+# DIARY ENDPOINTS
+# ============================================================================
+
+@router.post("/diaries/generate", response_model=dict)
+async def generate_diary(
+    request: DiaryGenerateRequest,
+    chat_repo: AIChatRepository = Depends(get_ai_repo),
+    diary_repo: DiaryRepository = Depends(get_diary_repo)
+):
+    """Generate a diary summary from a chat session"""
+    # 1. Get chat history
+    messages = await chat_repo.get_session_messages(request.session_id)
+    if not messages:
+        raise HTTPException(status_code=404, detail="Session not found or empty")
+
+    # 2. Convert to format expected by AI service
+    history_data = []
+    for msg in messages:
+        role = "user" if msg["sender_type"] == "user" else "model"
+        history_data.append({"role": role, "parts": [msg["content"]]})
+
+    # 3. Generate summary
+    diary_data = await ai_service.generate_diary_summary(history_data)
+
+    # 4. Save to DB
+    saved_diary = await diary_repo.create_diary(
+        user_id=request.user_id,
+        session_id=request.session_id,
+        title=diary_data.get("title", "Untitled Diary"),
+        content=diary_data.get("content", ""),
+        mood=diary_data.get("mood", "Neutral")
+    )
+
+    return saved_diary
+
+@router.get("/diaries", response_model=List[dict])
+async def get_user_diaries(user_id: str, repo: DiaryRepository = Depends(get_diary_repo)):
+    """Get all diaries for a user"""
+    return await repo.get_user_diaries(user_id)
+
+@router.get("/diaries/{diary_id}", response_model=dict)
+async def get_diary(diary_id: str, repo: DiaryRepository = Depends(get_diary_repo)):
+    """Get specific diary"""
+    diary = await repo.get_diary(diary_id)
+    if not diary:
+        raise HTTPException(status_code=404, detail="Diary not found")
+    return diary

@@ -142,10 +142,42 @@
             font-weight: 600;
         }
 
+        .action-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+            margin-right: 12px;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         .status {
             margin-left: auto;
             font-size: 12px;
             opacity: 0.9;
+        }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+            margin-right: 12px;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .messages {
@@ -340,7 +372,11 @@
                 <div>
                     <h2>🤖 AI Companion</h2>
                 </div>
-                <div class="status">Online</div>
+                <div class="status" style="display: flex; align-items: center;">
+                    <button class="action-btn" onclick="openDiary()">📔 Diary</button>
+                    <button class="action-btn" onclick="endAndSave()">💾 End & Save</button>
+                    Online
+                </div>
             </div>
 
             <div class="messages" id="messages">
@@ -564,6 +600,41 @@
                 sendButton.disabled = false;
                 messageInput.focus();
             }
+        }
+
+        // End and Save Diary
+        async function endAndSave() {
+            if (!currentSessionId) {
+                alert("Start a chat first!");
+                return;
+            }
+            if (!confirm("End this conversation and generate a diary entry?")) return;
+
+            addMessage('ai', "Generating your diary summary... Please wait a moment.");
+
+            try {
+                const response = await fetch(`${API_BASE}/diaries/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        user_id: userId
+                    })
+                });
+
+                if (!response.ok) throw new Error("Failed to generate diary");
+
+                // Redirect to Diary View
+                window.location.href = 'diary_view.html';
+
+            } catch (error) {
+                console.error("Diary generation failed:", error);
+                alert("Failed to generate diary. Please try again.");
+            }
+        }
+
+        function openDiary() {
+            window.location.href = 'diary_view.html';
         }
 
         // Init
