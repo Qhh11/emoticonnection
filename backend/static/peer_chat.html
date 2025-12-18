@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EmotiConnect Chat Test (Enhanced)</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Peer Chat - EmotiConnect</title>
     <style>
         * {
             margin: 0;
@@ -30,119 +33,204 @@
             height: 85vh;
         }
 
-        /* User Selector */
-        .user-selector {
-            width: 200px;
-            background: #f8f9fa;
-            border-right: 2px solid #e0e0e0;
-            padding: 20px;
-        }
-
-        .user-selector h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 14px;
-            text-transform: uppercase;
-        }
-
-        .user-btn {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 10px;
-            border: 2px solid #e0e0e0;
-            background: white;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .user-btn:hover {
-            border-color: #667eea;
-            background: #f0f4ff;
-        }
-
-        .user-btn.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        /* Contact List */
-        .contact-list {
-            width: 250px;
+        /* Contact List Sidebar */
+        .contact-sidebar {
+            width: 320px;
             background: white;
             border-right: 2px solid #e0e0e0;
-        }
-
-        .contact-header {
-            padding: 20px;
-            background: #667eea;
-            color: white;
             display: flex;
-            align-items: center;
-            gap: 12px;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 25px;
+            background: #667eea;
+            color: white;
         }
 
         .back-btn {
             background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 18px;
             transition: background 0.3s;
+            margin-bottom: 15px;
         }
 
         .back-btn:hover {
             background: rgba(255, 255, 255, 0.3);
         }
 
-        .contact-header h3 {
-            font-size: 16px;
-            flex: 1;
+        .sidebar-header h1 {
+            font-size: 22px;
+            margin-bottom: 8px;
         }
 
         .current-user {
-            font-size: 12px;
+            font-size: 14px;
             opacity: 0.9;
-            margin-top: 5px;
         }
 
-        .contacts {
-            overflow-y: auto;
-            height: calc(100% - 80px);
-        }
-
-        .contact-item {
+        .discover-banner {
             padding: 15px 20px;
-            border-bottom: 1px solid #f0f0f0;
+            background: #f0f4ff;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
             cursor: pointer;
             transition: background 0.2s;
         }
 
+        .discover-banner:hover {
+            background: #e8eef9;
+        }
+
+        .discover-banner .icon {
+            font-size: 24px;
+        }
+
+        .discover-banner .text {
+            flex: 1;
+        }
+
+        .discover-banner .title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 2px;
+        }
+
+        .discover-banner .subtitle {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .contacts-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .contact-item {
+            padding: 18px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .contact-item:hover {
-            background: #f5f5f5;
+            background: #f9fafb;
         }
 
         .contact-item.active {
             background: #e8eaf6;
-            border-left: 3px solid #667eea;
+            border-left: 4px solid #667eea;
+        }
+
+        .contact-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .unread-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: #f44336;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .contact-info {
+            flex: 1;
+            min-width: 0;
         }
 
         .contact-name {
-            font-weight: 500;
+            font-size: 15px;
+            font-weight: 600;
             margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mutual-badge {
+            font-size: 11px;
+            background: #e8eaf6;
+            color: #667eea;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .not-following-badge {
+            font-size: 11px;
+            background: #fff3e0;
+            color: #ff9800;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 500;
         }
 
         .contact-status {
-            font-size: 11px;
+            font-size: 12px;
             color: #999;
+        }
+
+        .empty-contacts {
+            padding: 60px 30px;
+            text-align: center;
+            color: #999;
+        }
+
+        .empty-contacts h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .empty-contacts p {
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .empty-contacts button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .empty-contacts button:hover {
+            background: #5568d3;
         }
 
         /* Chat Area */
@@ -150,52 +238,87 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+            background: #fafbfc;
         }
 
         .chat-header {
-            padding: 20px;
+            padding: 20px 25px;
             background: white;
             border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-shrink: 0;
+        }
+
+        .chat-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
         }
 
         .chat-title {
             font-size: 18px;
-            font-weight: bold;
+            font-weight: 700;
             color: #333;
         }
 
         .chat-status {
-            font-size: 12px;
-            color: #666;
-            margin-top: 3px;
+            font-size: 13px;
+            color: #999;
+            margin-top: 2px;
         }
 
         .chat-status.connected {
             color: #4caf50;
         }
 
-        .chat-status.disconnected {
-            color: #f44336;
-        }
-
-        .no-chat {
+        .no-chat-selected {
             flex: 1;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             color: #999;
-            font-size: 18px;
         }
 
-        .messages {
+        .no-chat-selected .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .no-chat-selected h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .no-chat-selected p {
+            font-size: 14px;
+        }
+
+        .messages-container {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
-            background: #f9fafb;
+            overflow-x: hidden;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
         }
 
         .message {
-            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
             animation: slideIn 0.3s ease;
         }
 
@@ -204,7 +327,6 @@
                 opacity: 0;
                 transform: translateY(10px);
             }
-
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -212,37 +334,57 @@
         }
 
         .message.sent {
-            text-align: right;
+            flex-direction: row-reverse;
         }
 
-        .message.received {
-            text-align: left;
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .message-content-wrapper {
+            max-width: 60%;
+            min-width: 0;
+        }
+
+        .message.sent .message-content-wrapper {
+            align-items: flex-end;
         }
 
         .message-bubble {
-            display: inline-block;
-            padding: 10px 15px;
-            border-radius: 18px;
-            max-width: 60%;
+            padding: 12px 16px;
+            border-radius: 16px;
             word-wrap: break-word;
         }
 
         .message.sent .message-bubble {
             background: #667eea;
             color: white;
+            border-bottom-right-radius: 4px;
         }
 
         .message.received .message-bubble {
-            background: #e5e7eb;
-            color: #1f2937;
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
 
-        .message-content {
-            font-size: 14px;
+        .message-text {
+            font-size: 15px;
             line-height: 1.4;
         }
 
-        .message-content.emoji {
+        .message-text.emoji-only {
             font-size: 48px;
             line-height: 1;
         }
@@ -252,190 +394,112 @@
         }
 
         .message-media img {
-            max-width: 100%;
-            max-height: 300px;
-            border-radius: 8px;
+            max-width: 250px;
+            max-height: 180px;
+            width: auto;
+            height: auto;
+            border-radius: 12px;
             cursor: pointer;
+            display: block;
+            object-fit: contain;
         }
 
         .message-media video {
-            max-width: 100%;
-            max-height: 300px;
-            border-radius: 8px;
-        }
-
-        .message-time {
-            font-size: 11px;
-            color: #9ca3af;
-            margin-top: 5px;
+            max-width: 250px;
+            max-height: 180px;
+            border-radius: 12px;
+            object-fit: contain;
         }
 
         .emotion-tag {
             display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-top: 6px;
+            font-weight: 500;
+        }
+
+        .message.received .emotion-tag {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            margin-top: 8px;
-            font-weight: 500;
-            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
         }
 
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        /* Input Area */
         .input-area {
-            padding: 20px;
+            padding: 20px 25px;
             background: white;
             border-top: 2px solid #e0e0e0;
+            flex-shrink: 0;
         }
 
-        .toolbar {
+        .input-toolbar {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 8px;
+            margin-bottom: 12px;
         }
 
-        .toolbar button {
-            padding: 8px 12px;
+        .toolbar-btn {
+            padding: 8px 14px;
             border: 1px solid #e0e0e0;
             background: white;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
         }
 
-        .toolbar button:hover {
-            background: #f0f4ff;
+        .toolbar-btn:hover {
+            background: #f9fafb;
             border-color: #667eea;
-        }
-
-        .toolbar button.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .emoji-picker {
-            display: none;
-            padding: 15px;
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .emoji-picker.show {
-            display: block;
-        }
-
-        .emoji-category {
-            margin-bottom: 15px;
-        }
-
-        .emoji-category h4 {
-            font-size: 12px;
-            color: #667eea;
-            margin-bottom: 8px;
-        }
-
-        .emoji-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 5px;
-        }
-
-        .emoji-item {
-            font-size: 24px;
-            cursor: pointer;
-            padding: 5px;
-            text-align: center;
-            border-radius: 5px;
-            transition: all 0.2s;
-        }
-
-        .emoji-item:hover {
-            background: #f0f4ff;
-            transform: scale(1.2);
-        }
-
-        .media-preview {
-            display: none;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .media-preview.show {
-            display: block;
-        }
-
-        .media-preview img,
-        .media-preview video {
-            max-width: 200px;
-            max-height: 200px;
-            border-radius: 8px;
-        }
-
-        .media-preview-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .uploading-indicator {
-            display: none;
-            padding: 10px;
-            background: #fff3cd;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            font-size: 12px;
-            text-align: center;
-        }
-
-        .uploading-indicator.show {
-            display: block;
         }
 
         .input-row {
             display: flex;
-            gap: 10px;
+            gap: 12px;
+            align-items: center;
         }
 
-        .input-area input {
+        .message-input {
             flex: 1;
-            padding: 12px 15px;
+            padding: 12px 18px;
             border: 2px solid #e5e7eb;
-            border-radius: 25px;
-            font-size: 14px;
+            border-radius: 24px;
+            font-size: 15px;
             outline: none;
+            transition: border-color 0.2s;
         }
 
-        .input-area input:focus {
+        .message-input:focus {
             border-color: #667eea;
         }
 
-        .input-area .send-btn {
-            padding: 12px 30px;
+        .send-btn {
+            padding: 12px 28px;
             background: #667eea;
             color: white;
             border: none;
-            border-radius: 25px;
-            font-weight: bold;
+            border-radius: 24px;
+            font-weight: 600;
             cursor: pointer;
             transition: background 0.2s;
         }
 
-        .input-area .send-btn:hover {
+        .send-btn:hover:not(:disabled) {
             background: #5568d3;
         }
 
-        .input-area .send-btn:disabled {
+        .send-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
@@ -443,161 +507,77 @@
         .hidden {
             display: none !important;
         }
+
+        #activeChat {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            height: 100%;
+        }
+
+        #activeChat.hidden {
+            display: none !important;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <!-- User Identity Handled via Auth -->
+        <!-- Contact Sidebar -->
+        <div class="contact-sidebar">
+            <div class="sidebar-header">
+                <button class="back-btn" onclick="window.location.href='index.html'">←</button>
+                <h1>💬 Peer Chat</h1>
+                <div class="current-user" id="currentUserDisplay">Loading...</div>
+            </div>
 
-        <!-- Contact List -->
-        <div class="contact-list">
-            <div class="contact-header">
-                <button class="back-btn" onclick="window.location.href='index.html'" title="返回 Dashboard">←</button>
-                <div style="flex: 1;">
-                    <h3>💬 真人聊天</h3>
-                    <div class="current-user" id="currentUserDisplay">You are: User 1</div>
+            <div class="discover-banner" onclick="window.location.href='discover.html'">
+                <div class="icon">🔍</div>
+                <div class="text">
+                    <div class="title">Discover People</div>
+                    <div class="subtitle">Find friends to chat with</div>
                 </div>
             </div>
-            <div class="contacts" id="contactList">
-                <!-- Populated dynamically -->
+
+            <div class="contacts-list" id="contactsList">
+                <!-- Dynamically populated -->
             </div>
         </div>
 
         <!-- Chat Area -->
         <div class="chat-area">
-            <div class="chat-header hidden" id="chatHeader">
-                <div class="chat-title" id="chatTitle">Select a contact</div>
-                <div class="chat-status" id="chatStatus">Disconnected</div>
+            <!-- No Chat Selected State -->
+            <div class="no-chat-selected" id="noChatSelected">
+                <div class="icon">💬</div>
+                <h2>Select a contact to start chatting</h2>
+                <p>Choose someone from your contacts list</p>
             </div>
 
-            <div class="no-chat" id="noChat">
-                👈 Select a contact to start chatting
-            </div>
-
-            <div class="messages hidden" id="messages"></div>
-
-            <div class="input-area hidden" id="inputArea">
-                <!-- Emoji Picker -->
-                <div id="emojiPicker" class="emoji-picker">
-                    <div class="emoji-category">
-                        <h4>😊 Smileys & People</h4>
-                        <div class="emoji-grid">
-                            <span class="emoji-item" data-emoji="😀">😀</span>
-                            <span class="emoji-item" data-emoji="😃">😃</span>
-                            <span class="emoji-item" data-emoji="😄">😄</span>
-                            <span class="emoji-item" data-emoji="😁">😁</span>
-                            <span class="emoji-item" data-emoji="😊">😊</span>
-                            <span class="emoji-item" data-emoji="😇">😇</span>
-                            <span class="emoji-item" data-emoji="🙂">🙂</span>
-                            <span class="emoji-item" data-emoji="🙃">🙃</span>
-                            <span class="emoji-item" data-emoji="😉">😉</span>
-                            <span class="emoji-item" data-emoji="😌">😌</span>
-                            <span class="emoji-item" data-emoji="😍">😍</span>
-                            <span class="emoji-item" data-emoji="🥰">🥰</span>
-                            <span class="emoji-item" data-emoji="😘">😘</span>
-                            <span class="emoji-item" data-emoji="😗">😗</span>
-                            <span class="emoji-item" data-emoji="😙">😙</span>
-                            <span class="emoji-item" data-emoji="😚">😚</span>
-                            <span class="emoji-item" data-emoji="😋">😋</span>
-                            <span class="emoji-item" data-emoji="😛">😛</span>
-                            <span class="emoji-item" data-emoji="😝">😝</span>
-                            <span class="emoji-item" data-emoji="😜">😜</span>
-                            <span class="emoji-item" data-emoji="🤪">🤪</span>
-                            <span class="emoji-item" data-emoji="🤨">🤨</span>
-                            <span class="emoji-item" data-emoji="🧐">🧐</span>
-                            <span class="emoji-item" data-emoji="🤓">🤓</span>
-                            <span class="emoji-item" data-emoji="😎">😎</span>
-                            <span class="emoji-item" data-emoji="🤩">🤩</span>
-                            <span class="emoji-item" data-emoji="🥳">🥳</span>
-                            <span class="emoji-item" data-emoji="😏">😏</span>
-                            <span class="emoji-item" data-emoji="😒">😒</span>
-                            <span class="emoji-item" data-emoji="😞">��</span>
-                            <span class="emoji-item" data-emoji="😔">😔</span>
-                            <span class="emoji-item" data-emoji="😟">😟</span>
-                            <span class="emoji-item" data-emoji="😕">😕</span>
-                            <span class="emoji-item" data-emoji="🙁">🙁</span>
-                            <span class="emoji-item" data-emoji="☹️">☹️</span>
-                            <span class="emoji-item" data-emoji="😣">😣</span>
-                            <span class="emoji-item" data-emoji="😖">😖</span>
-                            <span class="emoji-item" data-emoji="😫">😫</span>
-                            <span class="emoji-item" data-emoji="😩">😩</span>
-                            <span class="emoji-item" data-emoji="🥺">🥺</span>
-                        </div>
-                    </div>
-                    <div class="emoji-category">
-                        <h4>❤️ Hearts</h4>
-                        <div class="emoji-grid">
-                            <span class="emoji-item" data-emoji="❤️">❤️</span>
-                            <span class="emoji-item" data-emoji="🧡">🧡</span>
-                            <span class="emoji-item" data-emoji="💛">💛</span>
-                            <span class="emoji-item" data-emoji="💚">💚</span>
-                            <span class="emoji-item" data-emoji="💙">💙</span>
-                            <span class="emoji-item" data-emoji="💜">💜</span>
-                            <span class="emoji-item" data-emoji="🖤">🖤</span>
-                            <span class="emoji-item" data-emoji="🤍">🤍</span>
-                            <span class="emoji-item" data-emoji="🤎">🤎</span>
-                            <span class="emoji-item" data-emoji="💔">💔</span>
-                            <span class="emoji-item" data-emoji="💕">💕</span>
-                            <span class="emoji-item" data-emoji="💞">💞</span>
-                            <span class="emoji-item" data-emoji="💓">💓</span>
-                            <span class="emoji-item" data-emoji="💗">💗</span>
-                            <span class="emoji-item" data-emoji="💖">💖</span>
-                            <span class="emoji-item" data-emoji="💘">💘</span>
-                        </div>
-                    </div>
-                    <div class="emoji-category">
-                        <h4>👍 Gestures</h4>
-                        <div class="emoji-grid">
-                            <span class="emoji-item" data-emoji="👍">👍</span>
-                            <span class="emoji-item" data-emoji="👎">👎</span>
-                            <span class="emoji-item" data-emoji="👊">👊</span>
-                            <span class="emoji-item" data-emoji="✊">✊</span>
-                            <span class="emoji-item" data-emoji="🤛">🤛</span>
-                            <span class="emoji-item" data-emoji="🤜">🤜</span>
-                            <span class="emoji-item" data-emoji="👏">👏</span>
-                            <span class="emoji-item" data-emoji="🙌">🙌</span>
-                            <span class="emoji-item" data-emoji="👐">👐</span>
-                            <span class="emoji-item" data-emoji="🤲">🤲</span>
-                            <span class="emoji-item" data-emoji="🤝">🤝</span>
-                            <span class="emoji-item" data-emoji="🙏">🙏</span>
-                            <span class="emoji-item" data-emoji="✌️">✌️</span>
-                            <span class="emoji-item" data-emoji="🤞">🤞</span>
-                            <span class="emoji-item" data-emoji="🤟">🤟</span>
-                            <span class="emoji-item" data-emoji="🤘">🤘</span>
-                        </div>
+            <!-- Active Chat State (hidden by default) -->
+            <div id="activeChat" class="hidden">
+                <div class="chat-header">
+                    <div class="chat-avatar" id="chatAvatar">?</div>
+                    <div style="flex: 1;">
+                        <div class="chat-title" id="chatTitle">Contact Name</div>
+                        <div class="chat-status" id="chatStatus">Connecting...</div>
                     </div>
                 </div>
 
-                <!-- Media Preview -->
-                <div id="mediaPreview" class="media-preview">
-                    <div id="mediaPreviewContent"></div>
-                    <div class="media-preview-actions">
-                        <button onclick="clearMediaPreview()">❌ Cancel</button>
+                <div class="messages-container" id="messagesContainer">
+                    <!-- Messages will be added here -->
+                </div>
+
+                <div class="input-area">
+                    <div class="input-toolbar">
+                        <button class="toolbar-btn" onclick="triggerImageUpload()">📷 Photo</button>
+                        <button class="toolbar-btn" onclick="triggerVideoUpload()">🎥 Video</button>
+                        <input type="file" id="imageUpload" accept="image/*" style="display: none;" onchange="handleFileUpload(event, 'image')">
+                        <input type="file" id="videoUpload" accept="video/*" style="display: none;" onchange="handleFileUpload(event, 'video')">
                     </div>
-                </div>
-
-                <!-- Uploading Indicator -->
-                <div id="uploadingIndicator" class="uploading-indicator">
-                    ⏳ Uploading media...
-                </div>
-
-                <!-- Toolbar -->
-                <div class="toolbar">
-                    <button id="emojiBtn" onclick="toggleEmojiPicker()">😊 Emoji</button>
-                    <button onclick="triggerImageUpload()">🖼️ Image</button>
-                    <button onclick="triggerVideoUpload()">🎥 Video</button>
-                    <input type="file" id="imageUpload" accept="image/*" style="display: none;"
-                        onchange="handleFileSelect(event, 'image')">
-                    <input type="file" id="videoUpload" accept="video/*" style="display: none;"
-                        onchange="handleFileSelect(event, 'video')">
-                </div>
-
-                <!-- Message Input -->
-                <div class="input-row">
-                    <input type="text" id="messageInput" placeholder="Type a message..."
-                        onkeypress="if(event.key==='Enter') sendMessage()">
-                    <button class="send-btn" onclick="sendMessage()" id="sendBtn">Send</button>
+                    <div class="input-row">
+                        <input type="text" class="message-input" id="messageInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
+                        <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -605,22 +585,56 @@
 
     <script>
         // ====================================================================
-        // State
+        // Configuration
         // ====================================================================
         const API_BASE = 'http://localhost:8000/api';
         const WS_BASE = 'ws://localhost:8000';
 
-        let currentUserId = 1;
+        let currentUserId = null;
+        let currentUsername = null;
         let currentChatUserId = null;
+        let currentChatUsername = null;
         let currentRoomId = null;
         let currentWebSocket = null;
         let currentMediaUrl = null;
         let currentMediaType = null;
-
-        let allUsers = []; // Will be fetched from API
+        let allContacts = [];
 
         // ====================================================================
-        // Initialize
+        // Read Status Management
+        // ====================================================================
+        function getReadRooms() {
+            const readRooms = localStorage.getItem(`read_rooms_${currentUserId}`);
+            return readRooms ? JSON.parse(readRooms) : {};
+        }
+
+        function markRoomAsRead(otherUserId) {
+            const readRooms = getReadRooms();
+            readRooms[otherUserId] = new Date().toISOString();
+            localStorage.setItem(`read_rooms_${currentUserId}`, JSON.stringify(readRooms));
+        }
+
+        function isRoomRead(otherUserId, lastMessageTime) {
+            const readRooms = getReadRooms();
+            if (!readRooms.hasOwnProperty(otherUserId)) {
+                return false; // Never read
+            }
+
+            // If no last message time, consider it read
+            if (!lastMessageTime) {
+                return true;
+            }
+
+            // Compare last message time with read time
+            const readTime = new Date(readRooms[otherUserId]);
+            const messageTime = new Date(lastMessageTime);
+
+            // If message is newer than read time, it's unread
+            return messageTime <= readTime;
+        }
+
+        // ====================================================================
+        // Authentication Check
         // ====================================================================
         const storedUserId = localStorage.getItem('chat_user_id');
         const storedUsername = localStorage.getItem('chat_username');
@@ -628,116 +642,205 @@
         if (!storedUserId) {
             window.location.href = 'login.html';
         } else {
-            currentUserId = storedUserId; // Keep as string for now
-            document.getElementById('currentUserDisplay').textContent = `You are: ${storedUsername || 'User ' + currentUserId}`;
+            currentUserId = storedUserId;
+            currentUsername = storedUsername || 'User';
+            document.getElementById('currentUserDisplay').textContent = `Logged in as ${currentUsername}`;
         }
 
+        // ====================================================================
+        // Initialize
+        // ====================================================================
         async function init() {
-            // Fetch users
+            await loadContacts();
+        }
+
+        // ====================================================================
+        // Load Contacts
+        // ====================================================================
+        async function loadContacts() {
+            const contactsListEl = document.getElementById('contactsList');
+            contactsListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">Loading contacts...</div>';
+
             try {
-                const response = await fetch(`${API_BASE}/auth/users`);
-                if (response.ok) {
-                    const users = await response.json();
-                    allUsers = users.map(u => ({
-                        id: u.id,
-                        name: u.nickname || u.username
-                    }));
+                // Load following contacts
+                const contactsResponse = await fetch(`${API_BASE}/social/contacts/${currentUserId}`);
+                const followingContacts = contactsResponse.ok ? await contactsResponse.json() : [];
+
+                // Load chat rooms to find people who messaged us
+                const roomsResponse = await fetch(`${API_BASE}/chat/users/${currentUserId}/rooms`);
+                const rooms = roomsResponse.ok ? await roomsResponse.json() : [];
+
+                // Load all users once (for looking up people who messaged us)
+                const usersResponse = await fetch(`${API_BASE}/auth/users`);
+                const allUsers = usersResponse.ok ? await usersResponse.json() : [];
+
+                // Merge contacts: following + people with messages
+                const contactMap = new Map();
+
+                // Add following contacts
+                followingContacts.forEach(contact => {
+                    contactMap.set(contact.id, {
+                        ...contact,
+                        isFollowing: true,
+                        hasMessages: false,
+                        unreadCount: 0
+                    });
+                });
+
+                // Add people from rooms (who sent us messages)
+                for (const room of rooms) {
+                    const otherUserId = room.other_user_id;
+                    if (otherUserId === -1) continue; // Skip anonymous
+
+                    // Check if this room has been read (compare with last message time)
+                    const isRead = isRoomRead(otherUserId, room.last_message_time);
+
+                    if (!contactMap.has(otherUserId)) {
+                        // This person messaged us but we don't follow them
+                        const user = allUsers.find(u => u.id === otherUserId);
+                        if (user) {
+                            contactMap.set(otherUserId, {
+                                id: user.id,
+                                username: user.username,
+                                nickname: user.nickname || user.username,
+                                is_mutual: false,
+                                isFollowing: false,
+                                hasMessages: true,
+                                unreadCount: (room.last_message && !isRead) ? 1 : 0 // Only unread if not yet read
+                            });
+                        }
+                    } else {
+                        // Update existing contact with message info
+                        const contact = contactMap.get(otherUserId);
+                        contact.hasMessages = true;
+                        if (room.last_message && !isRead) {
+                            contact.unreadCount = 1; // Only mark as unread if not yet read
+                        }
+                    }
                 }
+
+                allContacts = Array.from(contactMap.values());
+                console.log('✅ Loaded contacts:', allContacts);
+                renderContacts();
             } catch (e) {
-                console.error("Failed to load users", e);
+                console.error('Failed to load contacts:', e);
+                contactsListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #f44336;">Network error</div>';
+            }
+        }
+
+        // ====================================================================
+        // Render Contacts
+        // ====================================================================
+        function renderContacts() {
+            const contactsListEl = document.getElementById('contactsList');
+
+            if (allContacts.length === 0) {
+                contactsListEl.innerHTML = `
+                    <div class="empty-contacts">
+                        <h3>No contacts yet</h3>
+                        <p>Follow people to start chatting</p>
+                        <button onclick="window.location.href='discover.html'">Discover People</button>
+                    </div>
+                `;
+                return;
             }
 
-            updateContactList();
-            initEmojiPicker();
-        }
+            contactsListEl.innerHTML = allContacts.map(contact => {
+                const initial = contact.nickname ? contact.nickname[0].toUpperCase() : contact.username[0].toUpperCase();
+                const mutualBadge = contact.is_mutual ? '<span class="mutual-badge">Mutual</span>' : '';
+                const notFollowingBadge = !contact.isFollowing ? '<span class="not-following-badge">Not Following</span>' : '';
+                const unreadBadge = contact.hasMessages && contact.unreadCount > 0 ? '<span class="unread-badge"></span>' : '';
 
-        if (storedUserId) {
-            init();
-        }
-
-        // ====================================================================
-        // Select User Identity
-        // ====================================================================
-        // User selection is now handled on login
-
-        // ====================================================================
-        // Update Contact List
-        // ====================================================================
-        function updateContactList() {
-            const contactList = document.getElementById('contactList');
-            contactList.innerHTML = '';
-
-            allUsers.filter(u => u.id !== currentUserId).forEach(user => {
-                const div = document.createElement('div');
-                div.className = 'contact-item';
-                div.onclick = () => openChat(user.id, user.name);
-                div.innerHTML = `
-                    <div class="contact-name">${user.name}</div>
-                    <div class="contact-status">Click to chat</div>
+                return `
+                    <div class="contact-item" data-user-id="${contact.id}" onclick="openChat('${contact.id}', '${contact.nickname}', '${contact.username}')">
+                        <div class="contact-avatar">${initial}${unreadBadge}</div>
+                        <div class="contact-info">
+                            <div class="contact-name">
+                                ${contact.nickname}
+                                ${mutualBadge}
+                                ${notFollowingBadge}
+                            </div>
+                            <div class="contact-status">@${contact.username}</div>
+                        </div>
+                    </div>
                 `;
-                contactList.appendChild(div);
-            });
+            }).join('');
         }
 
         // ====================================================================
         // Open Chat
         // ====================================================================
-        async function openChat(userId, userName) {
-            console.log(`Opening chat: User ${currentUserId} with User ${userId}`);
+        async function openChat(userId, nickname, username) {
+            console.log(`Opening chat with ${nickname} (${userId})`);
 
+            // Close existing connection
             if (currentWebSocket) {
                 currentWebSocket.close();
             }
 
             currentChatUserId = userId;
+            currentChatUsername = nickname || username;
+
+            // Mark this room as read (persistent)
+            markRoomAsRead(userId);
+
+            // Clear unread count for this contact
+            const contact = allContacts.find(c => c.id === userId);
+            if (contact) {
+                contact.unreadCount = 0;
+                renderContacts(); // Re-render to remove red badge
+            }
+
+            // Update UI
+            document.getElementById('noChatSelected').classList.add('hidden');
+            document.getElementById('activeChat').classList.remove('hidden');
 
             // Update active contact
-            document.querySelectorAll('.contact-item').forEach((item, i) => {
-                const contactUserId = allUsers.filter(u => u.id !== currentUserId)[i].id;
-                item.classList.toggle('active', contactUserId === userId);
+            document.querySelectorAll('.contact-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.userId === userId);
             });
 
-            // Show chat UI
-            document.getElementById('chatHeader').classList.remove('hidden');
-            document.getElementById('noChat').classList.add('hidden');
-            document.getElementById('messages').classList.remove('hidden');
-            document.getElementById('inputArea').classList.remove('hidden');
-            document.getElementById('chatTitle').textContent = `Chat with ${userName}`;
+            // Update chat header
+            const initial = nickname ? nickname[0].toUpperCase() : username[0].toUpperCase();
+            document.getElementById('chatAvatar').textContent = initial;
+            document.getElementById('chatTitle').textContent = nickname || username;
             document.getElementById('chatStatus').textContent = 'Connecting...';
             document.getElementById('chatStatus').className = 'chat-status';
-            document.getElementById('messages').innerHTML = '';
+
+            // Clear messages
+            document.getElementById('messagesContainer').innerHTML = '';
 
             try {
                 // Get or create room
-                const room = await fetch(`${API_BASE}/chat/rooms`, {
+                const roomResponse = await fetch(`${API_BASE}/chat/rooms`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user1_id: currentUserId, user2_id: userId })
-                }).then(r => r.json());
+                });
 
+                const room = await roomResponse.json();
                 currentRoomId = room.id;
                 console.log(`Room ID: ${currentRoomId}`);
 
-                // Load history
-                const messages = await fetch(`${API_BASE}/chat/rooms/${currentRoomId}/messages`)
-                    .then(r => r.ok ? r.json() : []);
-
-                messages.forEach(msg => {
-                    displayMessage(msg, msg.sender_id === currentUserId);
-                });
+                // Load message history
+                const messagesResponse = await fetch(`${API_BASE}/chat/rooms/${currentRoomId}/messages`);
+                if (messagesResponse.ok) {
+                    const messages = await messagesResponse.json();
+                    messages.forEach(msg => displayMessage(msg, msg.sender_id === currentUserId));
+                }
 
                 // Connect WebSocket
                 connectWebSocket(currentRoomId);
 
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error opening chat:', error);
                 document.getElementById('chatStatus').textContent = 'Connection failed';
-                alert('Failed to open chat. Is the server running?');
+                alert('Failed to open chat. Please try again.');
             }
         }
 
         // ====================================================================
-        // Connect WebSocket
+        // WebSocket Connection
         // ====================================================================
         function connectWebSocket(roomId) {
             const wsUrl = `${WS_BASE}/ws/rooms/${roomId}`;
@@ -747,37 +850,33 @@
 
             currentWebSocket.onopen = () => {
                 console.log('✅ Connected to room', roomId);
-                document.getElementById('chatStatus').textContent = '✓ Connected';
+                document.getElementById('chatStatus').textContent = 'Online';
                 document.getElementById('chatStatus').className = 'chat-status connected';
             };
 
             currentWebSocket.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 console.log('📩 Received message:', message);
-                console.log('   - sender_id:', message.sender_id);
-                console.log('   - currentUserId:', currentUserId);
-                console.log('   - emotion:', message.emotion);
-                console.log('   - isSent:', message.sender_id === currentUserId);
 
-                // Only display if from other user (avoid duplicate)
+                // Only display if from other user
                 if (message.sender_id !== currentUserId) {
-                    console.log('✅ Displaying message for receiver');
                     displayMessage(message, false);
-                } else {
-                    console.log('⏭️  Skipping own message (already displayed)');
+
+                    // Mark current room as read again (since we're viewing it)
+                    markRoomAsRead(currentChatUserId);
                 }
             };
 
             currentWebSocket.onerror = (error) => {
                 console.error('❌ WebSocket error:', error);
-                document.getElementById('chatStatus').textContent = '✗ Error';
-                document.getElementById('chatStatus').className = 'chat-status disconnected';
+                document.getElementById('chatStatus').textContent = 'Error';
+                document.getElementById('chatStatus').className = 'chat-status';
             };
 
             currentWebSocket.onclose = () => {
                 console.log('🔌 Disconnected');
                 document.getElementById('chatStatus').textContent = 'Disconnected';
-                document.getElementById('chatStatus').className = 'chat-status disconnected';
+                document.getElementById('chatStatus').className = 'chat-status';
             };
         }
 
@@ -818,46 +917,53 @@
             }, true);
 
             input.value = '';
-            clearMediaPreview();
+            currentMediaUrl = null;
+            currentMediaType = null;
         }
 
         // ====================================================================
         // Display Message
         // ====================================================================
         function displayMessage(message, isSent) {
-            const messagesDiv = document.getElementById('messages');
+            const container = document.getElementById('messagesContainer');
+
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
 
+            const initial = isSent
+                ? currentUsername[0].toUpperCase()
+                : currentChatUsername[0].toUpperCase();
+
+            const avatar = `<div class="message-avatar">${initial}</div>`;
+
             const bubble = document.createElement('div');
-            bubble.className = 'message-bubble';
+            bubble.className = 'message-content-wrapper';
 
-            // Message content
-            const content = document.createElement('div');
-            content.className = 'message-content';
+            const bubbleInner = document.createElement('div');
+            bubbleInner.className = 'message-bubble';
 
-            // Only show emoji in large size if it's ONLY emoji (no text mixed in)
+            // Message text
+            const text = document.createElement('div');
+            text.className = 'message-text';
+
+            // Check if emoji only
             const emojiOnlyRegex = /^[\p{Emoji}\s]+$/u;
-            const strippedContent = message.content.replace(/\s/g, ''); // Remove spaces
+            const strippedContent = message.content.replace(/\s/g, '');
             if (strippedContent.length <= 5 && emojiOnlyRegex.test(message.content)) {
-                content.className = 'message-content emoji';
+                text.className = 'message-text emoji-only';
             }
 
-            content.textContent = message.content;
-            bubble.appendChild(content);
+            text.textContent = message.content;
+            bubbleInner.appendChild(text);
 
-            // Media content
+            // Media
             if (message.media_url) {
                 const media = document.createElement('div');
                 media.className = 'message-media';
 
-                // Ensure absolute URL for media
-                console.log('🔍 Original media_url:', message.media_url);
-                console.log('🌐 window.location.origin:', window.location.origin);
                 const mediaUrl = message.media_url.startsWith('http')
                     ? message.media_url
                     : `${window.location.origin}${message.media_url}`;
-                console.log('✅ Final mediaUrl:', mediaUrl);
 
                 if (message.message_type === 'image') {
                     const img = document.createElement('img');
@@ -872,65 +978,35 @@
                     media.appendChild(video);
                 }
 
-                bubble.appendChild(media);
+                bubbleInner.appendChild(media);
             }
 
-            // Emotion tag (only show for received messages)
-            console.log('🎨 Emotion check - isSent:', isSent, 'emotion:', message.emotion);
+            // Emotion tag (only for received messages)
             if (!isSent && message.emotion) {
-                console.log('✅ Creating emotion tag:', message.emotion);
-
-                // Map emotion types to emojis
                 const emotionEmojis = {
-                    'Happiness': '😊',
-                    'Sadness': '😢',
-                    'Anxiety': '😰',
-                    'Anger': '😠',
-                    'Fatigue': '😴',
-                    'Calm': '😌',
-                    'Confusion': '😕'
+                    'Happiness': '😊', 'Sadness': '😢', 'Anxiety': '😰',
+                    'Anger': '😠', 'Fatigue': '😴', 'Calm': '😌', 'Confusion': '😕'
                 };
-
-                // Get emoji for this emotion (default to 😊 if not found)
                 const emoji = emotionEmojis[message.emotion] || '😊';
-
                 const emotionTag = document.createElement('div');
                 emotionTag.className = 'emotion-tag';
                 emotionTag.textContent = `${emoji} ${message.emotion}`;
-                bubble.appendChild(emotionTag);
-            } else {
-                console.log('⏭️  Skipping emotion tag - isSent:', isSent, 'emotion:', message.emotion);
+                bubbleInner.appendChild(emotionTag);
             }
 
+            bubble.appendChild(bubbleInner);
+
+            // Time
             const time = document.createElement('div');
             time.className = 'message-time';
             time.textContent = new Date(message.created_at).toLocaleTimeString();
+            bubble.appendChild(time);
 
+            messageDiv.innerHTML = avatar;
             messageDiv.appendChild(bubble);
-            messageDiv.appendChild(time);
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
 
-        // ====================================================================
-        // Emoji Picker
-        // ====================================================================
-        function initEmojiPicker() {
-            document.querySelectorAll('.emoji-item').forEach(item => {
-                item.addEventListener('click', function () {
-                    const emoji = this.getAttribute('data-emoji');
-                    const input = document.getElementById('messageInput');
-                    input.value += emoji;
-                    input.focus();
-                });
-            });
-        }
-
-        function toggleEmojiPicker() {
-            const picker = document.getElementById('emojiPicker');
-            const btn = document.getElementById('emojiBtn');
-            picker.classList.toggle('show');
-            btn.classList.toggle('active');
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
         }
 
         // ====================================================================
@@ -944,16 +1020,12 @@
             document.getElementById('videoUpload').click();
         }
 
-        async function handleFileSelect(event, type) {
+        async function handleFileUpload(event, type) {
             const file = event.target.files[0];
             if (!file) return;
 
             console.log(`📎 Selected ${type}:`, file.name);
 
-            // Show uploading indicator
-            document.getElementById('uploadingIndicator').classList.add('show');
-
-            // Upload to server
             const formData = new FormData();
             formData.append('file', file);
 
@@ -963,87 +1035,49 @@
                     body: formData
                 });
 
-                if (!response.ok) {
-                    throw new Error('Upload failed');
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ Upload successful:', result);
+                    currentMediaUrl = result.media_url;
+                    currentMediaType = result.media_type;
+
+                    // Auto-send with media
+                    document.getElementById('messageInput').value = file.name;
+                    sendMessage();
+                } else {
+                    alert('Failed to upload file');
                 }
-
-                const result = await response.json();
-                console.log('✅ Upload successful:', result);
-                console.log('📍 media_url from server:', result.media_url);
-
-                // Store media info
-                currentMediaUrl = result.media_url;
-                currentMediaType = result.media_type;
-                console.log('📦 Stored media_url:', currentMediaUrl);
-
-                // Show preview
-                showMediaPreview(result);
-
             } catch (error) {
                 console.error('❌ Upload error:', error);
-                alert('Failed to upload file. Please try again.');
+                alert('Failed to upload file');
             } finally {
-                // Hide uploading indicator
-                document.getElementById('uploadingIndicator').classList.remove('show');
-                // Clear file input
                 event.target.value = '';
             }
         }
 
-        function showMediaPreview(uploadResult) {
-            const previewContent = document.getElementById('mediaPreviewContent');
-            previewContent.innerHTML = '';
-
-            // Convert relative URL to absolute URL
-            const mediaUrl = uploadResult.media_url.startsWith('http')
-                ? uploadResult.media_url
-                : `${window.location.origin}${uploadResult.media_url}`;
-
-            if (uploadResult.media_type === 'image') {
-                const img = document.createElement('img');
-                img.src = mediaUrl;
-                previewContent.appendChild(img);
-            } else if (uploadResult.media_type === 'video') {
-                const video = document.createElement('video');
-                video.src = mediaUrl;
-                video.controls = true;
-                previewContent.appendChild(video);
-            }
-
-            const info = document.createElement('p');
-            info.style.marginTop = '10px';
-            info.style.fontSize = '12px';
-            info.textContent = `${uploadResult.filename} (${(uploadResult.file_size / 1024).toFixed(1)} KB)`;
-            previewContent.appendChild(info);
-
-            document.getElementById('mediaPreview').classList.add('show');
-        }
-
-        function clearMediaPreview() {
-            document.getElementById('mediaPreview').classList.remove('show');
-            document.getElementById('mediaPreviewContent').innerHTML = '';
-            currentMediaUrl = null;
-            currentMediaType = null;
-        }
-
         // ====================================================================
-        // Reset Chat
-        // ====================================================================
-        function resetChat() {
-            document.getElementById('chatHeader').classList.add('hidden');
-            document.getElementById('noChat').classList.remove('hidden');
-            document.getElementById('messages').classList.add('hidden');
-            document.getElementById('inputArea').classList.add('hidden');
-            document.getElementById('messages').innerHTML = '';
-            clearMediaPreview();
-            document.getElementById('emojiPicker').classList.remove('show');
-            document.getElementById('emojiBtn').classList.remove('active');
-        }
-
         // Cleanup
+        // ====================================================================
         window.onbeforeunload = () => {
             if (currentWebSocket) currentWebSocket.close();
         };
+
+        // ====================================================================
+        // Refresh contacts when page becomes visible (returning from discover)
+        // ====================================================================
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && storedUserId) {
+                console.log('Page visible, refreshing contacts...');
+                loadContacts();
+            }
+        });
+
+        // ====================================================================
+        // Start
+        // ====================================================================
+        if (storedUserId) {
+            init();
+        }
     </script>
 </body>
 

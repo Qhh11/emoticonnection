@@ -23,6 +23,7 @@ from app.modules.chat.api import chat_http, chat_ws, match, media
 from app.modules.ai.api import ai_chat, emotion
 from app.modules.post.api import post_http
 from app.modules.auth.api import auth
+from app.modules.social.api import following
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -88,6 +89,8 @@ app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
 app.include_router(post_http.router, prefix="/api")
 # Auth routes
 app.include_router(auth.router, prefix="/api")
+# Social/Following routes
+app.include_router(following.router, prefix="/api")
 # static path
 BASE_DIR = Path(__file__).resolve().parent.parent          
 STATIC_DIR = BASE_DIR / "static"                         
@@ -117,6 +120,7 @@ def root():
             "chat_api": "/api/chat",
             "auth_api": "/api/auth",
             "posts_api": "/api/posts",
+            "social_api": "/api/social",
             "ai_chat": "/api/ai-chat",
             "emotion": "/api/emotion",
             "matching": "/api/match",

@@ -53,7 +53,7 @@ def get_chat_repo() -> ChatRepository:
 # HELPER FUNCTIONS (Database operations via ChatRepository)
 # ============================================================================
 
-async def _get_or_create_room(repo: ChatRepository, user1_id: int, user2_id: int, is_anonymous: bool = False) -> dict:
+async def _get_or_create_room(repo: ChatRepository, user1_id: Union[int, str], user2_id: Union[int, str], is_anonymous: bool = False) -> dict:
     """
     Get existing room or create new one for two users
     Now using MongoDB via ChatRepository
@@ -76,7 +76,7 @@ async def _get_room_by_id(repo: ChatRepository, room_id: str) -> Optional[dict]:
 async def _create_message(
     repo: ChatRepository,
     room_id: str,
-    sender_id: int,
+    sender_id: Union[int, str],
     content: str,
     message_type: str = "text",
     media_url: str = None,
@@ -101,7 +101,7 @@ async def _get_room_messages(repo: ChatRepository, room_id: str, limit: int = 10
     return await repo.get_session_messages(str(room_id), limit)
 
 
-async def _get_user_rooms(repo: ChatRepository, user_id: int) -> List[dict]:
+async def _get_user_rooms(repo: ChatRepository, user_id: Union[int, str]) -> List[dict]:
     """Get all rooms for a user"""
     return await repo.get_user_sessions(str(user_id))
 
@@ -289,7 +289,7 @@ async def get_room(room_id: str, repo: ChatRepository = Depends(get_chat_repo)):
 
 
 @router.get("/users/{user_id}/rooms", response_model=List[RoomListItem])
-async def get_user_rooms(user_id: int, repo: ChatRepository = Depends(get_chat_repo)):
+async def get_user_rooms(user_id: str, repo: ChatRepository = Depends(get_chat_repo)):
     """
     GET /api/chat/users/{user_id}/rooms
     """
@@ -297,13 +297,13 @@ async def get_user_rooms(user_id: int, repo: ChatRepository = Depends(get_chat_r
     result = []
 
     for room in rooms:
-        # Parse user IDs from string (they're stored as strings in MongoDB)
-        room_user1_id: int = int(room["user1_id"]) if isinstance(room["user1_id"], str) and room["user1_id"].isdigit() else int(room["user1_id"])
-        room_user2_id: int = int(room["user2_id"]) if isinstance(room["user2_id"], str) and room["user2_id"].isdigit() else int(room["user2_id"])
+        # Get user IDs (they're stored as ObjectId strings in MongoDB)
+        room_user1_id = str(room["user1_id"])
+        room_user2_id = str(room["user2_id"])
 
-        other_user_id: int = (
+        other_user_id = (
             room_user2_id
-            if room_user1_id == user_id
+            if room_user1_id == str(user_id)
             else room_user1_id
         )
 
