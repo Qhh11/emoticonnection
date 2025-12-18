@@ -10,7 +10,7 @@ This file implements REST API endpoints for:
 Database: MongoDB (via PostRepository)
 """
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.modules.post.schemas.post import (
@@ -114,7 +114,7 @@ async def create_post(
 async def get_posts_feed(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=50, description="Posts per page"),
-    viewer_id: Optional[int] = Query(None, description="Current user ID (to check likes)"),
+    viewer_id: Optional[str] = Query(None, description="Current user ID (to check likes)"),
     tag: Optional[str] = Query(None, description="Filter by tag"),
     emotion: Optional[str] = Query(None, description="Filter by emotion"),
     repo: PostRepository = Depends(get_post_repo)
@@ -160,7 +160,7 @@ async def get_posts_feed(
 @router.get("/{post_id}", response_model=PostOut)
 async def get_post(
     post_id: str,
-    viewer_id: Optional[int] = Query(None, description="Current user ID"),
+    viewer_id: Optional[str] = Query(None, description="Current user ID"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -180,7 +180,7 @@ async def get_post(
 async def update_post(
     post_id: str,
     update_data: PostUpdate,
-    user_id: int = Query(..., description="User ID making the update"),
+    user_id: str = Query(..., description="User ID making the update"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -219,7 +219,7 @@ async def update_post(
 @router.delete("/{post_id}")
 async def delete_post(
     post_id: str,
-    user_id: int = Query(..., description="User ID making the deletion"),
+    user_id: str = Query(..., description="User ID making the deletion"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -375,7 +375,7 @@ async def get_comments(
 @router.delete("/comments/{comment_id}")
 async def delete_comment(
     comment_id: str,
-    user_id: int = Query(..., description="User ID making the deletion"),
+    user_id: str = Query(..., description="User ID making the deletion"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -467,7 +467,7 @@ async def get_posts_by_tag(
     tag: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
-    viewer_id: Optional[int] = Query(None),
+    viewer_id: Optional[str] = Query(None),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -497,7 +497,7 @@ async def get_posts_by_tag(
 
 @router.get("/user/{user_id}", response_model=PostListResponse)
 async def get_user_posts(
-    user_id: int,
+    user_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
     include_anonymous: bool = Query(False, description="Include anonymous posts (only for own profile)"),

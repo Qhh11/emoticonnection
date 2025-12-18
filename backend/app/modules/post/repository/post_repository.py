@@ -5,7 +5,7 @@ This file implements the Repository Pattern for post-related operations.
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -21,6 +21,7 @@ class PostRepository:
         self.posts = db.posts
         self.comments = db.post_comments
         self.likes = db.post_likes
+        self.users = db.users  # Add users collection for fetching usernames
 
     # ========================================================================
     # Post Operations
@@ -28,7 +29,7 @@ class PostRepository:
 
     async def create_post(
         self,
-        author_id: int,
+        author_id: Union[int, str],
         content: str,
         post_type: str = "text",
         media_urls: Optional[List[str]] = None,
@@ -85,9 +86,9 @@ class PostRepository:
         return self._post_to_dict(new_post)
 
     async def get_post_by_id(
-        self, 
+        self,
         post_id: str,
-        viewer_id: Optional[int] = None
+        viewer_id: Optional[Union[int, str]] = None
     ) -> Optional[Dict]:
         """Get a single post by ID"""
         try:
@@ -102,22 +103,28 @@ class PostRepository:
         
         if not post:
             return None
-        
+
         post_dict = self._post_to_dict(post)
-        
+
+        # Fetch real username if not anonymous
+        if not post_dict["is_anonymous"]:
+            username = await self._get_username(post_dict["author_id"])
+            if username:
+                post_dict["author_name"] = username
+
         # Check if viewer has liked this post
         if viewer_id:
             post_dict["is_liked"] = await self._check_user_liked(post_id, viewer_id)
-        
+
         return post_dict
 
     async def get_posts_feed(
         self,
         page: int = 1,
         page_size: int = 20,
-        viewer_id: Optional[int] = None,
+        viewer_id: Optional[Union[int, str]] = None,
         tag: Optional[str] = None,
-        author_id: Optional[int] = None,
+        author_id: Optional[Union[int, str]] = None,
         emotion: Optional[str] = None
     ) -> Dict:
         """
@@ -159,6 +166,13 @@ class PostRepository:
         result_posts = []
         for post in posts:
             post_dict = self._post_to_dict(post)
+
+            # Fetch real username if not anonymous
+            if not post_dict["is_anonymous"]:
+                username = await self._get_username(post_dict["author_id"])
+                if username:
+                    post_dict["author_name"] = username
+
             if viewer_id:
                 post_dict["is_liked"] = await self._check_user_liked(
                     post_dict["id"], viewer_id
@@ -175,7 +189,7 @@ class PostRepository:
 
     async def get_user_posts(
         self,
-        user_id: int,
+        user_id: Union[int, str],
         page: int = 1,
         page_size: int = 20,
         include_anonymous: bool = False
@@ -194,9 +208,20 @@ class PostRepository:
         
         cursor = self.posts.find(query).sort("created_at", -1).skip(skip).limit(page_size)
         posts = await cursor.to_list(length=page_size)
-        
+
+        # Convert posts and fetch usernames
+        result_posts = []
+        for post in posts:
+            post_dict = self._post_to_dict(post)
+            # Fetch real username if not anonymous
+            if not post_dict["is_anonymous"]:
+                username = await self._get_username(post_dict["author_id"])
+                if username:
+                    post_dict["author_name"] = username
+            result_posts.append(post_dict)
+
         return {
-            "posts": [self._post_to_dict(p) for p in posts],
+            "posts": result_posts,
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -238,7 +263,7 @@ class PostRepository:
         
         return self._post_to_dict(result) if result else None
 
-    async def delete_post(self, post_id: str, user_id: int) -> bool:
+    async def delete_post(self, post_id: str, user_id: Union[int, str]) -> bool:
         """Soft delete a post (only author can delete)"""
         try:
             oid = ObjectId(post_id) if ObjectId.is_valid(post_id) else post_id
@@ -256,7 +281,7 @@ class PostRepository:
     # Like Operations
     # ========================================================================
 
-    async def like_post(self, post_id: str, user_id: int) -> Dict:
+    async def like_post(self, post_id: str, user_id: Union[int, str]) -> Dict:
         """
         Like a post
         
@@ -302,7 +327,7 @@ class PostRepository:
             "new_like_count": await self._get_post_like_count(post_id)
         }
 
-    async def unlike_post(self, post_id: str, user_id: int) -> Dict:
+    async def unlike_post(self, post_id: str, user_id: Union[int, str]) -> Dict:
         """Unlike a post"""
         try:
             post_oid = ObjectId(post_id) if ObjectId.is_valid(post_id) else post_id
@@ -342,7 +367,7 @@ class PostRepository:
     async def create_comment(
         self,
         post_id: str,
-        author_id: int,
+        author_id: Union[int, str],
         content: str,
         is_anonymous: bool = False,
         parent_id: Optional[str] = None
@@ -388,8 +413,16 @@ class PostRepository:
                 {"_id": parent_oid},
                 {"$inc": {"reply_count": 1}}
             )
-        
-        return self._comment_to_dict(new_comment)
+
+        comment_dict = self._comment_to_dict(new_comment)
+
+        # Fetch real username if not anonymous
+        if not comment_dict["is_anonymous"]:
+            username = await self._get_username(comment_dict["author_id"])
+            if username:
+                comment_dict["author_name"] = username
+
+        return comment_dict
 
     async def get_post_comments(
         self,
@@ -426,16 +459,27 @@ class PostRepository:
         
         cursor = self.comments.find(query).sort("created_at", 1).skip(skip).limit(page_size)
         comments = await cursor.to_list(length=page_size)
-        
+
+        # Convert comments and fetch usernames
+        result_comments = []
+        for comment in comments:
+            comment_dict = self._comment_to_dict(comment)
+            # Fetch real username if not anonymous
+            if not comment_dict["is_anonymous"]:
+                username = await self._get_username(comment_dict["author_id"])
+                if username:
+                    comment_dict["author_name"] = username
+            result_comments.append(comment_dict)
+
         return {
-            "comments": [self._comment_to_dict(c) for c in comments],
+            "comments": result_comments,
             "total": total,
             "page": page,
             "page_size": page_size,
             "has_more": skip + len(comments) < total
         }
 
-    async def delete_comment(self, comment_id: str, user_id: int) -> bool:
+    async def delete_comment(self, comment_id: str, user_id: Union[int, str]) -> bool:
         """Soft delete a comment (only author can delete)"""
         try:
             oid = ObjectId(comment_id) if ObjectId.is_valid(comment_id) else comment_id
@@ -471,7 +515,7 @@ class PostRepository:
         
         return False
 
-    async def like_comment(self, comment_id: str, user_id: int) -> Dict:
+    async def like_comment(self, comment_id: str, user_id: Union[int, str]) -> Dict:
         """Like a comment"""
         try:
             comment_oid = ObjectId(comment_id) if ObjectId.is_valid(comment_id) else comment_id
@@ -518,7 +562,7 @@ class PostRepository:
         tag: str,
         page: int = 1,
         page_size: int = 20,
-        viewer_id: Optional[int] = None
+        viewer_id: Optional[Union[int, str]] = None
     ) -> Dict:
         """Get posts with a specific tag"""
         return await self.get_posts_feed(
@@ -592,13 +636,35 @@ class PostRepository:
     # Helper Methods
     # ========================================================================
 
+    async def _get_username(self, user_id: Union[int, str]) -> Optional[str]:
+        """Get username from user ID"""
+        try:
+            # Try to find user by ObjectId string first
+            from bson import ObjectId
+            user_oid = None
+            if isinstance(user_id, str) and ObjectId.is_valid(user_id):
+                user_oid = ObjectId(user_id)
+
+            # Query for user
+            user = await self.users.find_one(
+                {"$or": [{"_id": user_oid}, {"_id": user_id}]} if user_oid else {"_id": user_id}
+            )
+
+            if user:
+                # Return nickname or username
+                return user.get("nickname") or user.get("username")
+            return None
+        except Exception as e:
+            print(f"[PostRepository] Error fetching username for {user_id}: {e}")
+            return None
+
     def _extract_tags(self, content: str) -> List[str]:
         """Extract hashtags from content"""
         import re
         tags = re.findall(r'#(\w+)', content)
         return list(set(tag.lower() for tag in tags))
 
-    async def _check_user_liked(self, post_id: str, user_id: int) -> bool:
+    async def _check_user_liked(self, post_id: str, user_id: Union[int, str]) -> bool:
         """Check if user has liked a post"""
         try:
             post_oid = ObjectId(post_id) if ObjectId.is_valid(post_id) else post_id
