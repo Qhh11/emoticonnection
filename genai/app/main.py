@@ -16,9 +16,21 @@ from weaviate.classes.query import Filter
 try:
     from weaviate_client import WeaviateManager 
     from model import ConversationRecord
+    from emotion_analytics import (
+        EmotionAnalytics, 
+        generate_weekly_emotion_report,
+        generate_monthly_emotion_report,
+        EmotionSummary
+    )
 except ImportError:
     from app.weaviate_client import WeaviateManager 
-    from app.model import ConversationRecord 
+    from app.model import ConversationRecord
+    from app.emotion_analytics import (
+        EmotionAnalytics,
+        generate_weekly_emotion_report,
+        generate_monthly_emotion_report,
+        EmotionSummary
+    ) 
 
 
 logging.basicConfig(level=logging.INFO)
@@ -142,6 +154,121 @@ def generate_weekly_report(user_id: str, start_time_iso: str) -> str:
         if "could not find class" in str(e):
             logger.error("HINT: Did you run 'python -m init_schema' to create the database table?")
         raise
+
+
+def generate_emotion_analytics_report(
+    user_id: str,
+    period_type: str = "weekly",
+    end_date: str = None
+) -> dict:
+    """
+    Generate comprehensive emotion analytics report.
+    
+    Args:
+        user_id: User identifier
+        period_type: 'weekly' or 'monthly'
+        end_date: Optional end date (ISO format)
+        
+    Returns:
+        Dict containing the full emotion analytics report with:
+        - average_mood_score: Overall mood score (-1 to 1)
+        - mood_stability: Stability measure (0 to 1)
+        - emotion_distribution: Percentage breakdown of emotions
+        - emotion_trend: Time series data with trend direction
+        - word_cloud: High-frequency emotion words
+        - triggers: Common trigger scenarios
+        - summary_text: AI-generated summary
+        - key_insights: List of key findings
+        - suggestions: Personalized recommendations
+        - trend_prediction: Future trend forecast
+    """
+    if weaviate_manager is None:
+        raise RuntimeError("WeaviateManager is not initialized")
+    
+    logger.info(f"Generating {period_type} emotion analytics for user {user_id}")
+    
+    analytics = EmotionAnalytics(weaviate_manager, GEMINI_CLIENT)
+    
+    report = analytics.generate_report(user_id, period_type, end_date)
+    
+    # Convert to dictionary for API response
+    return {
+        "user_id": report.user_id,
+        "period_type": report.period_type,
+        "start_date": report.start_date,
+        "end_date": report.end_date,
+        "metrics": {
+            "average_mood_score": report.average_mood_score,
+            "mood_stability": report.mood_stability,
+            "total_interactions": report.total_interactions
+        },
+        "emotion_distribution": report.emotion_distribution,
+        "emotion_trend": {
+            "period": report.emotion_trend.period,
+            "data_points": report.emotion_trend.data_points,
+            "trend_direction": report.emotion_trend.trend_direction,
+            "volatility": report.emotion_trend.volatility
+        },
+        "word_cloud": {
+            "words": report.word_cloud.words,
+            "top_emotions": report.word_cloud.top_emotions,
+            "total_count": report.word_cloud.total_count
+        },
+        "triggers": [
+            {
+                "trigger_type": t.trigger_type,
+                "frequency": t.frequency,
+                "associated_emotions": t.associated_emotions,
+                "example_contexts": t.example_contexts,
+                "impact_score": t.impact_score
+            }
+            for t in report.triggers
+        ],
+        "ai_analysis": {
+            "summary_text": report.summary_text,
+            "key_insights": report.key_insights,
+            "suggestions": report.suggestions,
+            "trend_prediction": report.trend_prediction
+        }
+    }
+
+
+def get_emotion_curve_data(
+    user_id: str,
+    days: int = 7
+) -> dict:
+    """
+    Get emotion fluctuation curve data for visualization.
+    
+    Args:
+        user_id: User identifier
+        days: Number of days to analyze
+        
+    Returns:
+        Time series data suitable for charting
+    """
+    from datetime import datetime, timezone, timedelta
+    
+    end_dt = datetime.now(timezone.utc)
+    start_dt = end_dt - timedelta(days=days)
+    
+    start_date = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_date = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    analytics = EmotionAnalytics(weaviate_manager, GEMINI_CLIENT)
+    
+    # Fetch and analyze
+    conversations = analytics.fetch_user_conversations(user_id, start_date, end_date)
+    data_points = analytics.analyze_emotions_from_text(conversations)
+    trend = analytics.generate_emotion_trend(data_points)
+    
+    return {
+        "user_id": user_id,
+        "period_days": days,
+        "curve_data": trend.data_points,
+        "trend_direction": trend.trend_direction,
+        "volatility": trend.volatility
+    }
 
 def insert_fake_data():
     manager = WeaviateManager()

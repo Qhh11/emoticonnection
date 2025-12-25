@@ -16,7 +16,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.weaviate_client import WeaviateManager
-from app.main import call_gemini_api, generate_weekly_report
+from app.main import call_gemini_api, generate_weekly_report, generate_emotion_analytics_report, get_emotion_curve_data
+from app.emotion_analytics import EmotionAnalytics
 
 # Load environment variables
 load_dotenv()
@@ -302,6 +303,166 @@ def internal_error(error):
         'success': False,
         'error': 'Internal server error'
     }), 500
+
+
+# ==================== Emotion Analytics Endpoints ====================
+
+@app.route('/api/emotion-analytics', methods=['GET'])
+def get_emotion_analytics():
+    """
+    Generate comprehensive emotion analytics report.
+    
+    Query parameters:
+        user_id (required): User identifier
+        period_type (optional): 'weekly' or 'monthly' (default: 'weekly')
+        end_date (optional): End date in ISO format
+    
+    Returns:
+        Complete emotion analytics including:
+        - metrics: average_mood_score, mood_stability, total_interactions
+        - emotion_distribution: percentage breakdown
+        - emotion_trend: time series data
+        - word_cloud: high-frequency emotion words
+        - triggers: common trigger scenarios
+        - ai_analysis: summary, insights, suggestions, predictions
+    """
+    try:
+        if not weaviate_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Weaviate is not connected'
+            }), 503
+        
+        user_id = request.args.get('user_id')
+        period_type = request.args.get('period_type', 'weekly')
+        end_date = request.args.get('end_date')
+        
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameter: user_id'
+            }), 400
+        
+        if period_type not in ['weekly', 'monthly']:
+            return jsonify({
+                'success': False,
+                'error': "period_type must be 'weekly' or 'monthly'"
+            }), 400
+        
+        logger.info(f"Generating {period_type} emotion analytics for user {user_id}")
+        
+        report = generate_emotion_analytics_report(user_id, period_type, end_date)
+        
+        return jsonify(report), 200
+        
+    except Exception as e:
+        logger.error(f"Error in get_emotion_analytics endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/emotion-curve', methods=['GET'])
+def get_emotion_curve():
+    """
+    Get emotion fluctuation curve data for visualization.
+    
+    Query parameters:
+        user_id (required): User identifier
+        days (optional): Number of days to analyze (default: 7)
+    
+    Returns:
+        Time series data suitable for charting
+    """
+    try:
+        if not weaviate_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Weaviate is not connected'
+            }), 503
+        
+        user_id = request.args.get('user_id')
+        days = request.args.get('days', 7, type=int)
+        
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameter: user_id'
+            }), 400
+        
+        if days < 1 or days > 90:
+            return jsonify({
+                'success': False,
+                'error': 'days must be between 1 and 90'
+            }), 400
+        
+        logger.info(f"Getting emotion curve for user {user_id}, last {days} days")
+        
+        curve_data = get_emotion_curve_data(user_id, days)
+        
+        return jsonify(curve_data), 200
+        
+    except Exception as e:
+        logger.error(f"Error in get_emotion_curve endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/emotion-summary', methods=['GET'])
+def get_emotion_summary():
+    """
+    Get simplified emotion summary with key metrics.
+    
+    Query parameters:
+        user_id (required): User identifier
+        period_type (optional): 'weekly' or 'monthly' (default: 'weekly')
+    
+    Returns:
+        Simplified summary with key metrics and suggestions
+    """
+    try:
+        if not weaviate_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Weaviate is not connected'
+            }), 503
+        
+        user_id = request.args.get('user_id')
+        period_type = request.args.get('period_type', 'weekly')
+        
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameter: user_id'
+            }), 400
+        
+        logger.info(f"Getting emotion summary for user {user_id}")
+        
+        report = generate_emotion_analytics_report(user_id, period_type)
+        
+        # Return simplified summary
+        summary = {
+            'user_id': user_id,
+            'period_type': period_type,
+            'average_mood_score': report['metrics']['average_mood_score'],
+            'mood_stability': report['metrics']['mood_stability'],
+            'dominant_emotions': list(report['emotion_distribution'].keys())[:3],
+            'trend_direction': report['emotion_trend']['trend_direction'],
+            'summary': report['ai_analysis']['summary_text'],
+            'top_suggestions': report['ai_analysis']['suggestions'][:3]
+        }
+        
+        return jsonify(summary), 200
+        
+    except Exception as e:
+        logger.error(f"Error in get_emotion_summary endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # ==================== Main ====================

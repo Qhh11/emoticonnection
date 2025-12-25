@@ -3,11 +3,73 @@ Emotion router - handles emotion analysis and feedback.
 Provides endpoints for tone classification, emotion tracking, and emotional insights.
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Dict, Optional
 from schemas.message_schema import EmotionAnalysisRequest, EmotionAnalysisResponse
+from pydantic import BaseModel
+import httpx
+import os
 
 router = APIRouter()
+
+# GenAI service URL
+GENAI_SERVICE_URL = os.getenv("GENAI_SERVICE_URL", "http://localhost:8001")
+
+
+# Response models for analytics
+class EmotionMetrics(BaseModel):
+    average_mood_score: float
+    mood_stability: float
+    total_interactions: int
+
+
+class EmotionTrendData(BaseModel):
+    period: str
+    data_points: List[Dict]
+    trend_direction: str
+    volatility: float
+
+
+class WordCloudData(BaseModel):
+    words: Dict[str, int]
+    top_emotions: List[str]
+    total_count: int
+
+
+class TriggerData(BaseModel):
+    trigger_type: str
+    frequency: int
+    associated_emotions: List[str]
+    example_contexts: List[str]
+    impact_score: float
+
+
+class AIAnalysis(BaseModel):
+    summary_text: str
+    key_insights: List[str]
+    suggestions: List[str]
+    trend_prediction: str
+
+
+class EmotionAnalyticsResponse(BaseModel):
+    user_id: str
+    period_type: str
+    start_date: str
+    end_date: str
+    metrics: EmotionMetrics
+    emotion_distribution: Dict[str, float]
+    emotion_trend: EmotionTrendData
+    word_cloud: WordCloudData
+    triggers: List[TriggerData]
+    ai_analysis: AIAnalysis
+
+
+class EmotionCurveResponse(BaseModel):
+    user_id: str
+    period_days: int
+    curve_data: List[Dict]
+    trend_direction: str
+    volatility: float
 
 
 @router.post("/analyze", response_model=EmotionAnalysisResponse)
@@ -191,3 +253,213 @@ async def match_emotion_scenario(
     # TODO: Implement scenario matching logic
     # TODO: call LLM API for contextual recommendations
     raise HTTPException(status_code=501, detail="Not implemented")
+
+
+# ============== Emotion Analytics Endpoints ==============
+
+@router.get("/analytics/{user_id}", response_model=EmotionAnalyticsResponse)
+async def get_emotion_analytics(
+    user_id: str,
+    period_type: str = Query("weekly", description="Report period: 'weekly' or 'monthly'"),
+    end_date: Optional[str] = Query(None, description="End date in ISO format (YYYY-MM-DDTHH:MM:SSZ)")
+):
+    """
+    Get comprehensive emotion analytics report for a user.
+    
+    This endpoint returns:
+    - 周/月度总结 (Weekly/Monthly summary)
+    - 情绪波动曲线 (Emotion fluctuation curve)
+    - 高频情绪词云 (High-frequency emotion word cloud)
+    - 常见触发情境 (Common trigger scenarios)
+    - 心情平均得分 (Average mood score)
+    - 建议与趋势预测 (Suggestions and trend predictions)
+    
+    Args:
+        user_id: User identifier
+        period_type: 'weekly' or 'monthly'
+        end_date: Optional end date for the report period
+        
+    Returns:
+        EmotionAnalyticsResponse with complete analytics data
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            params = {
+                "user_id": user_id,
+                "period_type": period_type
+            }
+            if end_date:
+                params["end_date"] = end_date
+                
+            response = await client.get(
+                f"{GENAI_SERVICE_URL}/api/emotion-analytics",
+                params=params
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GenAI service error: {response.text}"
+                )
+                
+            return response.json()
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Analytics generation timed out")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"GenAI service unavailable: {str(e)}")
+
+
+@router.get("/curve/{user_id}", response_model=EmotionCurveResponse)
+async def get_emotion_curve(
+    user_id: str,
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze")
+):
+    """
+    Get emotion fluctuation curve data for visualization.
+    
+    Returns time series data suitable for charting emotion trends.
+    
+    Args:
+        user_id: User identifier
+        days: Number of days to include (1-90)
+        
+    Returns:
+        EmotionCurveResponse with curve data points
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{GENAI_SERVICE_URL}/api/emotion-curve",
+                params={"user_id": user_id, "days": days}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GenAI service error: {response.text}"
+                )
+                
+            return response.json()
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"GenAI service unavailable: {str(e)}")
+
+
+@router.get("/summary/{user_id}")
+async def get_emotion_summary(
+    user_id: str,
+    period_type: str = Query("weekly", description="'weekly' or 'monthly'")
+):
+    """
+    Get a simplified emotion summary with key metrics.
+    
+    Returns:
+        - Average mood score
+        - Dominant emotions
+        - Trend direction
+        - Key suggestions
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(
+                f"{GENAI_SERVICE_URL}/api/emotion-analytics",
+                params={"user_id": user_id, "period_type": period_type}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GenAI service error: {response.text}"
+                )
+            
+            data = response.json()
+            
+            # Return simplified summary
+            return {
+                "user_id": user_id,
+                "period_type": period_type,
+                "average_mood_score": data["metrics"]["average_mood_score"],
+                "mood_stability": data["metrics"]["mood_stability"],
+                "dominant_emotions": list(data["emotion_distribution"].keys())[:3],
+                "trend_direction": data["emotion_trend"]["trend_direction"],
+                "summary": data["ai_analysis"]["summary_text"],
+                "top_suggestions": data["ai_analysis"]["suggestions"][:3]
+            }
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"GenAI service unavailable: {str(e)}")
+
+
+@router.get("/word-cloud/{user_id}")
+async def get_emotion_word_cloud(
+    user_id: str,
+    days: int = Query(7, ge=1, le=90)
+):
+    """
+    Get emotion word cloud data for visualization.
+    
+    Returns:
+        Word frequency data suitable for word cloud rendering
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(
+                f"{GENAI_SERVICE_URL}/api/emotion-analytics",
+                params={"user_id": user_id, "period_type": "weekly" if days <= 7 else "monthly"}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GenAI service error: {response.text}"
+                )
+            
+            data = response.json()
+            return data["word_cloud"]
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"GenAI service unavailable: {str(e)}")
+
+
+@router.get("/triggers/{user_id}")
+async def get_emotion_triggers(
+    user_id: str,
+    period_type: str = Query("weekly", description="'weekly' or 'monthly'")
+):
+    """
+    Get common emotion trigger analysis.
+    
+    Returns:
+        List of identified triggers with associated emotions and impact
+    """
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(
+                f"{GENAI_SERVICE_URL}/api/emotion-analytics",
+                params={"user_id": user_id, "period_type": period_type}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GenAI service error: {response.text}"
+                )
+            
+            data = response.json()
+            return {
+                "user_id": user_id,
+                "triggers": data["triggers"],
+                "total_count": len(data["triggers"])
+            }
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timed out")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"GenAI service unavailable: {str(e)}")
