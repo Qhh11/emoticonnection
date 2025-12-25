@@ -100,22 +100,61 @@ class EmotionAnalytics:
     Analytics engine for emotion data processing and report generation.
     """
     
-    # Emotion categories and their sentiment scores
-    EMOTION_SCORES = {
-        # Positive emotions
-        'happy': 0.8, 'joyful': 0.9, 'excited': 0.7, 'grateful': 0.8,
-        'content': 0.6, 'hopeful': 0.5, 'peaceful': 0.6, 'loved': 0.9,
-        'proud': 0.7, 'confident': 0.6, 'optimistic': 0.7,
-        
-        # Neutral emotions
-        'neutral': 0.0, 'calm': 0.2, 'curious': 0.1, 'surprised': 0.0,
-        'thoughtful': 0.1, 'reflective': 0.1,
-        
-        # Negative emotions
-        'sad': -0.6, 'anxious': -0.5, 'stressed': -0.6, 'frustrated': -0.5,
-        'angry': -0.7, 'disappointed': -0.5, 'lonely': -0.6, 'worried': -0.4,
-        'overwhelmed': -0.7, 'depressed': -0.9, 'fearful': -0.6, 'guilty': -0.5,
-        'jealous': -0.4, 'ashamed': -0.6, 'hurt': -0.7
+    # 9 Core Emotion Categories with metadata
+    # 情绪 (Emotion) | 颜色 (Hex Code) | 中文昵称 | 英文昵称
+    EMOTION_CONFIG = {
+        'bored': {
+            'cn_name': '无聊', 'cn_nickname': '丧丧', 'en_nickname': 'Snoozy',
+            'color': '#4B4E91', 'score': -0.2
+        },
+        'fear': {
+            'cn_name': '恐惧', 'cn_nickname': '怕怕', 'en_nickname': 'Scaredy',
+            'color': '#9381BA', 'score': -0.6
+        },
+        'joy': {
+            'cn_name': '快乐', 'cn_nickname': '乐乐', 'en_nickname': 'Sunny',
+            'color': '#F9D849', 'score': 0.9
+        },
+        'sadness': {
+            'cn_name': '忧伤', 'cn_nickname': '忧忧', 'en_nickname': 'Bluey',
+            'color': '#3266B1', 'score': -0.7
+        },
+        'disgust': {
+            'cn_name': '厌恶', 'cn_nickname': '厌厌', 'en_nickname': 'Yucky',
+            'color': '#66B04C', 'score': -0.5
+        },
+        'anxiety': {
+            'cn_name': '焦虑', 'cn_nickname': '焦焦', 'en_nickname': 'Jitters',
+            'color': '#E67E22', 'score': -0.6
+        },
+        'anger': {
+            'cn_name': '愤怒', 'cn_nickname': '怒怒', 'en_nickname': 'Grumpy',
+            'color': '#D32F2F', 'score': -0.8
+        },
+        'embarrassment': {
+            'cn_name': '尴尬', 'cn_nickname': '尬尬', 'en_nickname': 'Blushy',
+            'color': '#D278A3', 'score': -0.3
+        },
+        'envy': {
+            'cn_name': '羡慕', 'cn_nickname': '慕慕', 'en_nickname': 'Sparkle',
+            'color': '#2BA8A4', 'score': -0.2
+        },
+    }
+    
+    # Emotion scores for calculation (extracted from config)
+    EMOTION_SCORES = {key: val['score'] for key, val in EMOTION_CONFIG.items()}
+    
+    # Chinese to English mapping
+    CN_TO_EN_EMOTION = {
+        '无聊': 'bored', '丧丧': 'bored',
+        '恐惧': 'fear', '怕怕': 'fear',
+        '快乐': 'joy', '乐乐': 'joy',
+        '忧伤': 'sadness', '忧忧': 'sadness',
+        '厌恶': 'disgust', '厌厌': 'disgust',
+        '焦虑': 'anxiety', '焦焦': 'anxiety',
+        '愤怒': 'anger', '怒怒': 'anger',
+        '尴尬': 'embarrassment', '尬尬': 'embarrassment',
+        '羡慕': 'envy', '慕慕': 'envy',
     }
     
     # Trigger categories
@@ -123,6 +162,40 @@ class EmotionAnalytics:
         'work', 'relationships', 'health', 'family', 'finance',
         'social', 'personal_growth', 'daily_routine', 'unexpected_events'
     ]
+    
+    @classmethod
+    def get_emotion_color(cls, emotion: str) -> str:
+        """Get the color hex code for an emotion."""
+        emotion_key = cls.normalize_emotion(emotion)
+        return cls.EMOTION_CONFIG.get(emotion_key, {}).get('color', '#808080')
+    
+    @classmethod
+    def get_emotion_nickname(cls, emotion: str, lang: str = 'cn') -> str:
+        """Get the cute nickname for an emotion."""
+        emotion_key = cls.normalize_emotion(emotion)
+        config = cls.EMOTION_CONFIG.get(emotion_key, {})
+        if lang == 'cn':
+            return config.get('cn_nickname', emotion)
+        return config.get('en_nickname', emotion)
+    
+    @classmethod
+    def normalize_emotion(cls, emotion: str) -> str:
+        """Normalize emotion string to standard English key."""
+        emotion_lower = emotion.lower().strip()
+        # Check if it's Chinese
+        if emotion_lower in cls.CN_TO_EN_EMOTION:
+            return cls.CN_TO_EN_EMOTION[emotion_lower]
+        # Check if it's already a valid English key
+        if emotion_lower in cls.EMOTION_CONFIG:
+            return emotion_lower
+        # Default mapping for common variations
+        variations = {
+            'happy': 'joy', 'sad': 'sadness', 'scared': 'fear',
+            'anxious': 'anxiety', 'angry': 'anger', 'envious': 'envy',
+            'disgusted': 'disgust', 'embarrassed': 'embarrassment',
+            'boring': 'bored'
+        }
+        return variations.get(emotion_lower, emotion_lower)
 
     def __init__(self, weaviate_manager: WeaviateManager, gemini_client):
         """Initialize with database and AI client."""
@@ -219,6 +292,20 @@ class EmotionAnalytics:
         batch_size = 20
         all_data_points = []
         
+        # Define the 9 emotion categories for the prompt
+        emotion_categories = """
+情绪分类 (必须从以下9种中选择一个):
+1. bored (无聊/丧丧) - 感到无聊、无趣
+2. fear (恐惧/怕怕) - 感到害怕、恐惧
+3. joy (快乐/乐乐) - 感到开心、快乐、满足
+4. sadness (忧伤/忧忧) - 感到悲伤、失落
+5. disgust (厌恶/厌厌) - 感到厌恶、反感
+6. anxiety (焦虑/焦焦) - 感到焦虑、紧张、担忧
+7. anger (愤怒/怒怒) - 感到愤怒、生气
+8. embarrassment (尴尬/尬尬) - 感到尴尬、羞涩
+9. envy (羡慕/慕慕) - 感到羡慕、嫉妒
+"""
+        
         for i in range(0, len(conversations), batch_size):
             batch = conversations[i:i+batch_size]
             
@@ -233,12 +320,14 @@ class EmotionAnalytics:
             
             prompt = f"""分析以下用户消息的情绪状态。对每条消息，返回JSON格式:
 
+{emotion_categories}
+
 消息列表:
 {json.dumps(texts_for_analysis, ensure_ascii=False, indent=2)}
 
 请返回一个JSON数组，每个元素包含:
 - timestamp: 原始时间戳
-- emotion: 主要情绪 (happy, sad, anxious, angry, grateful, hopeful, frustrated, neutral, etc.)
+- emotion: 主要情绪 (必须是: bored, fear, joy, sadness, disgust, anxiety, anger, embarrassment, envy 之一)
 - intensity: 情绪强度 (0.0-1.0)
 - sentiment_score: 情感得分 (-1.0 到 1.0, 负数为消极，正数为积极)
 - trigger_context: 可能的触发情境描述 (简短)
@@ -256,9 +345,13 @@ class EmotionAnalytics:
                 emotion_results = json.loads(response)
                 
                 for result in emotion_results:
+                    # Normalize the emotion to our 9 categories
+                    raw_emotion = result.get('emotion', 'bored')
+                    normalized_emotion = self.normalize_emotion(raw_emotion)
+                    
                     all_data_points.append(EmotionDataPoint(
                         timestamp=result.get('timestamp', ''),
-                        emotion=result.get('emotion', 'neutral'),
+                        emotion=normalized_emotion,
                         intensity=float(result.get('intensity', 0.5)),
                         sentiment_score=float(result.get('sentiment_score', 0.0)),
                         trigger_context=result.get('trigger_context')

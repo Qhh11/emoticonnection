@@ -1,6 +1,17 @@
 """
 Unit tests for Emotion Analytics module.
 Tests the emotion analysis, report generation, and data processing functions.
+
+9 Core Emotions:
+- bored (无聊/丧丧) - Snoozy
+- fear (恐惧/怕怕) - Scaredy  
+- joy (快乐/乐乐) - Sunny
+- sadness (忧伤/忧忧) - Bluey
+- disgust (厌恶/厌厌) - Yucky
+- anxiety (焦虑/焦焦) - Jitters
+- anger (愤怒/怒怒) - Grumpy
+- embarrassment (尴尬/尬尬) - Blushy
+- envy (羡慕/慕慕) - Sparkle
 """
 
 import sys
@@ -35,14 +46,14 @@ class TestEmotionDataPoint(unittest.TestCase):
         """Test creating an EmotionDataPoint instance."""
         dp = EmotionDataPoint(
             timestamp="2025-12-25T10:00:00Z",
-            emotion="happy",
+            emotion="joy",
             intensity=0.8,
             sentiment_score=0.7,
             trigger_context="received good news"
         )
         
         self.assertEqual(dp.timestamp, "2025-12-25T10:00:00Z")
-        self.assertEqual(dp.emotion, "happy")
+        self.assertEqual(dp.emotion, "joy")
         self.assertEqual(dp.intensity, 0.8)
         self.assertEqual(dp.sentiment_score, 0.7)
         self.assertEqual(dp.trigger_context, "received good news")
@@ -51,7 +62,7 @@ class TestEmotionDataPoint(unittest.TestCase):
         """Test EmotionDataPoint with no trigger context."""
         dp = EmotionDataPoint(
             timestamp="2025-12-25T10:00:00Z",
-            emotion="neutral",
+            emotion="bored",
             intensity=0.5,
             sentiment_score=0.0
         )
@@ -68,22 +79,22 @@ class TestEmotionAnalyticsCalculations(unittest.TestCase):
         self.mock_gemini = MagicMock()
         self.analytics = EmotionAnalytics(self.mock_weaviate, self.mock_gemini)
         
-        # Sample data points
+        # Sample data points using the 9 core emotions
         self.sample_data_points = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "happy", 0.8, 0.7, "work success"),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "sad", 0.6, -0.5, "personal issue"),
-            EmotionDataPoint("2025-12-22T10:00:00Z", "neutral", 0.5, 0.0, None),
-            EmotionDataPoint("2025-12-23T10:00:00Z", "anxious", 0.7, -0.4, "work deadline"),
-            EmotionDataPoint("2025-12-24T10:00:00Z", "happy", 0.9, 0.8, "holiday"),
-            EmotionDataPoint("2025-12-25T10:00:00Z", "grateful", 0.85, 0.9, "family"),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "joy", 0.8, 0.9, "work success"),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "sadness", 0.6, -0.7, "personal issue"),
+            EmotionDataPoint("2025-12-22T10:00:00Z", "bored", 0.5, -0.2, None),
+            EmotionDataPoint("2025-12-23T10:00:00Z", "anxiety", 0.7, -0.6, "work deadline"),
+            EmotionDataPoint("2025-12-24T10:00:00Z", "joy", 0.9, 0.9, "holiday"),
+            EmotionDataPoint("2025-12-25T10:00:00Z", "envy", 0.85, -0.2, "family"),
         ]
     
     def test_calculate_emotion_distribution(self):
         """Test emotion distribution calculation."""
         distribution = self.analytics.calculate_emotion_distribution(self.sample_data_points)
         
-        self.assertIn("happy", distribution)
-        self.assertAlmostEqual(distribution["happy"], 33.33, places=1)  # 2 out of 6
+        self.assertIn("joy", distribution)
+        self.assertAlmostEqual(distribution["joy"], 33.33, places=1)  # 2 out of 6
         self.assertEqual(len(distribution), 5)  # 5 unique emotions
         
         # Sum should be approximately 100
@@ -99,8 +110,8 @@ class TestEmotionAnalyticsCalculations(unittest.TestCase):
         """Test average mood score calculation."""
         avg_score = self.analytics.calculate_average_mood_score(self.sample_data_points)
         
-        # Expected: (0.7 - 0.5 + 0.0 - 0.4 + 0.8 + 0.9) / 6 = 0.25
-        expected = (0.7 - 0.5 + 0.0 - 0.4 + 0.8 + 0.9) / 6
+        # Expected: (0.9 - 0.7 - 0.2 - 0.6 + 0.9 - 0.2) / 6 = 0.0167
+        expected = (0.9 - 0.7 - 0.2 - 0.6 + 0.9 - 0.2) / 6
         self.assertAlmostEqual(avg_score, expected, places=2)
     
     def test_calculate_average_mood_score_empty(self):
@@ -127,9 +138,9 @@ class TestEmotionAnalyticsCalculations(unittest.TestCase):
     def test_calculate_mood_stability_stable_mood(self):
         """Test mood stability with consistent mood."""
         stable_points = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "happy", 0.8, 0.5, None),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "happy", 0.8, 0.5, None),
-            EmotionDataPoint("2025-12-22T10:00:00Z", "happy", 0.8, 0.5, None),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "joy", 0.8, 0.5, None),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "joy", 0.8, 0.5, None),
+            EmotionDataPoint("2025-12-22T10:00:00Z", "joy", 0.8, 0.5, None),
         ]
         stability = self.analytics.calculate_mood_stability(stable_points)
         
@@ -147,15 +158,15 @@ class TestEmotionTrendGeneration(unittest.TestCase):
         self.analytics = EmotionAnalytics(self.mock_weaviate, self.mock_gemini)
     
     def test_generate_emotion_trend_improving(self):
-        """Test trend detection for improving mood."""
-        # Create data with improving trend
+        """Test trend detection for improving mood (sadness -> joy)."""
+        # Create data with improving trend using 9 core emotions
         improving_data = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "sad", 0.7, -0.6, None),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "sad", 0.6, -0.4, None),
-            EmotionDataPoint("2025-12-22T10:00:00Z", "neutral", 0.5, 0.0, None),
-            EmotionDataPoint("2025-12-23T10:00:00Z", "happy", 0.6, 0.3, None),
-            EmotionDataPoint("2025-12-24T10:00:00Z", "happy", 0.7, 0.5, None),
-            EmotionDataPoint("2025-12-25T10:00:00Z", "happy", 0.8, 0.7, None),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "sadness", 0.7, -0.6, None),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "sadness", 0.6, -0.4, None),
+            EmotionDataPoint("2025-12-22T10:00:00Z", "bored", 0.5, 0.0, None),
+            EmotionDataPoint("2025-12-23T10:00:00Z", "joy", 0.6, 0.3, None),
+            EmotionDataPoint("2025-12-24T10:00:00Z", "joy", 0.7, 0.5, None),
+            EmotionDataPoint("2025-12-25T10:00:00Z", "joy", 0.8, 0.7, None),
         ]
         
         trend = self.analytics.generate_emotion_trend(improving_data)
@@ -165,14 +176,14 @@ class TestEmotionTrendGeneration(unittest.TestCase):
         self.assertEqual(len(trend.data_points), 6)
     
     def test_generate_emotion_trend_declining(self):
-        """Test trend detection for declining mood."""
+        """Test trend detection for declining mood (joy -> sadness)."""
         declining_data = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "happy", 0.8, 0.7, None),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "happy", 0.7, 0.5, None),
-            EmotionDataPoint("2025-12-22T10:00:00Z", "neutral", 0.5, 0.0, None),
-            EmotionDataPoint("2025-12-23T10:00:00Z", "sad", 0.6, -0.3, None),
-            EmotionDataPoint("2025-12-24T10:00:00Z", "sad", 0.7, -0.5, None),
-            EmotionDataPoint("2025-12-25T10:00:00Z", "sad", 0.8, -0.7, None),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "joy", 0.8, 0.7, None),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "joy", 0.7, 0.5, None),
+            EmotionDataPoint("2025-12-22T10:00:00Z", "bored", 0.5, 0.0, None),
+            EmotionDataPoint("2025-12-23T10:00:00Z", "sadness", 0.6, -0.3, None),
+            EmotionDataPoint("2025-12-24T10:00:00Z", "sadness", 0.7, -0.5, None),
+            EmotionDataPoint("2025-12-25T10:00:00Z", "sadness", 0.8, -0.7, None),
         ]
         
         trend = self.analytics.generate_emotion_trend(declining_data)
@@ -180,14 +191,14 @@ class TestEmotionTrendGeneration(unittest.TestCase):
         self.assertEqual(trend.trend_direction, "declining")
     
     def test_generate_emotion_trend_stable(self):
-        """Test trend detection for stable mood."""
+        """Test trend detection for stable mood (bored)."""
         stable_data = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "neutral", 0.5, 0.1, None),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "neutral", 0.5, 0.0, None),
-            EmotionDataPoint("2025-12-22T10:00:00Z", "neutral", 0.5, 0.1, None),
-            EmotionDataPoint("2025-12-23T10:00:00Z", "neutral", 0.5, -0.1, None),
-            EmotionDataPoint("2025-12-24T10:00:00Z", "neutral", 0.5, 0.0, None),
-            EmotionDataPoint("2025-12-25T10:00:00Z", "neutral", 0.5, 0.1, None),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "bored", 0.5, 0.1, None),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "bored", 0.5, 0.0, None),
+            EmotionDataPoint("2025-12-22T10:00:00Z", "bored", 0.5, 0.1, None),
+            EmotionDataPoint("2025-12-23T10:00:00Z", "bored", 0.5, -0.1, None),
+            EmotionDataPoint("2025-12-24T10:00:00Z", "bored", 0.5, 0.0, None),
+            EmotionDataPoint("2025-12-25T10:00:00Z", "bored", 0.5, 0.1, None),
         ]
         
         trend = self.analytics.generate_emotion_trend(stable_data)
@@ -213,13 +224,13 @@ class TestTriggerAnalysis(unittest.TestCase):
         self.analytics = EmotionAnalytics(self.mock_weaviate, self.mock_gemini)
     
     def test_analyze_triggers(self):
-        """Test trigger analysis."""
+        """Test trigger analysis with 9 core emotions."""
         data_with_triggers = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "anxious", 0.7, -0.5, "work deadline"),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "stressed", 0.8, -0.6, "work meeting"),
-            EmotionDataPoint("2025-12-22T10:00:00Z", "happy", 0.8, 0.7, "family dinner"),
-            EmotionDataPoint("2025-12-23T10:00:00Z", "sad", 0.6, -0.4, "relationships conflict"),
-            EmotionDataPoint("2025-12-24T10:00:00Z", "grateful", 0.9, 0.8, "family time"),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "anxiety", 0.7, -0.6, "work deadline"),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "anger", 0.8, -0.8, "work meeting"),
+            EmotionDataPoint("2025-12-22T10:00:00Z", "joy", 0.8, 0.9, "family dinner"),
+            EmotionDataPoint("2025-12-23T10:00:00Z", "sadness", 0.6, -0.7, "relationships conflict"),
+            EmotionDataPoint("2025-12-24T10:00:00Z", "envy", 0.9, -0.2, "family time"),
         ]
         
         triggers = self.analytics.analyze_triggers(data_with_triggers)
@@ -313,16 +324,16 @@ class TestEmotionSummaryGeneration(unittest.TestCase):
             {"timestamp": "2025-12-21T10:00:00Z", "userQuery": "工作很累"},
         ]
         
-        # Mock emotion analysis
+        # Mock emotion analysis using 9 core emotions
         mock_analyze.return_value = [
-            EmotionDataPoint("2025-12-20T10:00:00Z", "happy", 0.8, 0.6, None),
-            EmotionDataPoint("2025-12-21T10:00:00Z", "tired", 0.7, -0.3, "work"),
+            EmotionDataPoint("2025-12-20T10:00:00Z", "joy", 0.8, 0.9, None),
+            EmotionDataPoint("2025-12-21T10:00:00Z", "anxiety", 0.7, -0.6, "work"),
         ]
         
         # Mock word cloud response
         mock_call_gemini.return_value = json.dumps({
             "words": {"心情": 2, "工作": 1},
-            "emotions": ["happy", "tired"]
+            "emotions": ["joy", "anxiety"]
         })
         
         # Mock summary generation
@@ -353,28 +364,24 @@ class TestEmotionSummaryGeneration(unittest.TestCase):
 
 
 class TestEmotionScores(unittest.TestCase):
-    """Tests for emotion score mappings."""
+    """Tests for the 9 core emotion score mappings."""
     
-    def test_emotion_scores_exist(self):
-        """Test that emotion scores are defined."""
-        self.assertIn('happy', EmotionAnalytics.EMOTION_SCORES)
-        self.assertIn('sad', EmotionAnalytics.EMOTION_SCORES)
-        self.assertIn('neutral', EmotionAnalytics.EMOTION_SCORES)
-        self.assertIn('anxious', EmotionAnalytics.EMOTION_SCORES)
+    def test_all_9_emotions_exist(self):
+        """Test that all 9 core emotions are defined."""
+        core_emotions = ['bored', 'fear', 'joy', 'sadness', 'disgust', 
+                        'anxiety', 'anger', 'embarrassment', 'envy']
+        for emotion in core_emotions:
+            self.assertIn(emotion, EmotionAnalytics.EMOTION_SCORES,
+                         f"{emotion} should be in EMOTION_SCORES")
     
     def test_positive_emotion_scores(self):
-        """Test that positive emotions have positive scores."""
-        positive_emotions = ['happy', 'joyful', 'excited', 'grateful', 'hopeful']
-        for emotion in positive_emotions:
-            self.assertGreater(
-                EmotionAnalytics.EMOTION_SCORES.get(emotion, 0), 
-                0, 
-                f"{emotion} should have positive score"
-            )
+        """Test that joy has positive score (only positive emotion)."""
+        self.assertGreater(EmotionAnalytics.EMOTION_SCORES['joy'], 0,
+                          "joy should have positive score")
     
     def test_negative_emotion_scores(self):
         """Test that negative emotions have negative scores."""
-        negative_emotions = ['sad', 'anxious', 'angry', 'frustrated', 'depressed']
+        negative_emotions = ['sadness', 'fear', 'anger', 'anxiety', 'disgust']
         for emotion in negative_emotions:
             self.assertLess(
                 EmotionAnalytics.EMOTION_SCORES.get(emotion, 0), 
@@ -382,9 +389,106 @@ class TestEmotionScores(unittest.TestCase):
                 f"{emotion} should have negative score"
             )
     
-    def test_neutral_emotion_score(self):
-        """Test neutral emotion score."""
-        self.assertEqual(EmotionAnalytics.EMOTION_SCORES['neutral'], 0.0)
+    def test_mild_negative_emotions(self):
+        """Test mild negative emotions (bored, envy, embarrassment)."""
+        mild_emotions = ['bored', 'envy', 'embarrassment']
+        for emotion in mild_emotions:
+            score = EmotionAnalytics.EMOTION_SCORES.get(emotion, 0)
+            self.assertLess(score, 0, f"{emotion} should be negative")
+            self.assertGreater(score, -0.5, f"{emotion} should be mild negative")
+
+
+class TestEmotionConfig(unittest.TestCase):
+    """Tests for emotion configuration with colors and nicknames."""
+    
+    def test_emotion_config_structure(self):
+        """Test that EMOTION_CONFIG has correct structure."""
+        for key, config in EmotionAnalytics.EMOTION_CONFIG.items():
+            self.assertIn('cn_name', config)
+            self.assertIn('cn_nickname', config)
+            self.assertIn('en_nickname', config)
+            self.assertIn('color', config)
+            self.assertIn('score', config)
+    
+    def test_emotion_colors(self):
+        """Test emotion colors are valid hex codes."""
+        expected_colors = {
+            'bored': '#4B4E91',
+            'fear': '#9381BA',
+            'joy': '#F9D849',
+            'sadness': '#3266B1',
+            'disgust': '#66B04C',
+            'anxiety': '#E67E22',
+            'anger': '#D32F2F',
+            'embarrassment': '#D278A3',
+            'envy': '#2BA8A4',
+        }
+        for emotion, expected_color in expected_colors.items():
+            actual_color = EmotionAnalytics.EMOTION_CONFIG[emotion]['color']
+            self.assertEqual(actual_color, expected_color,
+                           f"{emotion} color mismatch")
+    
+    def test_chinese_nicknames(self):
+        """Test Chinese nicknames."""
+        expected_nicknames = {
+            'bored': '丧丧',
+            'fear': '怕怕',
+            'joy': '乐乐',
+            'sadness': '忧忧',
+            'disgust': '厌厌',
+            'anxiety': '焦焦',
+            'anger': '怒怒',
+            'embarrassment': '尬尬',
+            'envy': '慕慕',
+        }
+        for emotion, expected_nickname in expected_nicknames.items():
+            actual_nickname = EmotionAnalytics.EMOTION_CONFIG[emotion]['cn_nickname']
+            self.assertEqual(actual_nickname, expected_nickname)
+    
+    def test_get_emotion_color(self):
+        """Test get_emotion_color method."""
+        self.assertEqual(EmotionAnalytics.get_emotion_color('joy'), '#F9D849')
+        self.assertEqual(EmotionAnalytics.get_emotion_color('anger'), '#D32F2F')
+        # Test with unknown emotion
+        self.assertEqual(EmotionAnalytics.get_emotion_color('unknown'), '#808080')
+    
+    def test_get_emotion_nickname(self):
+        """Test get_emotion_nickname method."""
+        self.assertEqual(EmotionAnalytics.get_emotion_nickname('joy', 'cn'), '乐乐')
+        self.assertEqual(EmotionAnalytics.get_emotion_nickname('joy', 'en'), 'Sunny')
+        self.assertEqual(EmotionAnalytics.get_emotion_nickname('anger', 'cn'), '怒怒')
+        self.assertEqual(EmotionAnalytics.get_emotion_nickname('anger', 'en'), 'Grumpy')
+
+
+class TestEmotionNormalization(unittest.TestCase):
+    """Tests for emotion normalization."""
+    
+    def test_normalize_english_emotions(self):
+        """Test normalizing English emotion names."""
+        self.assertEqual(EmotionAnalytics.normalize_emotion('happy'), 'joy')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('sad'), 'sadness')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('angry'), 'anger')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('anxious'), 'anxiety')
+    
+    def test_normalize_chinese_emotions(self):
+        """Test normalizing Chinese emotion names."""
+        self.assertEqual(EmotionAnalytics.normalize_emotion('快乐'), 'joy')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('忧伤'), 'sadness')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('愤怒'), 'anger')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('焦虑'), 'anxiety')
+    
+    def test_normalize_chinese_nicknames(self):
+        """Test normalizing Chinese nicknames."""
+        self.assertEqual(EmotionAnalytics.normalize_emotion('乐乐'), 'joy')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('忧忧'), 'sadness')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('怒怒'), 'anger')
+        self.assertEqual(EmotionAnalytics.normalize_emotion('焦焦'), 'anxiety')
+    
+    def test_normalize_already_normalized(self):
+        """Test that already normalized emotions stay the same."""
+        for emotion in ['bored', 'fear', 'joy', 'sadness', 'disgust', 
+                       'anxiety', 'anger', 'embarrassment', 'envy']:
+            self.assertEqual(EmotionAnalytics.normalize_emotion(emotion), emotion)
 
 
 class TestTriggerCategories(unittest.TestCase):
@@ -420,9 +524,9 @@ class TestDataConversion(unittest.TestCase):
             average_mood_score=0.5,
             mood_stability=0.8,
             total_interactions=10,
-            emotion_distribution={"happy": 60.0, "sad": 40.0},
+            emotion_distribution={"joy": 60.0, "sadness": 40.0},
             emotion_trend=EmotionTrend("daily", [], "stable", 0.2),
-            word_cloud=EmotionWordCloud({"test": 5}, ["happy"], 5),
+            word_cloud=EmotionWordCloud({"test": 5}, ["joy"], 5),
             triggers=[],
             summary_text="Test summary",
             key_insights=["Insight 1"],
