@@ -7,7 +7,7 @@ This file defines all data structures for chat functionality:
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Union, Optional, List
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,21 @@ class MatchMode(str, Enum):
     HUMAN_NON_ANONYMOUS = "human_non_anonymous"
     AI_CHAT = "ai_chat"
 
+class SupportRole(str, Enum):
+    SEEKER = "seeker"      
+    SUPPORTER = "supporter"  
+    EITHER = "either"       
+
+
+class SupportNeed(str, Enum):
+    VENT = "vent"            
+    ADVICE = "advice"      
+    COMPANION = "companion" 
+
+class RiskFlag(str, Enum):
+    SAFE = "safe"
+    WARNING = "warning"
+    DANGER = "danger"
 
 class UserStatusType(str, Enum):
     ONLINE = "online"
@@ -202,21 +217,19 @@ class MessageOut(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-# New models - Matching
+# models - Matching
 class MatchRequest(BaseModel):
-    """
-    Example:
-    {
-        "user_id": 1,
-        "current_emotion": "happy",
-        "mode": "human_anonymous",
-        "preferred_emotions": ["warm", "friendly"]
-    }
-    """
-    user_id: int
+    user_id: Union[int, str]
     current_emotion: EmotionType
     mode: MatchMode
     preferred_emotions: Optional[List[EmotionType]] = None
+
+    # --- V2 fields (optional for backward compatibility) ---
+    role: Optional[SupportRole] = SupportRole.EITHER
+    need: Optional[SupportNeed] = SupportNeed.VENT
+    intensity: Optional[int] = Field(default=3, ge=1, le=5)  # 1-5
+    risk_flag: Optional[str] = None  # "safe" | "warning" | "danger" 
+
 
 
 class MatchResponse(BaseModel):
@@ -228,11 +241,16 @@ class MatchResponse(BaseModel):
 
 
 class MatchQueueEntry(BaseModel):
-    user_id: int
+    user_id: Union[int, str]
     current_emotion: EmotionType
     mode: MatchMode
     preferred_emotions: Optional[List[EmotionType]] = None
     queued_at: datetime = Field(default_factory=datetime.utcnow)
+
+    role: Optional[SupportRole] = SupportRole.EITHER
+    need: Optional[SupportNeed] = SupportNeed.VENT
+    intensity: Optional[int] = Field(default=3, ge=1, le=5)
+    risk_flag: Optional[str] = None
 
 
 # New models - Anonymous

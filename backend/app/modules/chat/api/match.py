@@ -1,51 +1,81 @@
 """
 Matching HTTP API Routes
-Emotion-based Matching API
+Enhanced Emotion-based Matching API (V2)
+
+All endpoints now use the research-based V2 matching algorithm
 """
 
 from fastapi import APIRouter, Depends
+from typing import List
 
-from app.modules.chat.schemas.chat import MatchRequest, MatchResponse, EmotionType
+from app.modules.chat.services.matching_service_v2 import (
+    MatchingServiceV2,
+    MatchRequestV2,
+    MatchResponseV2,
+    EmotionType,
+    SupportRole,
+    SupportNeed,
+    TopicTag,
+    MatchMode
+)
 from app.modules.chat.deps import get_matching_service
-from app.modules.chat.services.matching_service import MatchingService
 
 
 router = APIRouter(prefix="/match", tags=["matching"])
 
 
-@router.post("/find", response_model=MatchResponse)
+# ============================================================================
+# Main Matching APIs
+# ============================================================================
+
+@router.post("/find", response_model=MatchResponseV2)
 async def find_match(
-    request: MatchRequest,
-    matcher: MatchingService = Depends(get_matching_service)
+    request: MatchRequestV2,
+    matcher: MatchingServiceV2 = Depends(get_matching_service)
 ):
     """
-    Find a match for the user.
+    Find a match for the user using V2 algorithm
 
-    POST /api/v1/match/find
+    POST /api/match/find
 
     Request example:
     {
         "user_id": 1,
-        "current_emotion": "happy",
+        "current_emotion": "sad",
+        "emotion_intensity": 4,
+        "role": "seeker",
+        "support_need": "vent",
+        "topic": "relationships",
         "mode": "human_anonymous",
-        "preferred_emotions": ["warm", "friendly"]  // optional
+        "risk_level": "safe"
     }
 
     Response (match found):
     {
         "matched": true,
-        "room_id": 123,
+        "room_id": "abc123",
         "matched_user_id": 2,
         "is_anonymous": true,
-        "match_type": "human_anonymous"
+        "match_type": "human_anonymous",
+        "match_score": 7.5,
+        "match_reason": "role_complement+need_match+emotion_fit"
     }
 
     Response (waiting in queue):
     {
         "matched": false,
         "is_anonymous": true,
-        "match_type": "human_anonymous"
+        "match_type": "human_anonymous",
+        "queue_position": 3,
+        "estimated_wait": "About 1-3 minutes"
     }
+
+    Core Matching Principles:
+    1. Role Complementarity > Emotion Similarity (seeker matches supporter)
+    2. Avoid High-Risk Pairs (two high-intensity negative users don't match)
+    3. Topic Matching increases resonance
+    4. Need Alignment (vent/advice/companion)
+    5. Safety First (crisis users get professional resources)
     """
     return await matcher.find_match(request)
 
@@ -53,12 +83,12 @@ async def find_match(
 @router.post("/cancel/{user_id}")
 async def cancel_match_search(
     user_id: int,
-    matcher: MatchingService = Depends(get_matching_service)
+    matcher: MatchingServiceV2 = Depends(get_matching_service)
 ):
     """
-    Cancel the current user's match search.
+    Cancel the current user's match search
 
-    POST /api/v1/match/cancel/1
+    POST /api/match/cancel/1
     """
     removed = matcher.cancel_match_search(user_id)
     return {
@@ -68,41 +98,34 @@ async def cancel_match_search(
 
 
 @router.get("/status/{user_id}")
-async def get_queue_status(
-    user_id: int,
-    matcher: MatchingService = Depends(get_matching_service)
+async def get_status( user_id: int, matcher: MatchingServiceV2 = Depends(get_matching_service)
 ):
-    """
-    Get the queue status for a specific user.
+    if user_id in matcher.user_match_map:
+        info = matcher.user_match_map[user_id]
+        return {
+            "matched": True,
+            "in_queue": False,
+            "room_id": info["room_id"],
+            "matched_user_id": info["peer_id"],
+            "is_anonymous": info.get("is_anonymous", True),
+            "match_type": info.get("mode"),
+            "match_score": info.get("score"),
+            "match_reason": info.get("reason"),
+        }
 
-    GET /api/v1/match/status/1
-
-    Response if in queue:
-    {
-        "in_queue": true,
-        "emotion": "happy",
-        "mode": "human_anonymous",
-        "queued_at": "2025-01-01T00:00:00Z",
-        "queue_position": 3,
-        "total_in_queue": 10
-    }
-
-    Response if not in queue:
-    {
-        "in_queue": false
-    }
-    """
-    return matcher.get_queue_status(user_id)
+    status = matcher.get_queue_status(user_id)
+    status.setdefault("matched", False)
+    return status
 
 
 @router.get("/stats")
 async def get_queue_stats(
-    matcher: MatchingService = Depends(get_matching_service)
+    matcher: MatchingServiceV2 = Depends(get_matching_service)
 ):
     """
-    Get global queue statistics.
+    Get global queue statistics
 
-    GET /api/v1/match/stats
+    GET /api/match/stats
 
     Response example:
     {
@@ -111,34 +134,246 @@ async def get_queue_stats(
             "human_anonymous": 8,
             "human_non_anonymous": 7
         },
-        "by_emotion": {
-            "happy": 4,
-            "anxious": 3,
-            ...
+        "by_role": {
+            "seeker": 5,
+            "supporter": 6,
+            "either": 4
+        },
+        "by_emotion_category": {
+            "positive": 3,
+            "neutral": 5,
+            "negative": 7
         }
     }
     """
     return matcher.get_queue_stats()
 
 
+# ============================================================================
+# Helper APIs - Get available options
+# ============================================================================
+
+@router.get("/emotions")
+async def get_available_emotions():
+    """
+    Get all available emotion types and their categories
+
+    GET /api/match/emotions
+    """
+    return {
+        "emotions": {
+            "positive": [
+                {"value": "happy", "label": "Happy", "emoji": "😊"},
+                {"value": "excited", "label": "Excited", "emoji": "🎉"},
+                {"value": "grateful", "label": "Grateful", "emoji": "🙏"},
+                {"value": "hopeful", "label": "Hopeful", "emoji": "🌟"},
+                {"value": "calm", "label": "Calm", "emoji": "😌"},
+            ],
+            "neutral": [
+                {"value": "warm", "label": "Warm", "emoji": "💛"},
+                {"value": "friendly", "label": "Friendly", "emoji": "🤝"},
+                {"value": "neutral", "label": "Neutral", "emoji": "😐"},
+                {"value": "curious", "label": "Curious", "emoji": "🤔"},
+            ],
+            "negative": [
+                {"value": "sad", "label": "Sad", "emoji": "😢"},
+                {"value": "anxious", "label": "Anxious", "emoji": "😰"},
+                {"value": "stressed", "label": "Stressed", "emoji": "😫"},
+                {"value": "lonely", "label": "Lonely", "emoji": "😔"},
+                {"value": "frustrated", "label": "Frustrated", "emoji": "😤"},
+                {"value": "overwhelmed", "label": "Overwhelmed", "emoji": "😵"},
+                {"value": "uncertain", "label": "Uncertain", "emoji": "😕"},
+                {"value": "distant", "label": "Distant", "emoji": "🥺"},
+            ]
+        },
+        "description": {
+            "positive": "Positive emotions - suitable for supporter role",
+            "neutral": "Neutral/supportive emotions - flexible matching",
+            "negative": "Negative emotions - recommend matching with supporter"
+        }
+    }
+
+
+@router.get("/roles")
+async def get_available_roles():
+    """
+    Get all available roles
+
+    GET /api/match/roles
+    """
+    return {
+        "roles": [
+            {
+                "value": "seeker",
+                "label": "Seeking Support",
+                "description": "I need someone to listen and support me",
+                "emoji": "🙋"
+            },
+            {
+                "value": "supporter",
+                "label": "Providing Support",
+                "description": "I'm willing to listen and help others",
+                "emoji": "🤗"
+            },
+            {
+                "value": "either",
+                "label": "Either",
+                "description": "I can both share and listen",
+                "emoji": "💬"
+            }
+        ],
+        "matching_rules": [
+            "seeker + supporter = best match (4 points)",
+            "either + any role = good match (2-3 points)",
+            "seeker + seeker = only allowed with low emotion intensity"
+        ]
+    }
+
+
+@router.get("/needs")
+async def get_available_needs():
+    """
+    Get all available support need types
+
+    GET /api/match/needs
+    """
+    return {
+        "needs": [
+            {
+                "value": "vent",
+                "label": "Vent",
+                "description": "I just want to talk, no advice needed",
+                "emoji": "💭"
+            },
+            {
+                "value": "advice",
+                "label": "Advice",
+                "description": "I want concrete suggestions",
+                "emoji": "💡"
+            },
+            {
+                "value": "companion",
+                "label": "Companion",
+                "description": "I just want someone to chat with",
+                "emoji": "🫂"
+            },
+            {
+                "value": "distraction",
+                "label": "Distraction",
+                "description": "I want to take my mind off things",
+                "emoji": "🎮"
+            }
+        ]
+    }
+
+
+@router.get("/topics")
+async def get_available_topics():
+    """
+    Get all available topic tags
+
+    GET /api/match/topics
+    """
+    return {
+        "topics": [
+            {"value": "general", "label": "General Chat", "emoji": "💬"},
+            {"value": "relationships", "label": "Relationships", "emoji": "💑"},
+            {"value": "anxiety", "label": "Anxiety", "emoji": "😰"},
+            {"value": "depression", "label": "Depression", "emoji": "😞"},
+            {"value": "work_stress", "label": "Work Stress", "emoji": "💼"},
+            {"value": "academic", "label": "Academic", "emoji": "📚"},
+            {"value": "family", "label": "Family", "emoji": "👨‍👩‍👧"},
+            {"value": "loneliness", "label": "Loneliness", "emoji": "🏠"},
+            {"value": "self_esteem", "label": "Self Esteem", "emoji": "🪞"}
+        ],
+        "related_groups": [
+            ["anxiety", "depression"],
+            ["work_stress", "academic"],
+            ["relationships", "family"],
+            ["loneliness", "self_esteem"]
+        ]
+    }
+
+
+@router.get("/matching-rules")
+async def get_matching_rules():
+    """
+    Get matching rules explanation
+
+    GET /api/match/matching-rules
+    """
+    return {
+        "principles": [
+            {
+                "name": "Role Complementarity",
+                "description": "Seekers should match supporters, not other seekers",
+                "reason": "Research shows two support-seeking users may cause emotional contagion"
+            },
+            {
+                "name": "Emotional Contagion Protection",
+                "description": "Two high-intensity negative emotion users should not be paired",
+                "reason": "Emotional contagion research shows negative emotions spread through mimicry"
+            },
+            {
+                "name": "Need Alignment",
+                "description": "Vent users should match listeners, advice users need experienced people",
+                "reason": "7Cups research shows matching support expectations improves satisfaction"
+            },
+            {
+                "name": "Safety First",
+                "description": "Crisis users get professional resources, not normal matching",
+                "reason": "Avoiding worst outcomes is the top priority for mental health platforms"
+            }
+        ],
+        "scoring": {
+            "role_complementarity": "0-4 points (seeker+supporter=4)",
+            "need_alignment": "0-2 points",
+            "topic_match": "0-2 points",
+            "emotion_compatibility": "0-2 points",
+            "penalties": "Negative emotion pairs get score reduction"
+        },
+        "minimum_score": 3.0,
+        "research_sources": [
+            "ACM CSCW 2022: Matching for Peer Support",
+            "JMIR 2024: Trade-Offs for Online Mental Health Matching",
+            "Emotional Contagion Research (Hatfield et al.)"
+        ]
+    }
+
+
 @router.get("/compatible-emotions/{emotion}")
 async def get_compatible_emotions(
     emotion: EmotionType,
-    matcher: MatchingService = Depends(get_matching_service)
+    matcher: MatchingServiceV2 = Depends(get_matching_service)
 ):
     """
-    Get the list of emotions compatible with a given emotion.
+    Get emotions that are compatible with the given emotion
 
-    GET /api/v1/match/compatible-emotions/happy
+    GET /api/match/compatible-emotions/sad
 
-    Response example:
+    Response:
     {
-        "emotion": "happy",
-        "compatible_with": ["happy", "excited", "warm", "friendly"]
+        "emotion": "sad",
+        "category": "negative",
+        "best_matches": ["warm", "friendly", "calm", "hopeful"],
+        "recommendation": "Negative emotion users match best with supportive/neutral emotions"
     }
     """
-    compatible = matcher.emotion_compatibility.get(emotion, [])
+    category = matcher._get_emotion_category(emotion)
+    
+    if category.value == "negative":
+        best_matches = ["warm", "friendly", "calm", "hopeful", "neutral"]
+        recommendation = "Negative emotion users match best with supportive/neutral emotions"
+    elif category.value == "positive":
+        best_matches = ["happy", "excited", "warm", "friendly"]
+        recommendation = "Positive emotion users can match with similar positive or neutral emotions"
+    else:
+        best_matches = ["warm", "friendly", "neutral", "curious"]
+        recommendation = "Neutral emotion users are flexible and match well with most emotions"
+    
     return {
         "emotion": emotion.value,
-        "compatible_with": [e.value for e in compatible]
+        "category": category.value,
+        "best_matches": best_matches,
+        "recommendation": recommendation
     }

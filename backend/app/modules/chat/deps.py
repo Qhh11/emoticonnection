@@ -14,7 +14,8 @@ CURRENT STATUS:
 """
 from typing import Generator
 from app.modules.chat.services.ws_manager import ConnectionManager
-from app.modules.chat.services.matching_service import MatchingService, matching_service
+from app.modules.chat.services.matching_service_v2 import MatchingServiceV2, matching_service_v2
+
 
 class DummyDB:
     """
@@ -62,7 +63,9 @@ def get_db():
     """
     yield DummyDB()
 
+
 _ws_manager: ConnectionManager = None
+
 
 def get_ws_manager() -> ConnectionManager:
     global _ws_manager
@@ -71,6 +74,10 @@ def get_ws_manager() -> ConnectionManager:
     return _ws_manager
 
 
-def get_matching_service() -> MatchingService:
-    return matching_service
-
+def get_matching_service() -> MatchingServiceV2:
+    """
+    Get the V2 matching service instance
+    
+    Uses the global singleton instance for consistent state across requests
+    """
+    return matching_service_v2
