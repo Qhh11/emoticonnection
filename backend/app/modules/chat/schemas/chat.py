@@ -57,44 +57,25 @@ class UserStatusType(str, Enum):
 # ============================================================================
 
 class RoomCreate(BaseModel):
-    """
-    Request model for creating/opening a chat room
-
-    Example JSON:
-    {
-        "user1_id": 1,
-        "user2_id": 2
-    }
-    """
-    user1_id: int = Field(..., description="First user ID", example=1)
-    user2_id: int = Field(..., description="Second user ID", example=2)
-
+    user1_id: str
+    user2_id: str
 
 class Room(BaseModel):
-    """
-    Response model representing a chat room
-
-    Example JSON:
-    {
-        "id": "507f1f77bcf86cd799439011",
-        "user1_id": 1,
-        "user2_id": 2
-    }
-    """
-    id: str = Field(..., description="Unique room ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439011")
-    user1_id: int = Field(..., description="First user ID", example=1)
-    user2_id: int = Field(..., description="Second user ID", example=2)
+    id: str
+    user1_id: str
+    user2_id: str
 
 class RoomCreateExtended(BaseModel):
-    user1_id: int
-    user2_id: int
+    user1_id: str
+    user2_id: str
     is_anonymous: bool = False
+
 
 
 class RoomExtended(BaseModel):
     id: str  # MongoDB ObjectId as string
-    user1_id: int
-    user2_id: int
+    user1_id: str
+    user2_id: str
     is_anonymous: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     user1_revealed: bool = True
@@ -103,7 +84,7 @@ class RoomExtended(BaseModel):
 
 class RoomListItem(BaseModel):
     room_id: str  # MongoDB ObjectId as string
-    other_user_id: int
+    other_user_id: str
     other_user_name: Optional[str] = None  # None when anonymous
     is_anonymous: bool
     last_message: Optional[str] = None
@@ -146,7 +127,7 @@ class MessageCreate(BaseModel):
         "media_url": "/static/uploads/abc123.jpg"
     }
     """
-    sender_id: int = Field(..., description="Sender user ID", example=1)
+    sender_id: str = Field(..., description="Sender user ID", example=1)
     message_type: MessageType = Field(
         default=MessageType.TEXT,
         description="Type of message: text, emoji, image, or video"
@@ -195,7 +176,7 @@ class MessageOut(BaseModel):
     """
     id: str = Field(..., description="Unique message ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439014")
     room_id: str = Field(..., description="Room ID this message belongs to (MongoDB ObjectId)", example="507f1f77bcf86cd799439012")
-    sender_id: int = Field(..., description="Sender user ID", example=1)
+    sender_id: str = Field(..., description="Sender user ID", example=1)
     message_type: MessageType = Field(
         default=MessageType.TEXT,
         description="Type of message: text, emoji, image, or video"
@@ -219,7 +200,7 @@ class MessageOut(BaseModel):
 
 # models - Matching
 class MatchRequest(BaseModel):
-    user_id: Union[int, str]
+    user_id: str
     current_emotion: EmotionType
     mode: MatchMode
     preferred_emotions: Optional[List[EmotionType]] = None
@@ -235,13 +216,13 @@ class MatchRequest(BaseModel):
 class MatchResponse(BaseModel):
     matched: bool
     room_id: Optional[str] = None  # MongoDB ObjectId as string
-    matched_user_id: Optional[int] = None
+    matched_user_id: Optional[str] = None
     is_anonymous: bool = True
     match_type: MatchMode
 
 
 class MatchQueueEntry(BaseModel):
-    user_id: Union[int, str]
+    user_id: str
     current_emotion: EmotionType
     mode: MatchMode
     preferred_emotions: Optional[List[EmotionType]] = None
@@ -253,7 +234,6 @@ class MatchQueueEntry(BaseModel):
     risk_flag: Optional[str] = None
 
 
-# New models - Anonymous
 class AnonymousSettings(BaseModel):
     room_id: str  # MongoDB ObjectId as string
     user1_anonymous: bool = True
@@ -262,13 +242,13 @@ class AnonymousSettings(BaseModel):
 
 class RevealIdentityRequest(BaseModel):
     room_id: str  # MongoDB ObjectId as string
-    user_id: int
+    user_id: str
 
 
 class RevealIdentityResponse(BaseModel):
     success: bool
     message: str
-    revealed_user_id: Optional[int] = None
+    revealed_user_id: Optional[str] = None
     revealed_username: Optional[str] = None
 
 

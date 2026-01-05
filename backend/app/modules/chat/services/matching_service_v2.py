@@ -92,8 +92,6 @@ class MatchMode(str, Enum):
 
 
 class MatchRequestV2(BaseModel):
-    """Enhanced match request"""
-    user_id: Union[int, str]
     current_emotion: EmotionType
     emotion_intensity: int = Field(default=3, ge=1, le=5)
     role: SupportRole = SupportRole.EITHER
@@ -102,14 +100,19 @@ class MatchRequestV2(BaseModel):
     preferred_topics: Optional[List[TopicTag]] = None
     mode: MatchMode = MatchMode.HUMAN_ANONYMOUS
     risk_level: RiskLevel = RiskLevel.SAFE
+
+
+class MatchRequestV2Internal(MatchRequestV2):
+    user_id: str
     queued_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 
 class MatchResponseV2(BaseModel):
     """Enhanced match response"""
     matched: bool
     room_id: Optional[str] = None
-    matched_user_id: Optional[Union[int, str]] = None
+    matched_user_id: Optional[str] = None
     is_anonymous: bool = True
     match_type: MatchMode
     match_score: Optional[float] = None
@@ -143,8 +146,8 @@ class MatchingServiceV2:
             MatchMode.HUMAN_ANONYMOUS: [],
             MatchMode.HUMAN_NON_ANONYMOUS: [],
         }
-        self.active_matches: Dict[str, Tuple[Union[int, str], Union[int, str]]] = {}
-        self.user_match_map: Dict[Union[int, str], dict] = {}
+        self.active_matches: Dict[str, Tuple[str, str]] = {}
+        self.user_match_map: Dict[str, dict] = {}
         self.queue_timeout = timedelta(minutes=10)
         
         self.emotion_categories: Dict[EmotionType, EmotionCategory] = {
@@ -174,6 +177,7 @@ class MatchingServiceV2:
 
     async def find_match(self, request: MatchRequestV2) -> MatchResponseV2:
         """Main matching entry point"""
+        request.user_id = str(request.user_id)
         if request.risk_level == RiskLevel.CRISIS:
             return self._handle_crisis_user(request)
         
@@ -420,7 +424,7 @@ class MatchingServiceV2:
             ]
         )
 
-    def _return_existing_match(self, user_id: Union[int, str]) -> MatchResponseV2:
+    def _return_existing_match(self, user_id: str) -> MatchResponseV2:
         """Return existing match"""
         info = self.user_match_map[user_id]
         return MatchResponseV2(
@@ -429,7 +433,7 @@ class MatchingServiceV2:
             match_score=info.get("score"), match_reason=info.get("reason")
         )
 
-    def _get_queue_position(self, user_id: Union[int, str], mode: MatchMode) -> int:
+    def _get_queue_position(self, user_id: str, mode: MatchMode) -> int:
         """Get queue position"""
         queue = self.queues.get(mode, [])
         for i, entry in enumerate(queue):
@@ -469,7 +473,7 @@ class MatchingServiceV2:
                         "Try using open-ended questions instead of direct advice."])
         return tips
 
-    def cancel_match_search(self, user_id: Union[int, str]) -> bool:
+    def cancel_match_search(self, user_id: str) -> bool:
         """Cancel match search"""
         removed = False
         for mode in self.queues:
@@ -486,19 +490,15 @@ class MatchingServiceV2:
             print(f"[MatchV2] User {user_id} cancelled search")
         return removed
 
-    def get_queue_status(self, user_id: Union[int, str]) -> dict:
-        """Get queue status for a user"""
-
+    def get_queue_status(self, user_id: str) -> dict:
         if user_id in self.user_match_map:
             info = self.user_match_map[user_id]
-            mode_val = info["mode"].value if hasattr(info["mode"], "value") else info["mode"]
             return {
                 "matched": True,
-                "in_queue": False,
                 "room_id": info["room_id"],
-                "peer_id": info["peer_id"],
-                "is_anonymous": info.get("is_anonymous", True),
-                "mode": mode_val,
+                "matched_user_id": info["peer_id"],
+                "is_anonymous": info["is_anonymous"],
+                "match_type": info["mode"],
                 "match_score": info.get("score"),
                 "match_reason": info.get("reason"),
             }
@@ -516,11 +516,11 @@ class MatchingServiceV2:
                         "queued_at": entry.joined_at.isoformat(),
                         "queue_position": i + 1,
                         "total_in_queue": len(queue),
-                        "estimated_wait": self._estimate_wait_time(mode)
+                        "estimated_wait": self._estimate_wait_time(mode),
                     }
 
-        
         return {"matched": False, "in_queue": False}
+
 
 
     def get_queue_stats(self) -> dict:

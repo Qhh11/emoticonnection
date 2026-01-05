@@ -7,8 +7,11 @@ All endpoints now use the research-based V2 matching algorithm
 
 from fastapi import APIRouter, Depends
 from typing import List
+from fastapi import Header, HTTPException, Depends
+
 
 from app.modules.chat.services.matching_service_v2 import (
+    MatchRequestV2Internal,
     MatchingServiceV2,
     MatchRequestV2,
     MatchResponseV2,
@@ -19,6 +22,7 @@ from app.modules.chat.services.matching_service_v2 import (
     MatchMode
 )
 from app.modules.chat.deps import get_matching_service
+from app.modules.auth.deps import get_current_user
 
 
 router = APIRouter(prefix="/match", tags=["matching"])
@@ -30,92 +34,32 @@ router = APIRouter(prefix="/match", tags=["matching"])
 
 @router.post("/find", response_model=MatchResponseV2)
 async def find_match(
-    request: MatchRequestV2,
-    matcher: MatchingServiceV2 = Depends(get_matching_service)
+    request: MatchRequestV2,  
+    matcher: MatchingServiceV2 = Depends(get_matching_service),
+    me = Depends(get_current_user),
 ):
-    """
-    Find a match for the user using V2 algorithm
-
-    POST /api/match/find
-
-    Request example:
-    {
-        "user_id": 1,
-        "current_emotion": "sad",
-        "emotion_intensity": 4,
-        "role": "seeker",
-        "support_need": "vent",
-        "topic": "relationships",
-        "mode": "human_anonymous",
-        "risk_level": "safe"
-    }
-
-    Response (match found):
-    {
-        "matched": true,
-        "room_id": "abc123",
-        "matched_user_id": 2,
-        "is_anonymous": true,
-        "match_type": "human_anonymous",
-        "match_score": 7.5,
-        "match_reason": "role_complement+need_match+emotion_fit"
-    }
-
-    Response (waiting in queue):
-    {
-        "matched": false,
-        "is_anonymous": true,
-        "match_type": "human_anonymous",
-        "queue_position": 3,
-        "estimated_wait": "About 1-3 minutes"
-    }
-
-    Core Matching Principles:
-    1. Role Complementarity > Emotion Similarity (seeker matches supporter)
-    2. Avoid High-Risk Pairs (two high-intensity negative users don't match)
-    3. Topic Matching increases resonance
-    4. Need Alignment (vent/advice/companion)
-    5. Safety First (crisis users get professional resources)
-    """
-    return await matcher.find_match(request)
+    internal = MatchRequestV2Internal(**request.model_dump(), user_id=me["id"])
+    return await matcher.find_match(internal)
 
 
-@router.post("/cancel/{user_id}")
+
+
+@router.post("/cancel")
 async def cancel_match_search(
-    user_id: int,
-    matcher: MatchingServiceV2 = Depends(get_matching_service)
+    matcher: MatchingServiceV2 = Depends(get_matching_service),
+    me = Depends(get_current_user),
 ):
-    """
-    Cancel the current user's match search
-
-    POST /api/match/cancel/1
-    """
-    removed = matcher.cancel_match_search(user_id)
-    return {
-        "success": removed,
-        "message": "Removed from queue" if removed else "User was not in queue"
-    }
+    removed = matcher.cancel_match_search(me["id"])
+    return {"success": removed, "message": "Removed from queue" if removed else "User was not in queue"}
 
 
-@router.get("/status/{user_id}")
-async def get_status( user_id: int, matcher: MatchingServiceV2 = Depends(get_matching_service)
+@router.get("/status")
+async def get_status(
+    matcher: MatchingServiceV2 = Depends(get_matching_service),
+    me = Depends(get_current_user),
 ):
-    if user_id in matcher.user_match_map:
-        info = matcher.user_match_map[user_id]
-        return {
-            "matched": True,
-            "in_queue": False,
-            "room_id": info["room_id"],
-            "matched_user_id": info["peer_id"],
-            "is_anonymous": info.get("is_anonymous", True),
-            "match_type": info.get("mode"),
-            "match_score": info.get("score"),
-            "match_reason": info.get("reason"),
-        }
+    return matcher.get_queue_status(me["id"])
 
-    status = matcher.get_queue_status(user_id)
-    status.setdefault("matched", False)
-    return status
 
 
 @router.get("/stats")

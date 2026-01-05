@@ -16,4 +16,5 @@ class AuthResponse(BaseModel):
     message: Optional[str] = None
     user_id: Optional[str] = None
     nickname: Optional[str] = None
-    token: Optional[str] = None # For future JWT integration
+    access_token: Optional[str] = None   
+    token_type: Optional[str] = "bearer" 
