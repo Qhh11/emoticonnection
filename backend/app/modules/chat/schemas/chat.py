@@ -107,21 +107,21 @@ class MessageCreate(BaseModel):
 
     Example JSON for text:
     {
-        "sender_id": 1,
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "text",
         "content": "Hello, how are you?"
     }
 
     Example JSON for emoji:
     {
-        "sender_id": 1,
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "emoji",
         "content": "😊"
     }
 
     Example JSON for image/video:
     {
-        "sender_id": 1,
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "image",
         "content": "/static/uploads/abc123.jpg",
         "media_url": "/static/uploads/abc123.jpg"
@@ -155,9 +155,9 @@ class MessageOut(BaseModel):
 
     Example JSON for text:
     {
-        "id": 456,
-        "room_id": 123,
-        "sender_id": 1,
+        "id": "507f1f77bcf86cd799439014",
+        "room_id": "507f1f77bcf86cd799439012",
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "text",
         "content": "Hello, how are you?",
         "created_at": "2025-01-25T10:30:00Z"
@@ -165,9 +165,9 @@ class MessageOut(BaseModel):
 
     Example JSON for image:
     {
-        "id": 457,
-        "room_id": 123,
-        "sender_id": 1,
+        "id": "507f1f77bcf86cd799439015",
+        "room_id": "507f1f77bcf86cd799439012",
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "image",
         "content": "Check this out!",
         "media_url": "/static/uploads/abc123.jpg",

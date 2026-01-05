@@ -19,6 +19,7 @@ EmotiConnect is a real-time chat application with AI-powered emotion analysis. T
 
 ## Project Structure
 
+```
 emoticonnection/
 ├── database/                        # Unified database layer (team-shared)
 │   ├── config/
@@ -26,6 +27,7 @@ emoticonnection/
 │   ├── models/                     # Database models (Pydantic)
 │   │   ├── chat.py                 # ChatSession, ChatMessage
 │   │   ├── user.py                 # User model
+│   │   ├── following.py            # Following relationship model
 │   │   ├── community.py            # Post, Comment models
 │   │   ├── diary.py                # Diary model
 │   │   └── emotion_log.py          # Emotion analytics
@@ -33,9 +35,9 @@ emoticonnection/
 │   │   ├── chat_session_crud.py
 │   │   ├── chat_message_crud.py
 │   │   ├── user_crud.py
+│   │   ├── following_crud.py       # Following relationship CRUD
 │   │   └── diary_crud.py
-│   ├── .env                        # Database config (gitignored)
-│   └── init_db.py                  # Database initialization script
+│   └── .env                        # Database config (gitignored)
 │
 ├── backend/
 │   ├── app/
@@ -44,33 +46,42 @@ emoticonnection/
 │   │   │   │   ├── api/            # Login/Register endpoints
 │   │   │   │   └── schemas/        # Auth schemas
 │   │   │   ├── chat/               # Chat module
-│   │   │   │   ├── api/            # HTTP + WebSocket endpoints
-│   │   │   │   ├── repository/     # Async repository (FastAPI)
-│   │   │   │   ├── schemas/        # Request/response models
-│   │   │   │   └── services/       # WebSocket manager, matching
+│   │   │   │   ├── api/
+│   │   │   │   │   ├── chat_http.py   # REST API endpoints
+│   │   │   │   │   └── chat_ws.py     # WebSocket real-time chat
+│   │   │   │   ├── repository/
+│   │   │   │   │   └── chat_repository.py
+│   │   │   │   ├── schemas/
+│   │   │   │   │   └── chat.py
+│   │   │   │   └── services/       # WebSocket manager
+│   │   │   ├── social/             # Social/Following module
+│   │   │   │   └── api/
+│   │   │   │       └── following.py   # Following/contacts endpoints
 │   │   │   ├── post/               # Post/Feed module
-│   │   │   │   ├── api/            # HTTP endpoints
-│   │   │   │   ├── repository/     # Async repository
-│   │   │   │   └── schemas/        # Request/response models
+│   │   │   │   ├── api/
+│   │   │   │   ├── repository/
+│   │   │   │   └── schemas/
 │   │   │   └── ai/                 # AI module
 │   │   │       ├── api/            # AI chat + emotion endpoints
-│   │   │       └── core/           # AI services (Gemini)
+│   │   │       └── core/
+│   │   │           └── emotion.py  # Emotion analysis service
 │   │   └── main.py                 # FastAPI application
 │   ├── static/
 │   │   ├── index.html              # Dashboard (Main Entry)
 │   │   ├── login.html              # Login page
 │   │   ├── register.html           # Register page
+│   │   ├── discover.html           # Discover people page
 │   │   ├── ai_chat.html            # AI chat interface
 │   │   ├── peer_chat.html          # Peer chat interface
 │   │   ├── diary_view.html         # Diary interface
 │   │   └── uploads/                # Media uploads (gitignored)
-│   ├── tests/                      # Testing scripts
 │   ├── requirements.txt
 │   ├── start.sh                    # Startup script
 │   ├── .env                        # Backend config (gitignored)
 │   └── .venv/                      # Python virtual environment
 │
 └── mongodb_data/                   # Local MongoDB data (gitignored)
+```
 
 ### Architecture Notes
 
@@ -345,6 +356,93 @@ Stores comments on posts (created when comments exist)
 
 #### Collection: `post_likes`
 Stores likes on posts (created when likes exist)
+
+---
+
+## Database Management Scripts
+
+The `database/` folder contains useful scripts for managing test data:
+
+### 1. Create Test Users (`create_test_users.py`)
+
+Creates 4 test users for quick testing:
+
+```bash
+cd /Users/lyr22ryl/emoticonnection/database
+python3 create_test_users.py
+```
+
+**Creates:**
+- alice (password: password123)
+- bob (password: password123)
+- charlie (password: password123)
+- david (password: password123)
+
+**Use Case:** Quick setup for testing peer chat, following, and social features.
+
+### 2. Clear Chat History (`clear_chat_history.py`)
+
+Deletes all chat sessions and messages while **keeping users and follows**:
+
+```bash
+cd /Users/lyr22ryl/emoticonnection/database
+python3 clear_chat_history.py
+```
+
+**Deletes:**
+- All chat sessions
+- All chat messages
+
+**Preserves:**
+- Users
+- Following relationships
+
+**Use Case:** Clean slate for demos without losing user accounts.
+
+### 3. Reset All Data (`reset_all_data.py`)
+
+Completely wipes the database for a fresh start:
+
+```bash
+cd /Users/lyr22ryl/emoticonnection/database
+python3 reset_all_data.py
+```
+
+**Deletes:**
+- All users
+- All chat sessions
+- All chat messages
+- All following relationships
+
+**Requires confirmation:** You must type `DELETE ALL` to confirm.
+
+**Use Case:** Complete reset for testing registration → login → chat flow from scratch.
+
+### Typical Testing Workflow
+
+**Initial Setup:**
+```bash
+# 1. Reset everything
+cd database
+python3 reset_all_data.py   # Type: DELETE ALL
+
+# 2. Create test users
+python3 create_test_users.py
+
+# 3. Start testing
+# - Open browser: http://localhost:8000/static/login.html
+# - Login with alice/bob/charlie/david (password: password123)
+# - Test peer chat, following, etc.
+```
+
+**For Demos:**
+```bash
+# Clear chat history but keep users
+cd database
+python3 clear_chat_history.py   # Type: yes
+
+# Now you have clean chat but existing users
+```
 
 ---
 

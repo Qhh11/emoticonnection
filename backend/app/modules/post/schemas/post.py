@@ -7,7 +7,7 @@ This file defines all data structures for post/feed functionality:
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -54,7 +54,7 @@ class PostCreate(BaseModel):
         "tags": ["nature"]
     }
     """
-    author_id: int = Field(..., description="Author user ID", example=1)
+    author_id: Union[int, str] = Field(..., description="Author user ID (ObjectId string or int)", example=1)
     content: str = Field(
         ..., 
         description="Post text content",
@@ -123,7 +123,7 @@ class PostOut(BaseModel):
     }
     """
     id: str = Field(..., description="Post ID (MongoDB ObjectId)")
-    author_id: int = Field(..., description="Author user ID")
+    author_id: Union[int, str] = Field(..., description="Author user ID (ObjectId string or int)")
     author_name: Optional[str] = Field(
         None, 
         description="Author display name (null if anonymous)"
@@ -172,7 +172,7 @@ class CommentCreate(BaseModel):
         "is_anonymous": false
     }
     """
-    author_id: int = Field(..., description="Comment author user ID")
+    author_id: Union[int, str] = Field(..., description="Comment author user ID (ObjectId string or int)")
     content: str = Field(
         ...,
         description="Comment text",
@@ -210,7 +210,7 @@ class CommentOut(BaseModel):
     """
     id: str = Field(..., description="Comment ID")
     post_id: str = Field(..., description="Parent post ID")
-    author_id: int = Field(..., description="Author user ID")
+    author_id: Union[int, str] = Field(..., description="Author user ID (ObjectId string or int)")
     author_name: Optional[str] = Field(None, description="Author name (null if anonymous)")
     content: str = Field(..., description="Comment content")
     is_anonymous: bool = Field(..., description="Whether comment is anonymous")
@@ -240,7 +240,7 @@ class CommentListResponse(BaseModel):
 
 class LikeCreate(BaseModel):
     """Request model for liking a post/comment"""
-    user_id: int = Field(..., description="User who is liking")
+    user_id: Union[int, str] = Field(..., description="User who is liking (ObjectId string or int)")
 
 
 class LikeResponse(BaseModel):
