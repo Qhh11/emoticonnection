@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, EmailStr
 
 class MBTIProfile(BaseModel):
     """MBTI 档案"""
-    type: str = Field(..., description="MBTI 类型，如 INFP")
+    type: str = Field(default="Unknown", description="MBTI 类型，如 INFP")
     completed_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -35,7 +35,7 @@ class User(BaseModel):
     gender: Optional[str] = Field(None, description="male/female/other/prefer_not_to_say")
     
     # MBTI
-    mbti: Optional[MBTIProfile] = None
+    mbti: MBTIProfile = Field(default_factory=MBTIProfile)
     
     # 偏好设置
     preferences: UserPreferences = Field(default_factory=UserPreferences)

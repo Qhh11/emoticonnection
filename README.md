@@ -319,7 +319,7 @@ cp .env.example .env
 ### 3. 运行后端
 
 ```bash
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
 API 文档地址: http://localhost:8000/docs
 
@@ -328,7 +328,7 @@ API 文档地址: http://localhost:8000/docs
 ```bash
 cd frontend
 npm install
-npm start
+npm start (alternative: npm run dev)
 ```
 
 ---
