@@ -45,6 +45,7 @@ class User(BaseModel):
     level: int = Field(default=1, description="用户等级")
     
     # 个性化
+    avatar: str = Field(default="🦊", description="用户头像 emoji")
     avatar_url: Optional[str] = None
     unlocked_avatars: List[str] = Field(default_factory=list)
     unlocked_ai_styles: List[str] = Field(default_factory=list)

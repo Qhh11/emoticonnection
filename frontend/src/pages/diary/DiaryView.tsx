@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { aiChatApi } from '../../services/api'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -14,6 +15,7 @@ const MOOD_DATA = [
 ]
 
 export interface DiaryEntry {
+  id?: string
   date: string
   mood: string
   color: string
@@ -26,19 +28,47 @@ interface DiaryViewProps {
   onInteract: (e: React.MouseEvent) => void
   entries: DiaryEntry[]
   onAddEntry: (entry: {mood: string, color: string, text: string}) => void
+  userId?: string
+  onRefreshDiaries?: () => void
+  onOpenEntryDetail: (entry: DiaryEntry) => void
 }
 
 interface ChatAIViewProps {
   onSaveToDiary: (entry: {mood: string, color: string, text: string}) => void
   embedded?: boolean
+  userId?: string
+  onRefreshDiaries?: () => void
 }
 
-function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
-  const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([
+interface ChatMessage {
+  role: 'user' | 'ai'
+  content: string
+}
+
+function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'ai', content: "Hey there! I'm here to help you reflect on your emotions. How are you feeling today?" }
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // Create session on mount
+  useEffect(() => {
+    if (userId) {
+      aiChatApi.createSession(userId)
+        .then(session => setSessionId(session.id))
+        .catch(err => console.error('Failed to create AI session:', err))
+    }
+  }, [userId])
 
   const handleSend = async () => {
     if (!input.trim()) return
@@ -48,30 +78,80 @@ function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
     setInput('')
     setIsLoading(true)
 
-    // Simulate AI response (in production, this would call an actual AI API)
-    setTimeout(() => {
-      const responses = [
+    try {
+      // Build history for context
+      const history = messages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [m.content]
+      }))
+
+      const response = await aiChatApi.chat({
+        user_id: userId || 'anonymous',
+        session_id: sessionId || undefined,
+        message: userMessage,
+        history
+      })
+
+      setMessages(prev => [...prev, { role: 'ai', content: response.response }])
+    } catch (err) {
+      console.error('Failed to get AI response:', err)
+      // Fallback to simulated response
+      const fallbackResponses = [
         "That's really interesting. Can you tell me more about what triggered this feeling?",
         "I hear you. It sounds like you're experiencing something important. What stands out most about this moment?",
         "Thank you for sharing that. How does this emotion feel in your body right now?",
         "I appreciate your openness. What would help you process this feeling?",
         "That makes sense. Have you experienced something similar before?"
       ]
-      const aiResponse = responses[Math.floor(Math.random() * responses.length)]
+      const aiResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)]
       setMessages(prev => [...prev, { role: 'ai', content: aiResponse }])
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
-  const handleSaveReflection = () => {
-    // Extract the conversation and save as a diary entry
-    const conversationText = messages.map(m => `${m.role === 'user' ? 'Me' : 'AI'}: ${m.content}`).join('\n\n')
-    const randomMood = MOOD_DATA[Math.floor(Math.random() * MOOD_DATA.length)]
-    onSaveToDiary({
-      mood: randomMood.label,
-      color: randomMood.color,
-      text: conversationText
-    })
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleSaveReflection = async () => {
+    if (isSaving) return
+    setIsSaving(true)
+    setSaveSuccess(false)
+
+    try {
+      // Try to generate diary from AI
+      if (userId && sessionId) {
+        try {
+          await aiChatApi.generateDiary(sessionId, userId)
+          // Backend automatically saves the diary, so refresh from backend
+          if (onRefreshDiaries) {
+            onRefreshDiaries()
+          }
+          setSaveSuccess(true)
+          setTimeout(() => setSaveSuccess(false), 3000)
+          return
+        } catch (err) {
+          console.error('Failed to generate diary:', err)
+        }
+      }
+
+      // Fallback: Extract the conversation and save as a diary entry
+      const conversationText = messages.map(m => `${m.role === 'user' ? 'Me' : 'AI'}: ${m.content}`).join('\n\n')
+      const randomMood = MOOD_DATA[Math.floor(Math.random() * MOOD_DATA.length)]
+      onSaveToDiary({
+        mood: randomMood.label,
+        color: randomMood.color,
+        text: conversationText
+      })
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -87,8 +167,16 @@ function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
             <p className="text-[12px] font-black uppercase text-gray-300 tracking-widest">Powered by Emotional Intelligence</p>
           </div>
         </div>
-        <button onClick={handleSaveReflection} className="px-6 py-2 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">
-          Save to Journal
+        <button
+          onClick={handleSaveReflection}
+          disabled={isSaving}
+          className={`px-6 py-2 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${
+            saveSuccess
+              ? 'bg-green-500 text-white'
+              : 'bg-accent text-accent-inverse'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save to Journal'}
         </button>
       </div>
 
@@ -97,7 +185,7 @@ function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] p-6 rounded-3xl ${msg.role === 'user' ? 'bg-black text-white' : 'bg-gray-100 text-gray-800'}`}>
-              <p className="text-sm font-bold leading-relaxed">{msg.content}</p>
+              <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
             </div>
           </div>
         ))}
@@ -112,6 +200,7 @@ function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
@@ -121,11 +210,11 @@ function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={handleKeyDown}
             placeholder="Share your thoughts..."
             className="flex-1 px-6 py-4 bg-gray-50 rounded-full border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
           />
-          <button onClick={handleSend} disabled={!input.trim()} className="w-12 h-12 bg-accent text-accent-inverse rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={handleSend} disabled={!input.trim() || isLoading} className="w-12 h-12 bg-accent text-accent-inverse rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -137,7 +226,7 @@ function ChatAIView({ onSaveToDiary }: ChatAIViewProps) {
   )
 }
 
-export default function DiaryView({ onInteract, entries, onAddEntry }: DiaryViewProps) {
+export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail }: DiaryViewProps) {
   const [mode, setMode] = useState<DiaryMode>('manual')
   const [content, setContent] = useState('')
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0] | null>(null)
@@ -223,6 +312,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry }: DiaryView
               {entries.map((item, i) => (
                 <div
                   key={i}
+                  onClick={() => onOpenEntryDetail(item)}
                   className="diary-item-pullable p-8 rounded-[2rem] border border-black/[0.04] shadow-md flex flex-col justify-between cursor-pointer group hover:scale-[1.02] transition-transform mb-[-80px] last:mb-0"
                   style={{ backgroundColor: item.color }}
                 >
@@ -231,6 +321,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry }: DiaryView
                     <div className="text-[12px] font-black uppercase tracking-widest" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.mood}</div>
                   </div>
                   <p className="text-sm font-bold line-clamp-2" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.text}</p>
+                  <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>Click to view full</p>
                 </div>
               ))}
             </div>
@@ -239,9 +330,10 @@ export default function DiaryView({ onInteract, entries, onAddEntry }: DiaryView
       </div>
       ) : (
         <div className="h-[580px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
-          <ChatAIView onSaveToDiary={onAddEntry} embedded />
+          <ChatAIView onSaveToDiary={onAddEntry} userId={userId} onRefreshDiaries={onRefreshDiaries} embedded />
         </div>
       )}
+
     </div>
   )
 }

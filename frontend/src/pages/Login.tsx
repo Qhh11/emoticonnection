@@ -1,16 +1,31 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import Decor from '../components/ui/Decor'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { login } = useAuth()
+  const navigate = useNavigate()
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: API integration
-    console.log('Login:', { email, password })
+    setError('')
+    setIsLoading(true)
+
+    try {
+      await login({ username, password })
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -56,22 +71,29 @@ export default function Login() {
             Log in to continue your journey
           </p>
 
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="block text-sm font-medium text-text-dark mb-2"
               >
-                Email
+                Username
               </label>
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
-                placeholder="you@example.com"
+                placeholder="your_username"
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -90,11 +112,12 @@ export default function Login() {
                 className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
                 placeholder="••••••••"
                 required
+                disabled={isLoading}
               />
             </div>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full">
-              Log in
+            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Logging in...' : 'Log in'}
             </Button>
           </form>
 

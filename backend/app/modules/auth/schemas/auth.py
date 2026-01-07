@@ -15,6 +15,8 @@ class AuthResponse(BaseModel):
     success: bool
     message: Optional[str] = None
     user_id: Optional[str] = None
+    username: Optional[str] = None
     nickname: Optional[str] = None
-    access_token: Optional[str] = None   
-    token_type: Optional[str] = "bearer" 
+    avatar: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"

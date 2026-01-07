@@ -1,17 +1,33 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import Decor from '../components/ui/Decor'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Signup() {
   const [username, setUsername] = useState('')
+  const [nickname, setNickname] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { register } = useAuth()
+  const navigate = useNavigate()
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: API integration
-    console.log('Signup:', { username, email, password })
+    setError('')
+    setIsLoading(true)
+
+    try {
+      await register({ username, password, email, nickname: nickname || username })
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -57,7 +73,13 @@ export default function Signup() {
             Create your safe space account
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
                 htmlFor="username"
@@ -73,6 +95,25 @@ export default function Signup() {
                 className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
                 placeholder="your_username"
                 required
+                disabled={isLoading}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="nickname"
+                className="block text-sm font-medium text-text-dark mb-2"
+              >
+                Nickname (Display Name)
+              </label>
+              <input
+                id="nickname"
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
+                placeholder="How others will see you"
+                disabled={isLoading}
               />
             </div>
 
@@ -91,6 +132,7 @@ export default function Signup() {
                 className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
                 placeholder="you@example.com"
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -110,14 +152,15 @@ export default function Signup() {
                 placeholder="••••••••"
                 required
                 minLength={8}
+                disabled={isLoading}
               />
               <p className="mt-2 text-xs text-text-muted">
                 At least 8 characters
               </p>
             </div>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full">
-              Sign up
+            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Creating account...' : 'Sign up'}
             </Button>
           </form>
 

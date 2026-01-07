@@ -30,6 +30,9 @@ from config.mongodb_config import get_database  # type: ignore
 # Import AI emotion analysis service
 from app.modules.ai.core.emotion import EmotionService
 
+# Import points system
+from crud.check_in_crud import add_points_to_user  # type: ignore
+
 
 # ============================================================================
 # Initialize Router
@@ -106,7 +109,14 @@ async def create_post(
     )
     
     print(f"[Post] Created post {post['id']} by user {post_data.author_id} (anonymous: {post_data.is_anonymous})")
-    
+
+    # Award points for creating a post (+10)
+    try:
+        add_points_to_user(post_data.author_id, 10)
+        print(f"[Points] User {post_data.author_id} earned 10 points for creating a post")
+    except Exception as e:
+        print(f"[Points] Failed to award points: {e}")
+
     return PostOut(**post)
 
 
@@ -336,7 +346,14 @@ async def create_comment(
         raise HTTPException(status_code=404, detail="Post not found")
     
     print(f"[Comment] User {comment_data.author_id} commented on post {post_id}")
-    
+
+    # Award points for creating a comment (+5)
+    try:
+        add_points_to_user(comment_data.author_id, 5)
+        print(f"[Points] User {comment_data.author_id} earned 5 points for commenting")
+    except Exception as e:
+        print(f"[Points] Failed to award points: {e}")
+
     return CommentOut(**comment)
 
 

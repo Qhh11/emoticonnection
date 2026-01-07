@@ -45,6 +45,7 @@ def login(request: LoginRequest):
     user_id = str(user.get("_id"))
     username = user.get("username")
     nickname = user.get("nickname") or username
+    avatar = user.get("avatar", "🦊")
 
     token = create_access_token(
         subject=user_id,
@@ -57,8 +58,9 @@ def login(request: LoginRequest):
         user_id=user_id,
         username=username,
         nickname=nickname,
-        access_token=token,      
-        token_type="bearer"      
+        avatar=avatar,
+        access_token=token,
+        token_type="bearer"
     )
 
 
@@ -86,6 +88,7 @@ def register(request: RegisterRequest):
         user_id=str(user_id),
         username=username,
         nickname=nickname,
+        avatar="🦊",  # Default avatar for new users
         access_token=token,
         token_type="bearer"
     )

@@ -1,5 +1,12 @@
 import { useState } from 'react'
 import { Avatar3D } from '../../config/avatars'
+import { SocialStats, Post } from '../../services/api'
+
+interface AuthUser {
+  user_id: string
+  username: string
+  nickname: string
+}
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -46,15 +53,21 @@ interface GalleryCardProps {
   date: string
   color: string
   textColor: string
+  onClick?: () => void
 }
 
-function GalleryCard({ title, mood, date, color, textColor }: GalleryCardProps) {
+function GalleryCard({ title, mood, date, color, textColor, onClick }: GalleryCardProps) {
   return (
-    <div className="card-pullable flex-shrink-0 w-64 h-80 rounded-[2.5rem] p-8 flex flex-col justify-between border border-black/[0.04] shadow-xl" style={{ backgroundColor: color }}>
+    <div
+      onClick={onClick}
+      className="card-pullable flex-shrink-0 w-64 h-80 rounded-[2.5rem] p-8 flex flex-col justify-between border border-black/[0.04] shadow-xl cursor-pointer hover:scale-[1.02] transition-transform"
+      style={{ backgroundColor: color }}
+    >
       <span className="text-[12px] font-black uppercase tracking-widest opacity-40" style={{ color: textColor }}>{date}</span>
       <div className="space-y-1.5">
         <p className="text-[14px] font-black uppercase tracking-[0.25em] opacity-80" style={{ color: textColor }}>{mood}</p>
         <h5 className="text-xl font-black leading-tight tracking-tight" style={{ color: textColor }}>{title}</h5>
+        <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: textColor }}>Click to view</p>
       </div>
     </div>
   )
@@ -66,32 +79,58 @@ interface DiaryStackItemProps {
   color: string
   mood: string
   accent: string
+  onClick?: () => void
 }
 
-function DiaryStackItem({ title, date, color, mood, accent }: DiaryStackItemProps) {
+function DiaryStackItem({ title, date, color, mood, accent, onClick }: DiaryStackItemProps) {
   return (
-    <div className="diary-item-pullable p-8 rounded-[2.5rem] border border-black/[0.05] shadow-xl flex flex-col justify-between cursor-pointer mb-[-60px]" style={{ backgroundColor: color }}>
+    <div
+      onClick={onClick}
+      className="diary-item-pullable p-8 rounded-[2.5rem] border border-black/[0.05] shadow-xl flex flex-col justify-between cursor-pointer mb-[-60px] hover:scale-[1.02] transition-transform"
+      style={{ backgroundColor: color }}
+    >
       <div className="flex items-center space-x-4">
         <span className="text-[12px] font-black uppercase tracking-widest opacity-60" style={{ color: accent }}>{date}</span>
         <span className="text-[14px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border border-white/20" style={{ color: accent }}>{mood}</span>
       </div>
       <h6 className="text-2xl font-black tracking-tight" style={{ color: accent }}>{title}</h6>
+      <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: accent }}>Click to view full</p>
     </div>
   )
 }
 
+export interface DiaryEntry {
+  date: string
+  mood: string
+  color: string
+  text: string
+}
+
 interface ProfileViewProps {
   points: number
-  onCheckIn: (e: React.MouseEvent) => void
+  level: number
+  avatar: string
+  onCheckIn: (mood: string) => Promise<boolean>
   onThemeChange: (theme: Theme) => void
   currentTheme: Theme
   onOpenAvatarGallery: () => void
   selectedAvatar: Avatar3D | null
+  user: AuthUser | null
+  socialStats: SocialStats | null
+  diaryEntries: DiaryEntry[]
+  userPosts: Post[]
+  onOpenJournalDetail: (entry: DiaryEntry) => void
+  onOpenPostDetail: (post: Post) => void
+  todayCheckIn: { mood: string; color: string; text: string } | null
+  onOpenSettings?: () => void
 }
 
-export default function ProfileView({ points, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
+
+  // Use todayCheckIn from props or local state
+  const effectiveCheckIn = todayCheckIn || checkedInMood
   const [showThemeSelector, setShowThemeSelector] = useState(false)
 
   // Generate current month calendar
@@ -129,10 +168,12 @@ export default function ProfileView({ points, onCheckIn, onThemeChange, currentT
   const currentMonth = calendarData.monthYear
   const calendarDates = calendarData.dates
 
-  const handleCheckIn = (e: React.MouseEvent, mood: typeof MOOD_DATA[0]) => {
-    onCheckIn(e)
-    setCheckedInMood(mood)
-    setShowMoodPicker(false)
+  const handleCheckIn = async (mood: typeof MOOD_DATA[0]) => {
+    const success = await onCheckIn(mood.label)
+    if (success) {
+      setCheckedInMood(mood)
+      setShowMoodPicker(false)
+    }
   }
 
   return (
@@ -163,27 +204,41 @@ export default function ProfileView({ points, onCheckIn, onThemeChange, currentT
         <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-center gap-10">
           <div className="relative group">
             <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] bg-gray-50 flex items-center justify-center text-6xl shadow-inner border-4 border-white group-hover:scale-105 transition-transform duration-700 font-black tracking-tighter overflow-hidden">
-              🦊
+              {avatar}
             </div>
-            <div className="absolute -bottom-1 -right-1 bg-accent text-accent-inverse px-3 py-1 rounded-full text-[14px] font-black uppercase tracking-widest border-2 border-white transition-colors">LVL 4</div>
+            <div className="absolute -bottom-1 -right-1 bg-accent text-accent-inverse px-3 py-1 rounded-full text-[14px] font-black uppercase tracking-widest border-2 border-white transition-colors">Lv.{level}</div>
           </div>
           <div className="flex-1 space-y-6 w-full">
             <div className="flex justify-between items-start">
               <div className="space-y-0.5">
-                <h3 className="text-xl font-black text-gray-800">Alex_Vibe_99</h3>
-                <p className="text-gray-400 font-bold text-[13px] uppercase tracking-[0.2em]">Resonance: <span className="text-accent transition-colors">{points.toLocaleString()}</span></p>
+                <h3 className="text-xl font-black text-gray-800">{user?.nickname || user?.username || 'User'}</h3>
+                <p className="text-gray-400 font-bold text-[13px] uppercase tracking-[0.2em]">Energy: <span className="text-accent transition-colors">{points.toLocaleString()}</span></p>
               </div>
-              <button
-                onClick={onOpenAvatarGallery}
-                className="px-4 py-2 rounded-xl bg-accent text-accent-inverse hover:opacity-90 transition-all flex items-center gap-2 shadow-md"
-              >
-                <span className="text-[12px] font-black uppercase tracking-widest">3D Avatar</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={onOpenAvatarGallery}
+                  className="px-4 py-2 rounded-xl bg-accent text-accent-inverse hover:opacity-90 transition-all flex items-center gap-2 shadow-md"
+                >
+                  <span className="text-[12px] font-black uppercase tracking-widest">3D Avatar</span>
+                </button>
+                {onOpenSettings && (
+                  <button
+                    onClick={onOpenSettings}
+                    className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all flex items-center gap-2 shadow-md"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path>
+                    </svg>
+                    <span className="text-[12px] font-black uppercase tracking-widest">Settings</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex space-x-10">
-              <StatItem label="Posts" value="142" />
-              <StatItem label="Followers" value="3.8k" />
-              <StatItem label="Friends" value="219" />
+              <StatItem label="Posts" value={String(userPosts.length)} />
+              <StatItem label="Followers" value={socialStats?.followers_count?.toString() || '0'} />
+              <StatItem label="Following" value={socialStats?.following_count?.toString() || '0'} />
             </div>
           </div>
         </div>
@@ -222,7 +277,7 @@ export default function ProfileView({ points, onCheckIn, onThemeChange, currentT
               <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-300 mb-3">Choose Vibe</p>
               <div className="grid grid-cols-3 gap-2">
                 {MOOD_DATA.map(m => (
-                  <button key={m.label} onClick={(e) => handleCheckIn(e, m)} className="aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 transition-all hover:scale-105 active:scale-95 shadow-sm" style={{ backgroundColor: m.color }}>
+                  <button key={m.label} onClick={() => handleCheckIn(m)} className="aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 transition-all hover:scale-105 active:scale-95 shadow-sm" style={{ backgroundColor: m.color }}>
                     <span className="text-[14px] font-black tracking-tighter uppercase" style={{ color: m.text }}>{m.label}</span>
                   </button>
                 ))}
@@ -235,8 +290,8 @@ export default function ProfileView({ points, onCheckIn, onThemeChange, currentT
               // Today - show check-in button
               if (dateInfo.isToday) {
                 return (
-                  <button key={i} disabled={!!checkedInMood} onClick={() => !checkedInMood && setShowMoodPicker(!showMoodPicker)} className={`w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-500 border-2 text-[12px] ${checkedInMood ? 'border-transparent shadow-lg font-black' : 'bg-transparent border-accent text-accent hover:bg-accent hover:text-white hover:scale-105'}`} style={{ backgroundColor: checkedInMood?.color || 'transparent', color: checkedInMood?.text || 'inherit' }}>
-                    {checkedInMood ? dateInfo.day : <span className="text-lg">+</span>}
+                  <button key={i} disabled={!!effectiveCheckIn} onClick={() => !effectiveCheckIn && setShowMoodPicker(!showMoodPicker)} className={`w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-500 border-2 text-[12px] ${effectiveCheckIn ? 'border-transparent shadow-lg font-black' : 'bg-transparent border-accent text-accent hover:bg-accent hover:text-white hover:scale-105'}`} style={{ backgroundColor: effectiveCheckIn?.color || 'transparent', color: effectiveCheckIn?.text || 'inherit' }}>
+                    {effectiveCheckIn ? dateInfo.day : <span className="text-lg">+</span>}
                   </button>
                 )
               }
@@ -262,26 +317,60 @@ export default function ProfileView({ points, onCheckIn, onThemeChange, currentT
         </div>
       </section>
 
+      {/* My Moments - User's Posts */}
       <section className="space-y-12">
         <h4 className="text-3xl font-black tracking-tighter uppercase px-4">My Moments</h4>
-        <div className="card-stack overflow-visible px-4 pt-10">
-          <GalleryCard title="Midnight Silence" mood="Bored" date="MAY 24" color="#4B4E91" textColor="#ffffff" />
-          <GalleryCard title="Peak Success" mood="Joy" date="MAY 22" color="#F9D849" textColor="#121212" />
-          <GalleryCard title="Nightmare Steps" mood="Fear" date="MAY 15" color="#9381BA" textColor="#ffffff" />
-          <GalleryCard title="Deep Blue Hour" mood="Sad" date="MAY 10" color="#3266B1" textColor="#ffffff" />
-          <GalleryCard title="Vivid Desire" mood="Envy" date="MAY 08" color="#2BA8A4" textColor="#ffffff" />
-        </div>
+        {userPosts.length > 0 ? (
+          <div className="card-stack overflow-visible px-4 pt-10">
+            {userPosts.slice(0, 5).map((post, i) => {
+              const postMood = post.emotion || post.ai_emotion || 'Neutral'
+              const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === postMood.toLowerCase())
+              const color = moodData?.color || '#4B4E91'
+              const textColor = postMood === 'Joy' ? '#121212' : '#ffffff'
+              return (
+                <GalleryCard
+                  key={post.id || i}
+                  title={post.content.substring(0, 30) + (post.content.length > 30 ? '...' : '')}
+                  mood={postMood}
+                  date={new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase()}
+                  color={color}
+                  textColor={textColor}
+                  onClick={() => onOpenPostDetail(post)}
+                />
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400 font-bold px-4">
+            No posts yet. Share your moments in the Community tab!
+          </div>
+        )}
       </section>
 
+      {/* My Journals - User's Diary Entries */}
       <section className="space-y-12 pb-20">
-        <h4 className="text-3xl font-black tracking-tighter uppercase px-4">Private Logs</h4>
-        <div className="diary-stack px-4">
-          <DiaryStackItem title="Breaking through the anxiety loop" date="MAY 23" color="#E67E22" mood="Anxious" accent="#ffffff" />
-          <DiaryStackItem title="The social tension today" date="MAY 21" color="#D278A3" mood="Awkward" accent="#ffffff" />
-          <DiaryStackItem title="Fueling the fire of ambition" date="MAY 18" color="#D32F2F" mood="Angry" accent="#ffffff" />
-          <DiaryStackItem title="Synthesis of internal disgust" date="MAY 15" color="#66B04C" mood="Disgust" accent="#ffffff" />
-        </div>
+        <h4 className="text-3xl font-black tracking-tighter uppercase px-4">My Journals</h4>
+        {diaryEntries.length > 0 ? (
+          <div className="diary-stack px-4">
+            {diaryEntries.slice(0, 4).map((entry, i) => (
+              <DiaryStackItem
+                key={i}
+                title={entry.text.substring(0, 40) + (entry.text.length > 40 ? '...' : '')}
+                date={entry.date}
+                color={entry.color}
+                mood={entry.mood}
+                accent={entry.mood === 'Joy' ? '#121212' : '#ffffff'}
+                onClick={() => onOpenJournalDetail(entry)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400 font-bold px-4">
+            No journal entries yet. Start writing in the Journal tab!
+          </div>
+        )}
       </section>
+
     </div>
   )
 }
