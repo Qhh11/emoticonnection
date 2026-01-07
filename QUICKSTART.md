@@ -226,11 +226,12 @@ Get your Gemini API key: https://makersuite.google.com/app/apikey
 
 ## Running the Application
 
-### 1. Start MongoDB (if not already running)
+### 1. Start MongoDB (if not already running OR not using cloud service)
 
 ```bash
 # If using Homebrew:
 brew services start mongodb-community
+alternative: sudo systemctl start mongod
 
 # If using manual installation:
 /path/to/mongodb/bin/mongod --dbpath /path/to/mongodb_data
