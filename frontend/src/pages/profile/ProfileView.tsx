@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Avatar3D } from '../../config/avatars'
-import { SocialStats, Post } from '../../services/api'
+import { SocialStats, Post, User} from '../../services/api'
 
 interface AuthUser {
   user_id: string
-  username: string
-  nickname: string
+  // username: string
+  // nickname: string
 }
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
@@ -115,7 +115,7 @@ interface ProfileViewProps {
   currentTheme: Theme
   onOpenAvatarGallery: () => void
   selectedAvatar: Avatar3D | null
-  user: AuthUser | null
+  user: User | null
   socialStats: SocialStats | null
   diaryEntries: DiaryEntry[]
   userPosts: Post[]

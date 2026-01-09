@@ -8,7 +8,7 @@ import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
 
@@ -30,7 +30,8 @@ const MOOD_DATA = [
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user: AuthUser, logout } = useAuth()
+  const [user, setUser] = useState< User | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const [points, setPoints] = useState(0)
   const [level, setLevel] = useState(1)
@@ -68,6 +69,9 @@ export default function Dashboard() {
 
   // Sync userAvatar when user data changes (e.g., after login loads user data)
   useEffect(() => {
+    if (AuthUser?.user_id) {
+      userApi.getUser(AuthUser?.user_id).then(user => { setUser(user) })
+    }
     if (user?.avatar) {
       setUserAvatar(user.avatar)
     }
@@ -82,13 +86,13 @@ export default function Dashboard() {
 
   // Fetch social stats, points, and diaries when user is available
   useEffect(() => {
-    if (user?.user_id) {
-      userApi.getSocialStats(user.user_id)
+    if (user?._id) {
+      userApi.getSocialStats(user._id)
         .then(stats => setSocialStats(stats))
         .catch(err => console.error('Failed to fetch social stats:', err))
 
       // Load user points and level from API
-      userApi.getPoints(user.user_id)
+      userApi.getPoints(user._id)
         .then(data => {
           setPoints(data.points)
           setLevel(data.level)
@@ -96,7 +100,7 @@ export default function Dashboard() {
         .catch(err => console.error('Failed to fetch points:', err))
 
       // Load diaries from API
-      aiChatApi.getDiaries(user.user_id)
+      aiChatApi.getDiaries(user._id)
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
@@ -109,14 +113,14 @@ export default function Dashboard() {
         .catch(err => console.error('Failed to fetch diaries:', err))
 
       // Load user's posts from API
-      postApi.getUserPosts(user.user_id)
+      postApi.getUserPosts(user._id)
         .then(response => {
           setUserPosts(response.posts)
         })
         .catch(err => console.error('Failed to fetch user posts:', err))
 
       // Check if user has checked in today
-      userApi.getTodayCheckIn(user.user_id)
+      userApi.getTodayCheckIn(user._id)
         .then(response => {
           if (response.checked_in && response.check_in) {
             const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === response.check_in!.mood.toLowerCase())
@@ -127,7 +131,7 @@ export default function Dashboard() {
         })
         .catch(err => console.error('Failed to fetch today check-in:', err))
     }
-  }, [user?.user_id])
+  }, [user?._id])
 
   // Helper function to get mood color
   const getMoodColor = (mood: string | undefined): string => {
@@ -164,8 +168,8 @@ export default function Dashboard() {
   }
 
   const refreshDiaries = () => {
-    if (user?.user_id) {
-      aiChatApi.getDiaries(user.user_id)
+    if (user?._id) {
+      aiChatApi.getDiaries(user._id)
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
@@ -180,8 +184,8 @@ export default function Dashboard() {
   }
 
   const refreshUserPosts = () => {
-    if (user?.user_id) {
-      postApi.getUserPosts(user.user_id)
+    if (user?._id) {
+      postApi.getUserPosts(user._id)
         .then(response => {
           setUserPosts(response.posts)
         })
@@ -190,17 +194,17 @@ export default function Dashboard() {
   }
 
   const refreshPoints = () => {
-    if (user?.user_id) {
-      userApi.getPoints(user.user_id)
+    if (user?._id) {
+      userApi.getPoints(user._id)
         .then(data => setPoints(data.points))
         .catch(err => console.error('Failed to fetch points:', err))
     }
   }
 
   const handleCheckIn = async (mood: string): Promise<boolean> => {
-    if (!user?.user_id) return false
+    if (!user?._id) return false
     try {
-      const response = await userApi.checkIn(user.user_id, { mood })
+      const response = await userApi.checkIn(user._id, { mood })
       if (response.success) {
         setPoints(response.total_points)
         // Update todayCheckIn state
@@ -228,6 +232,7 @@ export default function Dashboard() {
   }
 
   const handleOpenSettings = () => {
+    console.log('Opening settings for user:', user)
     setSettingsNickname(user?.nickname || user?.username || '')
     setSettingsPassword('')
     setSettingsAvatar(userAvatar)
@@ -235,7 +240,7 @@ export default function Dashboard() {
   }
 
   const handleSaveSettings = async () => {
-    if (!user?.user_id) return
+    if (!user?._id) return
     setSettingsSaving(true)
     try {
       const updateData: { nickname?: string; password?: string; avatar?: string } = {}
@@ -249,7 +254,8 @@ export default function Dashboard() {
         updateData.avatar = settingsAvatar
       }
       if (Object.keys(updateData).length > 0) {
-        await userApi.updateUser(user.user_id, updateData)
+        await userApi.updateUser(user._id, updateData)
+        userApi.getUser(user._id).then(user => { setUser(user) })
         // Update local avatar state immediately without page reload
         if (updateData.avatar) {
           setUserAvatar(updateData.avatar)
@@ -293,11 +299,11 @@ export default function Dashboard() {
           onOpenSettings={handleOpenSettings}
         />
       case 'diary':
-        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?.user_id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} />
+        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} />
       case 'community':
-        return <CommunityView onInteract={triggerCheckIn} userId={user?.user_id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} />
+        return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} />
       case 'soulsync':
-        return <SoulSyncView onInteract={triggerCheckIn} userId={user?.user_id} />
+        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} />
       default:
         return <PlaceholderView title={activeTab} />
     }

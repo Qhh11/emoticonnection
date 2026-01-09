@@ -1,11 +1,11 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { authApi, setToken, removeToken, getToken, LoginRequest, RegisterRequest } from '../services/api'
 
 interface AuthUser {
   user_id: string
-  username: string
-  nickname: string
-  avatar?: string
+  // username: string
+  // nickname: string
+  // avatar?: string
 }
 
 interface AuthContextType {
@@ -51,9 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(response.access_token)
       const authUser: AuthUser = {
         user_id: response.user_id,
-        username: response.username,
-        nickname: response.nickname,
-        avatar: response.avatar,
+        // username: response.username,
+        // nickname: response.nickname,
+        // avatar: response.avatar,
       }
       setUser(authUser)
       localStorage.setItem('user', JSON.stringify(authUser))
@@ -69,9 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(response.access_token)
       const authUser: AuthUser = {
         user_id: response.user_id,
-        username: response.username,
-        nickname: response.nickname,
-        avatar: response.avatar,
+        // username: response.username,
+        // nickname: response.nickname,
+        // avatar: response.avatar,
       }
       setUser(authUser)
       localStorage.setItem('user', JSON.stringify(authUser))
