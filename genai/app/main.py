@@ -70,7 +70,7 @@ def call_gemini_api(prompt: str) -> str:
             gen_cfg = types.GenerateContentConfig(temperature=0.7)
 
         response = GEMINI_CLIENT.models.generate_content(
-            model="gemini-2.5-flash", 
+            model="gemini-2.5-flash-lite", 
             contents=prompt,
             config=gen_cfg
         )

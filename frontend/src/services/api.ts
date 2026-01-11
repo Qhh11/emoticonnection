@@ -383,6 +383,7 @@ export interface ChatMessage {
   content: string
   media_url?: string | null
   emotion?: string | null
+  emotion_color?: string | null
   created_at: string
 }
 

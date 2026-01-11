@@ -17,82 +17,42 @@ from typing import Dict, List, Any, Optional, Literal
 from collections import Counter
 from dataclasses import dataclass, asdict
 
+# Dynamic import handling for model and weaviate_client
+try:
+    from model import (EmotionDataPoint, EmotionWordCloud, EmotionTrend,
+                        TriggerAnalysis, EmotionSummary, ConversationRecord)
+    from weaviate_client import WeaviateManager
+except ImportError:
+    # For dynamic imports from other directories
+    import sys
+    import os
+    from pathlib import Path
+    
+    # Get the directory containing this file
+    current_dir = Path(__file__).parent
+    
+    # Add current directory to sys.path temporarily
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    try:
+        from model import (EmotionDataPoint, EmotionWordCloud, EmotionTrend,
+                            TriggerAnalysis, EmotionSummary, ConversationRecord)
+        from weaviate_client import WeaviateManager
+    finally:
+        # Clean up sys.path
+        if str(current_dir) in sys.path:
+            sys.path.remove(str(current_dir))
+
+from google.genai import types
+
 from langchain_core.prompts import PromptTemplate
 import weaviate.classes.query as wq
 from weaviate.classes.query import Filter
 
-try:
-    from weaviate_client import WeaviateManager
-    from model import ConversationRecord
-except ImportError:
-    from app.weaviate_client import WeaviateManager
-    from app.model import ConversationRecord
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class EmotionDataPoint:
-    """Single emotion data point for time series analysis."""
-    timestamp: str
-    emotion: str
-    intensity: float  # 0-1 scale
-    sentiment_score: float  # -1 to 1 scale
-    trigger_context: Optional[str] = None
-
-
-@dataclass
-class EmotionWordCloud:
-    """Word cloud data structure."""
-    words: Dict[str, int]  # word -> frequency
-    top_emotions: List[str]
-    total_count: int
-
-
-@dataclass
-class EmotionTrend:
-    """Emotion trend over time."""
-    period: str  # 'daily', 'weekly', 'monthly'
-    data_points: List[Dict[str, Any]]  # [{date, avg_score, dominant_emotion}]
-    trend_direction: str  # 'improving', 'declining', 'stable'
-    volatility: float  # 0-1 scale
-
-
-@dataclass
-class TriggerAnalysis:
-    """Common trigger scenario analysis."""
-    trigger_type: str  # e.g., 'work', 'relationships', 'health'
-    frequency: int
-    associated_emotions: List[str]
-    example_contexts: List[str]
-    impact_score: float  # -1 to 1
-
-
-@dataclass
-class EmotionSummary:
-    """Complete emotion analytics summary."""
-    user_id: str
-    period_type: Literal['weekly', 'monthly']
-    start_date: str
-    end_date: str
-    
-    # Core metrics
-    average_mood_score: float  # -1 to 1
-    mood_stability: float  # 0-1, higher is more stable
-    total_interactions: int
-    
-    # Analysis components
-    emotion_distribution: Dict[str, float]  # emotion -> percentage
-    emotion_trend: EmotionTrend
-    word_cloud: EmotionWordCloud
-    triggers: List[TriggerAnalysis]
-    
-    # AI-generated content
-    summary_text: str
-    key_insights: List[str]
-    suggestions: List[str]
-    trend_prediction: str
 
 
 class EmotionAnalytics:
@@ -204,7 +164,6 @@ class EmotionAnalytics:
         
     def _call_gemini(self, prompt: str) -> str:
         """Call Gemini API for text generation."""
-        from google.genai import types
         
         try:
             config_path = os.path.join(os.path.dirname(__file__), "gemini_config.json")
@@ -219,7 +178,7 @@ class EmotionAnalytics:
                 gen_cfg = types.GenerateContentConfig(temperature=0.7)
 
             response = self.gemini_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.5-flash-lite",
                 contents=prompt,
                 config=gen_cfg
             )
@@ -277,7 +236,7 @@ class EmotionAnalytics:
 
     def analyze_emotions_from_text(self, conversations: List[Dict]) -> List[EmotionDataPoint]:
         """
-        Analyze emotions from conversation texts using Gemini.
+        Analyze emotions from conversation texts using Gemini with enhanced prompt engineering.
         
         Args:
             conversations: List of conversation records
@@ -292,19 +251,19 @@ class EmotionAnalytics:
         batch_size = 20
         all_data_points = []
         
-        # Define the 9 emotion categories for the prompt
-        emotion_categories = """
-情绪分类 (必须从以下9种中选择一个):
-1. bored (无聊/丧丧) - 感到无聊、无趣
-2. fear (恐惧/怕怕) - 感到害怕、恐惧
-3. joy (快乐/乐乐) - 感到开心、快乐、满足
-4. sadness (忧伤/忧忧) - 感到悲伤、失落
-5. disgust (厌恶/厌厌) - 感到厌恶、反感
-6. anxiety (焦虑/焦焦) - 感到焦虑、紧张、担忧
-7. anger (愤怒/怒怒) - 感到愤怒、生气
-8. embarrassment (尴尬/尬尬) - 感到尴尬、羞涩
-9. envy (羡慕/慕慕) - 感到羡慕、嫉妒
-"""
+        # 优化后的情绪定义，帮助模型更精准区分
+        emotion_definitions = """
+        请严格基于以下 9 种情绪进行分类（括号内为判断标准）：
+        1. bored (无聊): 感到乏味、无趣、发呆、低能量、或是"没什么事"的平淡状态。
+        2. fear (恐惧): 对当下具体威胁的害怕、惊吓、或是想要逃离的冲动。
+        3. joy (快乐): 开心、兴奋、满足、感激、或是轻松愉悦的状态。
+        4. sadness (忧伤): 失落、难过、想哭、遗憾、或是受到伤害的感觉。
+        5. disgust (厌恶): 反感、恶心、鄙视、不仅是生理上的，也包括对某人某事的道德厌恶。
+        6. anxiety (焦虑): 对未来的担忧、紧张、压力大、不知所措、或是"悬着一颗心"。
+        7. anger (愤怒): 生气、暴躁、想要攻击、或是对不公的抗议。
+        8. embarrassment (尴尬): 羞愧、社死现场、不好意思、或是想要找地缝钻进去。
+        9. envy (羡慕): 嫉妒、酸葡萄心理、或是渴望拥有别人拥有的东西。
+        """
         
         for i in range(0, len(conversations), batch_size):
             batch = conversations[i:i+batch_size]
@@ -318,27 +277,39 @@ class EmotionAnalytics:
                     'text': user_query
                 })
             
-            prompt = f"""分析以下用户消息的情绪状态。对每条消息，返回JSON格式:
+            # 这里的 Prompt 经过了重写，增加了 CoT (Chain of Thought) 和防御性指令
+            prompt = f"""你是一位擅长共情和文本挖掘的心理分析专家。请分析以下用户对话片段的情绪状态。
 
-{emotion_categories}
+            【分析指南】
+            1. **语境分析**：结合标点符号（如"..."可能代表无语或犹豫）、Emoji（"😅"代表尴尬而非开心）、语气词（"切"代表不屑）。
+            2. **区分易混淆情绪**：
+               - "明天要考试了好慌" 是 anxiety (焦虑) 而不是 fear (恐惧)。
+               - "不知道干嘛" 是 bored (无聊) 而不是 sadness (忧伤)。
+            3. **触发源识别**：只有在用户明确提及原因时（如"因为工作被骂了"）才填写 trigger_context。如果用户只说"好烦"，trigger_context 应为 null。
+            4. **情感打分**：
+               - intensity (0.0-1.0): 情绪的强烈程度。0.1为微弱，0.9为极强。
+               - sentiment_score (-1.0 到 1.0): -1.0(极度消极) 到 1.0(极度积极)。注意：anger 和 sadness 通常是负分，但 joy 是正分。
+            
+            {emotion_definitions}
 
-消息列表:
-{json.dumps(texts_for_analysis, ensure_ascii=False, indent=2)}
+            【待分析消息列表】
+            {json.dumps(texts_for_analysis, ensure_ascii=False, indent=2)}
 
-请返回一个JSON数组，每个元素包含:
-- timestamp: 原始时间戳
-- emotion: 主要情绪 (必须是: bored, fear, joy, sadness, disgust, anxiety, anger, embarrassment, envy 之一)
-- intensity: 情绪强度 (0.0-1.0)
-- sentiment_score: 情感得分 (-1.0 到 1.0, 负数为消极，正数为积极)
-- trigger_context: 可能的触发情境描述 (简短)
-
-只返回JSON数组，不要其他文字。"""
+            请返回一个纯 JSON 数组（不要包含 Markdown 标记），每个对象包含：
+            - timestamp: (保持原样)
+            - reasoning: (简短分析这句话为什么被归为此类情绪，这有助于提高准确性)
+            - emotion: (必须是上述9个英文单词之一)
+            - intensity: (浮点数)
+            - sentiment_score: (浮点数)
+            - trigger_context: (简短描述触发原因，如果没有则为 null)
+            """
 
             try:
                 response = self._call_gemini(prompt)
                 # Parse JSON response
                 response = response.strip()
                 if response.startswith('```'):
+                    # 移除可能的 markdown 代码块标记
                     response = response.split('\n', 1)[1]
                     response = response.rsplit('```', 1)[0]
                 
@@ -349,12 +320,17 @@ class EmotionAnalytics:
                     raw_emotion = result.get('emotion', 'bored')
                     normalized_emotion = self.normalize_emotion(raw_emotion)
                     
+                    # 某些极端情况下模型可能返回 null 作为 trigger
+                    trigger_ctx = result.get('trigger_context')
+                    if trigger_ctx == 'null' or trigger_ctx == 'None':
+                        trigger_ctx = None
+
                     all_data_points.append(EmotionDataPoint(
                         timestamp=result.get('timestamp', ''),
                         emotion=normalized_emotion,
                         intensity=float(result.get('intensity', 0.5)),
                         sentiment_score=float(result.get('sentiment_score', 0.0)),
-                        trigger_context=result.get('trigger_context')
+                        trigger_context=trigger_ctx
                     ))
             except Exception as e:
                 logger.warning(f"Batch emotion analysis failed: {e}")
@@ -362,8 +338,8 @@ class EmotionAnalytics:
                 for conv in batch:
                     all_data_points.append(EmotionDataPoint(
                         timestamp=conv.get('timestamp', ''),
-                        emotion='neutral',
-                        intensity=0.5,
+                        emotion='bored', # Fallback to bored/neutral
+                        intensity=0.1,
                         sentiment_score=0.0,
                         trigger_context=None
                     ))

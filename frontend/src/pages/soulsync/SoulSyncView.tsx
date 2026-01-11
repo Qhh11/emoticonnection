@@ -21,6 +21,7 @@ interface ChatMessage {
   text: string
   timestamp: number
   emotion: string
+  emotion_color: string
 }
 
 export interface PeerSession {
@@ -111,7 +112,8 @@ export default function SoulSyncView({ onInteract, userId }: SoulSyncViewProps) 
         role: m.sender_id === userId ? 'user' : 'peer',
         text: m.content,
         timestamp: new Date(m.created_at).getTime(),
-        emotion: m.emotion || 'Neutral'
+        emotion: m.emotion || 'Neutral',
+        emotion_color: m.emotion_color || '#4B4E91'
       }))
 
       setSessions(prev => prev.map(s =>
@@ -143,7 +145,8 @@ export default function SoulSyncView({ onInteract, userId }: SoulSyncViewProps) 
           role: data.sender_id === userId ? 'user' : 'peer',
           text: data.content,
           timestamp: new Date(data.created_at || Date.now()).getTime(),
-          emotion: data.emotion || 'Neutral'
+          emotion: data.emotion || 'Neutral',
+          emotion_color: data.emotion_color || '#4B4E91'
         }
 
         setSessions(prev => prev.map(s =>
@@ -544,7 +547,7 @@ export default function SoulSyncView({ onInteract, userId }: SoulSyncViewProps) 
                           {m.text}
                         </div>
                         <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-black/5 text-[12px] font-black uppercase tracking-widest text-gray-400 ${m.role === 'user' ? 'float-right' : 'float-left'}`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: MOOD_DATA.find(md => md.label === m.emotion)?.color || '#4B4E91' }}></span>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: m.emotion_color }}></span>
                           <span>{m.emotion}</span>
                         </div>
                       </div>

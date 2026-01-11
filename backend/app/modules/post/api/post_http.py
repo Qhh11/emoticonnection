@@ -22,17 +22,14 @@ from app.modules.post.schemas.post import (
 from app.modules.post.repository.post_repository import PostRepository
 # Use unified database configuration
 import sys
+import os
 from pathlib import Path
 database_path = Path(__file__).resolve().parents[5] / "database"
 sys.path.insert(0, str(database_path))
 from config.mongodb_config import get_database  # type: ignore
 
-# Import AI emotion analysis service
-from app.modules.ai.core.emotion import EmotionService
-
 # Import points system
 from crud.check_in_crud import add_points_to_user  # type: ignore
-
 
 # ============================================================================
 # Initialize Router
@@ -88,9 +85,38 @@ async def create_post(
     ai_emotion = None
     if post_data.content:
         try:
-            emotion_service = EmotionService()
-            if emotion_service.model is not None:
-                ai_emotion = await emotion_service.analyze_emotion(post_data.content)
+            import importlib.util
+            from google import genai
+            
+            # 动态导入 genai/app 模块
+            genai_app_path = Path(__file__).resolve().parents[5] / "genai" / "app"
+            
+            # 导入 weaviate_client
+            weaviate_spec = importlib.util.spec_from_file_location(
+                "weaviate_client", genai_app_path / "weaviate_client.py"
+            )
+            weaviate_module = importlib.util.module_from_spec(weaviate_spec)
+            weaviate_spec.loader.exec_module(weaviate_module)
+            WeaviateManager = weaviate_module.WeaviateManager
+            
+            # 导入 emotion_analytics
+            analytics_spec = importlib.util.spec_from_file_location(
+                "emotion_analytics", genai_app_path / "emotion_analytics.py"
+            )
+            analytics_module = importlib.util.module_from_spec(analytics_spec)
+            analytics_spec.loader.exec_module(analytics_module)
+            EmotionAnalytics = analytics_module.EmotionAnalytics
+            
+            # 初始化 Gemini 客户端和 WeaviateManager
+            api_key = os.getenv("GEMINI_API_KEY")
+            gemini_client = genai.Client(api_key=api_key)
+            weaviate_manager = WeaviateManager()
+            analytics = EmotionAnalytics(weaviate_manager, gemini_client)
+            # 构造单条对话格式
+            conversations = [{"timestamp": "", "userQuery": post_data.content}]
+            data_points = analytics.analyze_emotions_from_text(conversations)
+            if data_points:
+                ai_emotion = data_points[0].emotion
                 print(f"[AI] Post emotion analyzed: {ai_emotion}")
         except Exception as e:
             print(f"[AI] Post emotion analysis failed: {e}")
