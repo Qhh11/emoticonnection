@@ -1,0 +1,12 @@
+**/.env
+.env
+/venv
+/.vscode/
+
+# Ignore files starting with dot (.)
+.*
+!.gitignore
+!.gitkeep
+
+# Ignore files starting with double underscore (__)
+__*
