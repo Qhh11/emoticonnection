@@ -43,7 +43,7 @@ class TriggerAnalysis:
 class EmotionSummary:
     """Complete emotion analytics summary."""
     user_id: str
-    period_type: Literal['weekly', 'monthly']
+    period_type: Literal['daily', 'weekly', 'monthly']
     start_date: str
     end_date: str
     

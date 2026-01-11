@@ -45,6 +45,7 @@ except ImportError:
             sys.path.remove(str(current_dir))
 
 from google.genai import types
+from google import genai
 
 from langchain_core.prompts import PromptTemplate
 import weaviate.classes.query as wq
@@ -480,12 +481,12 @@ class EmotionAnalytics:
         
         # Use Gemini to extract emotion-related keywords
         prompt = f"""从以下文本中提取与情绪相关的关键词和表达。
-返回JSON格式: {{"words": {{"词语1": 频次, "词语2": 频次, ...}}, "emotions": ["情绪1", "情绪2", ...]}}
+            返回JSON格式: {{"words": {{"词语1": 频次, "词语2": 频次, ...}}, "emotions": ["情绪1", "情绪2", ...]}}
 
-文本:
-{all_text[:5000]}
+            文本:
+            {all_text[:5000]}
 
-只返回JSON，不要其他内容。"""
+            只返回JSON，不要其他内容。"""
 
         try:
             response = self._call_gemini(prompt)
@@ -628,7 +629,7 @@ class EmotionAnalytics:
     def generate_report(
         self,
         user_id: str,
-        period_type: Literal['weekly', 'monthly'] = 'weekly',
+        period_type: Literal['daily', 'weekly', 'monthly'] = 'weekly',
         end_date: Optional[str] = None
     ) -> EmotionSummary:
         """
@@ -636,7 +637,7 @@ class EmotionAnalytics:
         
         Args:
             user_id: User identifier
-            period_type: 'weekly' or 'monthly'
+            period_type: 'daily', 'weekly', or 'monthly'
             end_date: End date (ISO format), defaults to now
             
         Returns:
@@ -648,9 +649,11 @@ class EmotionAnalytics:
         else:
             end_dt = datetime.now(timezone.utc)
             
-        if period_type == 'weekly':
+        if period_type == 'daily':
+            start_dt = end_dt - timedelta(days=1)
+        elif period_type == 'weekly':
             start_dt = end_dt - timedelta(days=7)
-        else:
+        else:  # monthly
             start_dt = end_dt - timedelta(days=30)
             
         start_date = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -733,7 +736,24 @@ class EmotionAnalytics:
         return json.dumps(convert(summary), ensure_ascii=False, indent=2)
 
 
+
 # Convenience functions for direct use
+def generate_daily_emotion_report(
+    user_id: str,
+    end_date: Optional[str] = None,
+    weaviate_manager: Optional[WeaviateManager] = None,
+    gemini_client = None
+) -> EmotionSummary:
+    """Generate daily emotion report for a user."""
+    if weaviate_manager is None:
+        weaviate_manager = WeaviateManager()
+    if gemini_client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_client = genai.Client(api_key=api_key)
+        
+    analytics = EmotionAnalytics(weaviate_manager, gemini_client)
+    return analytics.generate_report(user_id, 'daily', end_date)
+
 def generate_weekly_emotion_report(
     user_id: str,
     end_date: Optional[str] = None,
@@ -741,8 +761,6 @@ def generate_weekly_emotion_report(
     gemini_client = None
 ) -> EmotionSummary:
     """Generate weekly emotion report for a user."""
-    from google import genai
-    
     if weaviate_manager is None:
         weaviate_manager = WeaviateManager()
     if gemini_client is None:
@@ -760,8 +778,6 @@ def generate_monthly_emotion_report(
     gemini_client = None
 ) -> EmotionSummary:
     """Generate monthly emotion report for a user."""
-    from google import genai
-    
     if weaviate_manager is None:
         weaviate_manager = WeaviateManager()
     if gemini_client is None:
