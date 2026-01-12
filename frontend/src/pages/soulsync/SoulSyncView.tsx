@@ -40,9 +40,10 @@ export interface PeerSession {
 interface SoulSyncViewProps {
   onInteract: (e: React.MouseEvent) => void
   userId?: string
+  onViewProfile?: (userId: string) => void
 }
 
-export default function SoulSyncView({ onInteract, userId }: SoulSyncViewProps) {
+export default function SoulSyncView({ onInteract, userId, onViewProfile }: SoulSyncViewProps) {
   const [isSearching, setIsSearching] = useState(false)
   const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean } | null>(null)
   const [sessions, setSessions] = useState<PeerSession[]>([])
@@ -512,11 +513,20 @@ export default function SoulSyncView({ onInteract, userId }: SoulSyncViewProps) 
             <div className="flex-1 flex flex-col">
               <header className="p-6 border-b border-black/5 flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl shadow-inner border-2 border-white" style={{ borderColor: currentSession.moodColor + '40' }}>
+                  <div
+                    className={`w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl shadow-inner border-2 border-white ${!currentSession.isAnonymous ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
+                    style={{ borderColor: currentSession.moodColor + '40' }}
+                    onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
+                  >
                     {currentSession.partnerAvatar}
                   </div>
                   <div>
-                    <h3 className="font-black text-sm uppercase">@{currentSession.partnerName}</h3>
+                    <h3
+                      className={`font-black text-sm uppercase ${!currentSession.isAnonymous ? 'cursor-pointer hover:underline' : ''}`}
+                      onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
+                    >
+                      @{currentSession.partnerName}
+                    </h3>
                     <p className="text-[13px] font-black uppercase text-gray-300 tracking-widest">
                       {currentSession.isAnonymous ? '🎭 Ghost Mode' : '👤 Echo Pulse'}
                     </p>

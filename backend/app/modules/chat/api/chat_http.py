@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 database_path = Path(__file__).resolve().parents[5] / "database"
 sys.path.insert(0, str(database_path))
-from config.mongodb_config import get_database  # type: ignore
+from config.mongodb_config import get_database, get_sync_database  # type: ignore
 
 
 
@@ -52,6 +52,18 @@ def get_chat_repo() -> ChatRepository:
 # ============================================================================
 # HELPER FUNCTIONS (Database operations via ChatRepository)
 # ============================================================================
+
+def _get_username_by_id(user_id: str) -> Optional[str]:
+    """根据 user_id 获取用户的 username"""
+    try:
+        db = get_sync_database()
+        user = db.users.find_one({"_id": ObjectId(user_id)})
+        if user:
+            return user.get("username") or user.get("nickname")
+        return None
+    except Exception:
+        return None
+
 
 async def _get_or_create_room(repo: ChatRepository, user1_id: Union[int, str], user2_id: Union[int, str], is_anonymous: bool = False) -> dict:
     """
@@ -337,8 +349,13 @@ async def get_user_rooms(user_id: str, repo: ChatRepository = Depends(get_chat_r
 
         result.append(RoomListItem(
             room_id=room["id"],
+<<<<<<< HEAD
             other_user_id=str(other_user_id) if not is_other_anonymous else "-1",
             other_user_name=None if is_other_anonymous else f"User {other_user_id}",
+=======
+            other_user_id=other_user_id if not is_other_anonymous else -1,
+            other_user_name=None if is_other_anonymous else _get_username_by_id(other_user_id),
+>>>>>>> df67ae8 (feat: add other users' profile view)
             is_anonymous=room.get("is_anonymous", False),
             last_message=last_msg["content"][:50] if last_msg else None,
             last_message_time=last_msg["created_at"] if last_msg else None

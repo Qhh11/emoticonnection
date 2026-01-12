@@ -30,9 +30,10 @@ interface PostCardProps {
   onLike: (postId: string) => void
   userId?: string
   onPointsChanged?: () => void
+  onViewProfile?: (userId: string) => void
 }
 
-function PostCard({ post, onResonate, onLike, userId, onPointsChanged }: PostCardProps) {
+function PostCard({ post, onResonate, onLike, userId, onPointsChanged, onViewProfile }: PostCardProps) {
   const [liked, setLiked] = useState(post.is_liked)
   const [likeCount, setLikeCount] = useState(post.like_count)
   const [showComments, setShowComments] = useState(false)
@@ -119,11 +120,18 @@ function PostCard({ post, onResonate, onLike, userId, onPointsChanged }: PostCar
     <div className="p-10 rounded-[2.5rem] border border-black/[0.05] shadow-xl flex flex-col justify-between transition-all hover:scale-[1.02]" style={{ backgroundColor: colors.bg }}>
       <div className="flex justify-between items-start mb-10">
         <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shadow-inner border border-white/20">
+          <div
+            className={`w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shadow-inner border border-white/20 ${!post.is_anonymous ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
+            onClick={() => !post.is_anonymous && onViewProfile?.(post.author_id)}
+          >
             {post.is_anonymous ? '🎭' : '👤'}
           </div>
           <div className="space-y-0.5">
-            <p className="text-[13px] font-black uppercase tracking-widest" style={{ color: colors.text }}>
+            <p
+              className={`text-[13px] font-black uppercase tracking-widest ${!post.is_anonymous ? 'cursor-pointer hover:underline' : ''}`}
+              style={{ color: colors.text }}
+              onClick={() => !post.is_anonymous && onViewProfile?.(post.author_id)}
+            >
               {post.is_anonymous ? 'Anonymous' : (post.author_name || 'User')}
             </p>
             <p className="text-[14px] font-black uppercase opacity-60" style={{ color: colors.text }}>
@@ -246,9 +254,10 @@ interface CommunityViewProps {
   userNickname?: string
   onPostCreated?: () => void
   onPointsChanged?: () => void
+  onViewProfile?: (userId: string) => void
 }
 
-export default function CommunityView({ onInteract, userId, userNickname, onPostCreated, onPointsChanged }: CommunityViewProps) {
+export default function CommunityView({ onInteract, userId, userNickname, onPostCreated, onPointsChanged, onViewProfile }: CommunityViewProps) {
   const [posts, setPosts] = useState<ApiPost[]>([])
   const [trendingTags, setTrendingTags] = useState<TrendingTag[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -422,7 +431,7 @@ export default function CommunityView({ onInteract, userId, userNickname, onPost
             </div>
           ) : (
             posts.map(post => (
-              <PostCard key={post.id} post={post} onResonate={onInteract} onLike={handleLike} userId={userId} onPointsChanged={onPointsChanged} />
+              <PostCard key={post.id} post={post} onResonate={onInteract} onLike={handleLike} userId={userId} onPointsChanged={onPointsChanged} onViewProfile={onViewProfile} />
             ))
           )}
         </div>

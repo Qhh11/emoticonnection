@@ -36,11 +36,15 @@ export const THEMES: Theme[] = [
 interface StatItemProps {
   label: string
   value: string
+  onClick?: () => void
 }
 
-function StatItem({ label, value }: StatItemProps) {
+function StatItem({ label, value, onClick }: StatItemProps) {
   return (
-    <div className="space-y-0.5">
+    <div
+      className={`space-y-0.5 ${onClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`}
+      onClick={onClick}
+    >
       <p className="text-xl font-black tracking-tighter text-gray-800">{value}</p>
       <p className="text-[12px] font-black uppercase tracking-widest text-gray-300">{label}</p>
     </div>
@@ -123,9 +127,11 @@ interface ProfileViewProps {
   onOpenPostDetail: (post: Post) => void
   todayCheckIn: { mood: string; color: string; text: string } | null
   onOpenSettings?: () => void
+  onViewFollowing?: () => void
+  onViewFollowers?: () => void
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
 
@@ -237,8 +243,8 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
             </div>
             <div className="flex space-x-10">
               <StatItem label="Posts" value={String(userPosts.length)} />
-              <StatItem label="Followers" value={socialStats?.followers_count?.toString() || '0'} />
-              <StatItem label="Following" value={socialStats?.following_count?.toString() || '0'} />
+              <StatItem label="Followers" value={socialStats?.followers_count?.toString() || '0'} onClick={onViewFollowers} />
+              <StatItem label="Following" value={socialStats?.following_count?.toString() || '0'} onClick={onViewFollowing} />
             </div>
           </div>
         </div>

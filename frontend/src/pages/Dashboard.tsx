@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
+import UserProfileModal from '../components/UserProfileModal'
+import FollowListModal from '../components/FollowListModal'
 import { Avatar3D } from '../config/avatars'
 import CommunityView from './community/CommunityView'
 import DiaryView, { DiaryEntry } from './diary/DiaryView'
@@ -66,6 +68,12 @@ export default function Dashboard() {
 
   // User avatar state
   const [userAvatar, setUserAvatar] = useState('🦊')
+
+  // User profile modal state (for viewing other users)
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null)
+
+  // Follow list modal state
+  const [followListType, setFollowListType] = useState<'following' | 'followers' | null>(null)
 
   // Sync userAvatar when user data changes (e.g., after login loads user data)
   useEffect(() => {
@@ -297,13 +305,21 @@ export default function Dashboard() {
           onOpenPostDetail={setSelectedPostModal}
           todayCheckIn={todayCheckIn}
           onOpenSettings={handleOpenSettings}
+          onViewFollowing={() => setFollowListType('following')}
+          onViewFollowers={() => setFollowListType('followers')}
         />
       case 'diary':
         return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} />
       case 'community':
+<<<<<<< HEAD
         return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} />
       case 'soulsync':
         return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} />
+=======
+        return <CommunityView onInteract={triggerCheckIn} userId={user?.user_id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
+      case 'soulsync':
+        return <SoulSyncView onInteract={triggerCheckIn} userId={user?.user_id} onViewProfile={setViewingUserId} />
+>>>>>>> df67ae8 (feat: add other users' profile view)
       default:
         return <PlaceholderView title={activeTab} />
     }
@@ -472,6 +488,31 @@ export default function Dashboard() {
           </div>
         )
       })()}
+
+      {/* User Profile Modal (for viewing other users) */}
+      {viewingUserId && (
+        <UserProfileModal
+          userId={viewingUserId}
+          currentUserId={user?.user_id || ''}
+          isOpen={!!viewingUserId}
+          onClose={() => setViewingUserId(null)}
+        />
+      )}
+
+      {/* Follow List Modal */}
+      {followListType && user?.user_id && (
+        <FollowListModal
+          userId={user.user_id}
+          currentUserId={user.user_id}
+          type={followListType}
+          isOpen={!!followListType}
+          onClose={() => setFollowListType(null)}
+          onViewProfile={(userId) => {
+            setFollowListType(null)
+            setViewingUserId(userId)
+          }}
+        />
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
