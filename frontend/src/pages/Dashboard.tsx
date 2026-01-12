@@ -88,11 +88,15 @@ export default function Dashboard() {
   // Weekly emotion report for Profile card preview
   const [weeklyReport, setWeeklyReport] = useState<EmotionReport | null>(null)
 
-  // Sync userAvatar when user data changes (e.g., after login loads user data)
+  // Load user data from AuthUser on mount or when AuthUser changes
   useEffect(() => {
     if (AuthUser?.user_id) {
-      userApi.getUser(AuthUser?.user_id).then(user => { setUser(user) })
+      userApi.getUser(AuthUser.user_id).then(userData => { setUser(userData) })
     }
+  }, [AuthUser?.user_id])
+
+  // Sync userAvatar when user data changes
+  useEffect(() => {
     if (user?.avatar) {
       setUserAvatar(user.avatar)
     }
