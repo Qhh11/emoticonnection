@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { matchApi, chatApi, socialApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser } from '../../services/api'
+import { matchApi, chatApi, socialApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
 import { Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
-const MOOD_DATA = [
+const MOOD_DATA: { label: string; color: string; text: string; value: EmotionType }[] = [
   { label: 'Bored', color: '#4B4E91', text: '#ffffff', value: 'neutral' },
   { label: 'Fear', color: '#9381BA', text: '#ffffff', value: 'anxious' },
   { label: 'Joy', color: '#F9D849', text: '#121212', value: 'happy' },
@@ -15,6 +15,34 @@ const MOOD_DATA = [
   { label: 'Angry', color: '#D32F2F', text: '#ffffff', value: 'frustrated' },
   { label: 'Awkward', color: '#D278A3', text: '#ffffff', value: 'uncertain' },
   { label: 'Envy', color: '#2BA8A4', text: '#ffffff', value: 'frustrated' },
+]
+
+// Role data for V2 matching
+const ROLE_DATA: { value: SupportRole; label: string; description: string; emoji: string }[] = [
+  { value: 'seeker', label: 'Seeker', description: 'I need support', emoji: '🙋' },
+  { value: 'supporter', label: 'Supporter', description: 'I can help', emoji: '🤗' },
+  { value: 'either', label: 'Either', description: 'Both is fine', emoji: '💬' },
+]
+
+// Support need data for V2 matching
+const NEED_DATA: { value: SupportNeed; label: string; description: string; emoji: string }[] = [
+  { value: 'vent', label: 'Vent', description: 'Just need to talk', emoji: '💭' },
+  { value: 'advice', label: 'Advice', description: 'Want suggestions', emoji: '💡' },
+  { value: 'companion', label: 'Companion', description: 'Just want company', emoji: '🫂' },
+  { value: 'distraction', label: 'Distraction', description: 'Take my mind off', emoji: '🎮' },
+]
+
+// Topic data for V2 matching
+const TOPIC_DATA: { value: TopicTag; label: string; emoji: string }[] = [
+  { value: 'general', label: 'General', emoji: '💬' },
+  { value: 'relationships', label: 'Relationships', emoji: '💑' },
+  { value: 'anxiety', label: 'Anxiety', emoji: '😰' },
+  { value: 'depression', label: 'Depression', emoji: '😞' },
+  { value: 'work_stress', label: 'Work', emoji: '💼' },
+  { value: 'academic', label: 'Academic', emoji: '📚' },
+  { value: 'family', label: 'Family', emoji: '👨‍👩‍👧' },
+  { value: 'loneliness', label: 'Loneliness', emoji: '🏠' },
+  { value: 'self_esteem', label: 'Self Esteem', emoji: '🪞' },
 ]
 
 interface ChatMessage {
@@ -54,13 +82,24 @@ const VIP_REQUIRED_LEVEL = 3
 
 export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar, userLevel = 0, showEmotionAnalysis: propShowAnalysis, onCloseEmotionAnalysis, onSessionChange }: SoulSyncViewProps) {
   const [isSearching, setIsSearching] = useState(false)
-  const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean } | null>(null)
+  const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean; matchScore?: number; matchReason?: string } | null>(null)
   const [sessions, setSessions] = useState<PeerSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0]>(MOOD_DATA[2])
   const [isAnonymousMatch, setIsAnonymousMatch] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // V2 Matching preferences
+  const [selectedRole, setSelectedRole] = useState<SupportRole>('either')
+  const [selectedNeed, setSelectedNeed] = useState<SupportNeed>('companion')
+  const [selectedTopic, setSelectedTopic] = useState<TopicTag>('general')
+  const [selectedIntensity, setSelectedIntensity] = useState(3)
+
+  // Queue status
+  const [queuePosition, setQueuePosition] = useState<number | null>(null)
+  const [estimatedWait, setEstimatedWait] = useState<string | null>(null)
+  const [safetyTips, setSafetyTips] = useState<string[]>([])
 
   // VIP Emotion Analysis state - controlled by prop or internal state
   const [internalShowAnalysis, setInternalShowAnalysis] = useState(false)
@@ -258,61 +297,89 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     onInteract(e)
     setIsSearching(true)
     setIsLoading(true)
+    setSafetyTips([])
+    setQueuePosition(null)
+    setEstimatedWait(null)
 
     try {
-      const response = await matchApi.findMatch(userId, {
+      const response = await matchApi.findMatch({
         current_emotion: selectedMood.value,
-        role: 'either',
-        need: 'companion',
-        intensity: 3,
-        is_anonymous: isAnonymousMatch,
-        preferred_mode: isAnonymousMatch ? 'human_anonymous' : 'human_non_anonymous'
+        emotion_intensity: selectedIntensity,
+        role: selectedRole,
+        support_need: selectedNeed,
+        topic: selectedTopic,
+        mode: isAnonymousMatch ? 'human_anonymous' : 'human_non_anonymous',
+        risk_level: 'safe'
       })
 
       if (response.matched && response.room_id) {
         setMatchedPartner({
           roomId: response.room_id,
           partnerId: response.matched_user_id || 'unknown',
-          isAnonymous: response.is_anonymous || isAnonymousMatch
+          isAnonymous: response.is_anonymous,
+          matchScore: response.match_score,
+          matchReason: response.match_reason
         })
       } else {
-        // No match found yet, show waiting or fallback
-        setTimeout(() => {
-          // Simulate a match for demo purposes
-          const demoRoomId = `demo_${Date.now()}`
-          setMatchedPartner({
-            roomId: demoRoomId,
-            partnerId: 'demo_partner',
-            isAnonymous: isAnonymousMatch
-          })
-        }, 2000)
+        // Not matched yet, show queue status
+        if (response.queue_position) {
+          setQueuePosition(response.queue_position)
+        }
+        if (response.estimated_wait) {
+          setEstimatedWait(response.estimated_wait)
+        }
+        if (response.safety_tips) {
+          setSafetyTips(response.safety_tips)
+        }
+        // Start polling for match status
+        pollMatchStatus()
       }
     } catch (err) {
       console.error('Match failed:', err)
-      // Fallback simulation
-      setTimeout(() => {
-        const demoRoomId = `demo_${Date.now()}`
-        setMatchedPartner({
-          roomId: demoRoomId,
-          partnerId: 'demo_partner',
-          isAnonymous: isAnonymousMatch
-        })
-      }, 2000)
+      // Show error state, keep user in queue view
+      setQueuePosition(1)
+      setEstimatedWait('Waiting for other users...')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const cancelMatching = async () => {
-    if (userId) {
-      try {
-        await matchApi.cancelMatch(userId)
-      } catch (err) {
-        console.error('Cancel match failed:', err)
+  // Poll for match status when in queue
+  const pollMatchStatus = useCallback(async () => {
+    if (!isSearching) return
+
+    try {
+      const status = await matchApi.getStatus()
+      if (status.matched && status.room_id) {
+        setMatchedPartner({
+          roomId: status.room_id,
+          partnerId: status.matched_user_id || 'unknown',
+          isAnonymous: status.is_anonymous || isAnonymousMatch,
+          matchScore: status.match_score,
+          matchReason: status.match_reason
+        })
+      } else if (status.in_queue) {
+        setQueuePosition(status.queue_position || null)
+        setEstimatedWait(status.estimated_wait || null)
+        // Continue polling
+        setTimeout(pollMatchStatus, 3000)
       }
+    } catch (err) {
+      console.error('Status check failed:', err)
+    }
+  }, [isSearching, isAnonymousMatch])
+
+  const cancelMatching = async () => {
+    try {
+      await matchApi.cancelMatch()
+    } catch (err) {
+      console.error('Cancel match failed:', err)
     }
     setIsSearching(false)
     setMatchedPartner(null)
+    setQueuePosition(null)
+    setEstimatedWait(null)
+    setSafetyTips([])
   }
 
   const confirmMatch = async () => {
@@ -463,11 +530,35 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
               </div>
               <div className="text-center space-y-4">
                 <h3 className="text-4xl font-black uppercase tracking-tighter text-white">
-                  {isLoading ? 'Searching Pulse' : 'Finding Match...'}
+                  {isLoading ? 'Searching Pulse' : 'In Queue...'}
                 </h3>
                 <p className="text-white/80 font-black uppercase text-[13px] tracking-[0.3em]">
-                  Synchronizing frequencies in {selectedMood.label} mode
+                  {selectedRole === 'seeker' ? '🙋 Seeking Support' : selectedRole === 'supporter' ? '🤗 Ready to Help' : '💬 Open to Both'} • {selectedMood.label}
                 </p>
+                {/* Queue Status Info */}
+                {(queuePosition || estimatedWait) && (
+                  <div className="mt-4 space-y-2">
+                    {queuePosition && (
+                      <p className="text-white/60 text-sm font-bold">
+                        Queue Position: #{queuePosition}
+                      </p>
+                    )}
+                    {estimatedWait && (
+                      <p className="text-white/60 text-sm font-bold">
+                        Estimated Wait: {estimatedWait}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {/* Safety Tips */}
+                {safetyTips.length > 0 && (
+                  <div className="mt-6 p-4 bg-white/10 rounded-2xl text-left max-w-md">
+                    <p className="text-white/80 text-xs font-black uppercase tracking-widest mb-2">Safety Tips</p>
+                    {safetyTips.map((tip, i) => (
+                      <p key={i} className="text-white/70 text-sm mb-1">• {tip}</p>
+                    ))}
+                  </div>
+                )}
               </div>
               <button onClick={cancelMatching} className="px-8 py-3 bg-white text-gray-800 rounded-full text-[13px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all shadow-xl">
                 Cancel
@@ -487,6 +578,23 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
                   <span className="text-[12px] font-black uppercase tracking-widest">Match Found!</span>
                 </div>
               </div>
+              {/* Match Score & Reason */}
+              {(matchedPartner.matchScore || matchedPartner.matchReason) && (
+                <div className="flex justify-center gap-4">
+                  {matchedPartner.matchScore && (
+                    <div className="px-4 py-2 bg-accent/10 rounded-xl">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Compatibility</p>
+                      <p className="text-xl font-black text-accent">{Math.round(matchedPartner.matchScore * 10)}%</p>
+                    </div>
+                  )}
+                  {matchedPartner.matchReason && (
+                    <div className="px-4 py-2 bg-gray-50 rounded-xl">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Match Type</p>
+                      <p className="text-sm font-black text-gray-600">{matchedPartner.matchReason.replace(/_/g, ' ')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
               <p className="text-gray-400 text-sm font-bold max-w-xs mx-auto">
                 Soul matched on your current frequency. Enter the pulse?
               </p>
@@ -514,47 +622,120 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
         <div className="grid lg:grid-cols-12 gap-12">
           {/* Match Portal */}
           <div className="lg:col-span-7 bg-white p-12 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-12">
-            <div className="space-y-6">
+            <div className="space-y-3">
               <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Sync Mode</h4>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex gap-3">
                 <button
                   onClick={() => setIsAnonymousMatch(true)}
-                  className={`p-8 rounded-[2rem] border-2 transition-all flex flex-col items-center space-y-4 ${isAnonymousMatch ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+                  className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${isAnonymousMatch ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
                 >
-                  <span className="text-4xl">🎭</span>
-                  <span className="text-[13px] font-black uppercase tracking-widest">Anonymous Ghost</span>
+                  <span className="text-xl">🎭</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest">Anonymous</span>
                 </button>
                 <button
                   onClick={() => setIsAnonymousMatch(false)}
-                  className={`p-8 rounded-[2rem] border-2 transition-all flex flex-col items-center space-y-4 ${!isAnonymousMatch ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+                  className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${!isAnonymousMatch ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
                 >
-                  <span className="text-4xl">👤</span>
-                  <span className="text-[13px] font-black uppercase tracking-widest">Public Echo</span>
+                  <span className="text-xl">👤</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest">Public</span>
                 </button>
               </div>
             </div>
 
-            <div className="space-y-6">
+            {/* Role Selector */}
+            <div className="space-y-4">
+              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Your Role</h4>
+              <div className="grid grid-cols-3 gap-3">
+                {ROLE_DATA.map(r => (
+                  <button
+                    key={r.value}
+                    onClick={() => setSelectedRole(r.value)}
+                    className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 ${selectedRole === r.value ? 'border-accent bg-accent/5 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+                  >
+                    <span className="text-2xl">{r.emoji}</span>
+                    <span className="text-[11px] font-black uppercase tracking-widest">{r.label}</span>
+                    <span className="text-[9px] text-gray-400 font-bold">{r.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Support Need Selector */}
+            <div className="space-y-4">
+              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">What Do You Need?</h4>
+              <div className="flex flex-wrap gap-2">
+                {NEED_DATA.map(n => (
+                  <button
+                    key={n.value}
+                    onClick={() => setSelectedNeed(n.value)}
+                    className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedNeed === n.value ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-500 hover:border-black/10'}`}
+                  >
+                    <span>{n.emoji}</span>
+                    <span className="text-[12px] font-black uppercase tracking-widest">{n.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Emotion/Resonance Selector */}
+            <div className="space-y-4">
               <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Set Your Resonance</h4>
               <div className="flex flex-wrap gap-2">
                 {MOOD_DATA.map(m => (
                   <button
                     key={m.label}
                     onClick={() => setSelectedMood(m)}
-                    className={`inline-flex items-center space-x-2 px-5 py-3 rounded-full border transition-all active:scale-95 ${selectedMood.label === m.label ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                    className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedMood.label === m.label ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
                   >
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }}></div>
-                    <span className="text-[13px] font-black uppercase tracking-widest">{m.label}</span>
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: selectedMood.label === m.label ? '#ffffff' : m.color }}></div>
+                    <span className="text-[12px] font-black uppercase tracking-widest">{m.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="pt-8">
+            {/* Intensity Slider */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Intensity</h4>
+                <span className="text-[11px] font-black uppercase tracking-widest text-gray-400">
+                  {selectedIntensity === 1 ? 'Very Low' : selectedIntensity === 2 ? 'Low' : selectedIntensity === 3 ? 'Moderate' : selectedIntensity === 4 ? 'High' : 'Very High'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                {[1, 2, 3, 4, 5].map(level => (
+                  <button
+                    key={level}
+                    onClick={() => setSelectedIntensity(level)}
+                    className={`flex-1 h-10 rounded-xl transition-all ${selectedIntensity >= level ? 'bg-accent shadow-inner' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    style={{ opacity: selectedIntensity >= level ? 0.4 + (level * 0.15) : 1 }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Topic Selector */}
+            <div className="space-y-4">
+              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Topic (Optional)</h4>
+              <div className="flex flex-wrap gap-2">
+                {TOPIC_DATA.map(t => (
+                  <button
+                    key={t.value}
+                    onClick={() => setSelectedTopic(t.value)}
+                    className={`inline-flex items-center space-x-1.5 px-3 py-2 rounded-full border transition-all active:scale-95 text-[11px] ${selectedTopic === t.value ? 'border-accent bg-accent/10 text-accent shadow-sm' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                  >
+                    <span>{t.emoji}</span>
+                    <span className="font-black uppercase tracking-wider">{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4">
               <button
                 onClick={startMatching}
                 disabled={!userId}
-                className="w-full py-6 bg-accent text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:opacity-90 transition-all flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-5 bg-accent text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:opacity-90 transition-all flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Find Echoes</span>
                 <span className="text-xl">⚡</span>

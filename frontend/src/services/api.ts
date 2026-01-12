@@ -309,48 +309,76 @@ export const postApi = {
 
 // ============ 匹配 API ============
 
+// Backend V2 Emotion Types
+export type EmotionType =
+  | 'happy' | 'excited' | 'grateful' | 'hopeful' | 'calm'  // Positive
+  | 'warm' | 'friendly' | 'neutral' | 'curious'             // Neutral
+  | 'sad' | 'anxious' | 'stressed' | 'lonely' | 'frustrated' | 'overwhelmed' | 'uncertain' | 'distant'  // Negative
+
+export type SupportRole = 'seeker' | 'supporter' | 'either'
+export type SupportNeed = 'vent' | 'advice' | 'companion' | 'distraction'
+export type TopicTag = 'general' | 'relationships' | 'anxiety' | 'depression' | 'work_stress' | 'academic' | 'family' | 'loneliness' | 'self_esteem'
+export type MatchMode = 'human_anonymous' | 'human_non_anonymous' | 'ai_chat'
+export type RiskLevel = 'safe' | 'moderate' | 'high' | 'crisis'
+
 export interface MatchRequest {
-  current_emotion: string
-  role: 'seeker' | 'supporter' | 'either'
-  need: 'vent' | 'advice' | 'companion' | 'distraction'
-  intensity: number
-  support_topics?: string[]
-  is_anonymous?: boolean
-  preferred_mode?: 'human_anonymous' | 'human_non_anonymous'
+  current_emotion: EmotionType
+  emotion_intensity?: number  // 1-5, default 3
+  role?: SupportRole          // default 'either'
+  support_need?: SupportNeed  // default 'vent'
+  topic?: TopicTag            // default 'general'
+  preferred_topics?: TopicTag[]
+  mode?: MatchMode            // default 'human_anonymous'
+  risk_level?: RiskLevel      // default 'safe'
 }
 
 export interface MatchResponse {
   matched: boolean
   room_id?: string
   matched_user_id?: string
-  is_anonymous?: boolean
-  match_type?: string
+  is_anonymous: boolean
+  match_type: MatchMode
   match_score?: number
-  wait_time_seconds?: number
+  match_reason?: string
+  safety_tips?: string[]
+  queue_position?: number
+  estimated_wait?: string
 }
 
 export interface MatchStatus {
-  in_queue: boolean
-  position?: number
-  wait_time_estimate?: number
+  matched: boolean
+  in_queue?: boolean
+  room_id?: string
+  matched_user_id?: string
+  is_anonymous?: boolean
+  match_type?: MatchMode
+  match_score?: number
+  match_reason?: string
+  mode?: string
   emotion?: string
-  intensity?: number
+  role?: string
+  need?: string
+  queued_at?: string
+  queue_position?: number
+  total_in_queue?: number
+  estimated_wait?: string
 }
 
 export const matchApi = {
-  findMatch: (userId: string, data: MatchRequest) =>
-    request<MatchResponse>(`/api/match/find?user_id=${userId}`, {
+  // JWT auth - no user_id in query params
+  findMatch: (data: MatchRequest) =>
+    request<MatchResponse>('/api/match/find', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  cancelMatch: (userId: string) =>
-    request<{ success: boolean; message: string }>(`/api/match/cancel?user_id=${userId}`, {
+  cancelMatch: () =>
+    request<{ success: boolean; message: string }>('/api/match/cancel', {
       method: 'POST',
     }),
 
-  getStatus: (userId: string) =>
-    request<MatchStatus>(`/api/match/status?user_id=${userId}`),
+  getStatus: () =>
+    request<MatchStatus>('/api/match/status'),
 
   getEmotions: () =>
     request<{ emotions: Record<string, Array<{ value: string; label: string; emoji: string }>> }>('/api/match/emotions'),
@@ -363,6 +391,9 @@ export const matchApi = {
 
   getTopics: () =>
     request<{ topics: Array<{ value: string; label: string; emoji: string }> }>('/api/match/topics'),
+
+  getStats: () =>
+    request<{ total_in_queue: number; by_mode: Record<string, number>; by_role: Record<string, number>; by_emotion_category: Record<string, number> }>('/api/match/stats'),
 }
 
 // ============ 聊天 API ============
