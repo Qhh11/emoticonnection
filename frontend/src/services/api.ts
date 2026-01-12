@@ -518,6 +518,22 @@ export const aiChatApi = {
       method: 'POST',
       body: JSON.stringify({ messages, user_id: userId }),
     }),
+
+  // Emotion Reports
+  getDailyReport: (userId: string, endDate?: string) => {
+    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
+    return request<EmotionReport>(`/api/ai-chat/reports/daily${query}`)
+  },
+
+  getWeeklyReport: (userId: string, endDate?: string) => {
+    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
+    return request<EmotionReport>(`/api/ai-chat/reports/weekly${query}`)
+  },
+
+  getMonthlyReport: (userId: string, endDate?: string) => {
+    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
+    return request<EmotionReport>(`/api/ai-chat/reports/monthly${query}`)
+  },
 }
 
 // VIP Context Emotion Analysis Response
@@ -527,6 +543,52 @@ export interface ContextEmotionAnalysis {
   key_emotions: { emotion: string; count: number }[]
   analysis_summary: string
   suggested_response?: string
+}
+
+// Emotion Report Types
+export interface EmotionTrendDataPoint {
+  date: string
+  avg_score: number
+  dominant_emotion: string
+}
+
+export interface EmotionTrend {
+  period: string
+  data_points: EmotionTrendDataPoint[]
+  trend_direction: 'improving' | 'declining' | 'stable'
+  volatility: number
+}
+
+export interface EmotionWordCloud {
+  words: Record<string, number>
+  top_emotions: string[]
+  total_count: number
+}
+
+export interface TriggerAnalysis {
+  trigger_type: string
+  frequency: number
+  associated_emotions: string[]
+  example_contexts: string[]
+  impact_score: number
+}
+
+export interface EmotionReport {
+  user_id: string
+  period_type: 'daily' | 'weekly' | 'monthly'
+  start_date: string
+  end_date: string
+  average_mood_score: number
+  mood_stability: number
+  total_interactions: number
+  emotion_distribution: Record<string, number>
+  emotion_trend: EmotionTrend
+  word_cloud: EmotionWordCloud
+  triggers: TriggerAnalysis[]
+  summary_text: string
+  key_insights: string[]
+  suggestions: string[]
+  trend_prediction: string
 }
 
 // ============ 社交 API ============

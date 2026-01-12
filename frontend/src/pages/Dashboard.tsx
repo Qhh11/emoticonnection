@@ -4,13 +4,14 @@ import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
+import EmotionReportModal from '../components/EmotionReportModal'
 import { Avatar3D } from '../config/avatars'
 import CommunityView from './community/CommunityView'
 import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
 
@@ -81,6 +82,12 @@ export default function Dashboard() {
   // Track if user is in a peer chat session (for VIP hint display)
   const [hasActiveSession, setHasActiveSession] = useState(false)
 
+  // Emotion Report Modal state
+  const [showEmotionReport, setShowEmotionReport] = useState(false)
+
+  // Weekly emotion report for Profile card preview
+  const [weeklyReport, setWeeklyReport] = useState<EmotionReport | null>(null)
+
   // Sync userAvatar when user data changes (e.g., after login loads user data)
   useEffect(() => {
     if (AuthUser?.user_id) {
@@ -144,6 +151,15 @@ export default function Dashboard() {
           }
         })
         .catch(err => console.error('Failed to fetch today check-in:', err))
+
+      // Load weekly emotion report for Profile card preview
+      aiChatApi.getWeeklyReport(user._id)
+        .then(rawData => {
+          // Handle double-serialized JSON from backend
+          const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
+          setWeeklyReport(data)
+        })
+        .catch(err => console.error('Failed to fetch weekly report:', err))
     }
   }, [user?._id])
 
@@ -320,6 +336,8 @@ export default function Dashboard() {
           onOpenSettings={handleOpenSettings}
           onViewFollowing={() => setFollowListType('following')}
           onViewFollowers={() => setFollowListType('followers')}
+          onOpenEmotionReport={() => setShowEmotionReport(true)}
+          weeklyReport={weeklyReport}
         />
       case 'diary':
         return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} avatar={selectedAvatar} />
@@ -383,6 +401,15 @@ export default function Dashboard() {
           activeTab={activeTab}
           onClick={handleAvatarClick}
           showVipHint={activeTab === 'soulsync' && hasActiveSession}
+        />
+      )}
+
+      {/* Emotion Report Modal */}
+      {user?._id && (
+        <EmotionReportModal
+          isOpen={showEmotionReport}
+          onClose={() => setShowEmotionReport(false)}
+          userId={user._id}
         />
       )}
 

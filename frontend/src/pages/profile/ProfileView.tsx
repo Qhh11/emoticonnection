@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Avatar3D } from '../../config/avatars'
-import { SocialStats, Post, User} from '../../services/api'
+import { SocialStats, Post, User, EmotionReport } from '../../services/api'
 
 interface AuthUser {
   user_id: string
@@ -129,9 +129,40 @@ interface ProfileViewProps {
   onOpenSettings?: () => void
   onViewFollowing?: () => void
   onViewFollowers?: () => void
+  onOpenEmotionReport?: () => void
+  weeklyReport?: EmotionReport | null
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers }: ProfileViewProps) {
+// Helper functions for emotion display
+const getMoodEmoji = (score: number): string => {
+  if (score >= 0.6) return '😊'
+  if (score >= 0.2) return '🙂'
+  if (score >= -0.2) return '😐'
+  if (score >= -0.6) return '😔'
+  return '😢'
+}
+
+const getMoodLabel = (score: number): string => {
+  if (score >= 0.6) return 'Great'
+  if (score >= 0.2) return 'Good'
+  if (score >= -0.2) return 'Okay'
+  if (score >= -0.6) return 'Low'
+  return 'Bad'
+}
+
+const getTrendIcon = (direction: string): string => {
+  if (direction === 'improving') return '📈'
+  if (direction === 'declining') return '📉'
+  return '➡️'
+}
+
+const getTrendLabel = (direction: string): string => {
+  if (direction === 'improving') return '+Up'
+  if (direction === 'declining') return '-Down'
+  return 'Stable'
+}
+
+export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
 
@@ -251,21 +282,75 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
       </header>
 
       <section className="grid lg:grid-cols-5 gap-8">
-        <div className="lg:col-span-3 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-8 flex flex-col justify-between h-[420px]">
+        <div className="lg:col-span-3 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-6 flex flex-col justify-between h-[420px]">
           <div className="flex justify-between items-center">
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Trend</h4>
-            <span className="text-[12px] font-bold text-black/20">7 Days</span>
+            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Emotion Insights</h4>
+            <span className="text-[12px] font-bold text-black/20">Weekly</span>
           </div>
-          <div className="flex-1 flex items-center justify-center relative px-4">
-            <svg className="w-full h-full opacity-60" viewBox="0 0 400 180">
-              <path d="M0,130 Q50,10 100,90 T200,70 T300,120 T400,50" fill="none" stroke="currentColor" className="text-accent transition-all duration-500" strokeWidth="3" strokeLinecap="round" />
-              <circle cx="100" cy="90" r="5" fill="currentColor" className="text-accent" />
-              <circle cx="300" cy="120" r="5" fill="white" stroke="currentColor" className="text-accent" strokeWidth="2" />
-            </svg>
+
+          {/* Quick Stats - Using real data from weeklyReport */}
+          <div className="flex justify-around">
+            <div className="text-center">
+              <span className="text-3xl">{getMoodEmoji(weeklyReport?.average_mood_score ?? 0)}</span>
+              <p className="text-lg font-black mt-1">{getMoodLabel(weeklyReport?.average_mood_score ?? 0)}</p>
+              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Mood</p>
+            </div>
+            <div className="text-center">
+              <span className="text-3xl">{getTrendIcon(weeklyReport?.emotion_trend?.trend_direction || 'stable')}</span>
+              <p className="text-lg font-black mt-1">{getTrendLabel(weeklyReport?.emotion_trend?.trend_direction || 'stable')}</p>
+              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Trend</p>
+            </div>
+            <div className="text-center">
+              <span className="text-3xl">🎯</span>
+              <p className="text-lg font-black mt-1">{Math.round((weeklyReport?.mood_stability ?? 1) * 100)}%</p>
+              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Stable</p>
+            </div>
+          </div>
+
+          {/* Simplified Bar Chart - Using real data */}
+          <div className="flex-1 flex items-end justify-between gap-2 px-4">
+            {weeklyReport?.emotion_trend?.data_points && weeklyReport.emotion_trend.data_points.length > 0 ? (
+              weeklyReport.emotion_trend.data_points.map((point, i) => {
+                // Normalize score from [-1, 1] to [20, 100] for bar height
+                const height = Math.max(20, ((point.avg_score + 1) / 2) * 100)
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div
+                      className="w-full rounded-t-lg bg-accent transition-all hover:opacity-80"
+                      style={{ height: `${height}%`, minHeight: '20px' }}
+                      title={`${point.dominant_emotion}: ${point.avg_score.toFixed(2)}`}
+                    />
+                  </div>
+                )
+              })
+            ) : (
+              // Placeholder bars when no data
+              ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((_, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full rounded-t-lg bg-gray-200 transition-all" style={{ height: '30%', minHeight: '20px' }} />
+                </div>
+              ))
+            )}
           </div>
           <div className="flex justify-between text-[12px] font-black uppercase tracking-widest text-gray-400 px-4">
             <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
           </div>
+
+          {/* View Full Report Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onOpenEmotionReport?.()
+            }}
+            className="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-600 transition-all flex items-center justify-center gap-2"
+          >
+            <span>View Full Report</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
 
         <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] flex flex-col shadow-sm relative">
