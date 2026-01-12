@@ -21,6 +21,23 @@ const MOOD_DATA = [
   { label: 'Envy', color: '#2BA8A4', text: '#ffffff' },
 ]
 
+// Emotion color mapping for bar chart (matches EmotionReportModal)
+const EMOTION_COLORS: Record<string, string> = {
+  'joy': '#F9D849',
+  'sadness': '#3266B1',
+  'anger': '#D32F2F',
+  'anxiety': '#E67E22',
+  'bored': '#4B4E91',
+  'fear': '#9381BA',
+  'disgust': '#66B04C',
+  'embarrassment': '#D278A3',
+  'envy': '#2BA8A4',
+}
+
+const getEmotionColor = (emotion: string): string => {
+  return EMOTION_COLORS[emotion.toLowerCase()] || '#808080'
+}
+
 export interface Theme {
   name: string
   color: string
@@ -307,30 +324,74 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
             </div>
           </div>
 
-          {/* Simplified Bar Chart - Using real data */}
+          {/* Simplified Bar Chart - 7 bars for Mon-Sun with real data */}
           <div className="flex-1 flex items-end justify-between gap-2 px-4">
-            {weeklyReport?.emotion_trend?.data_points && weeklyReport.emotion_trend.data_points.length > 0 ? (
-              weeklyReport.emotion_trend.data_points.map((point, i) => {
-                // Normalize score from [-1, 1] to [20, 100] for bar height
-                const height = Math.max(20, ((point.avg_score + 1) / 2) * 100)
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <div
-                      className="w-full rounded-t-lg bg-accent transition-all hover:opacity-80"
-                      style={{ height: `${height}%`, minHeight: '20px' }}
-                      title={`${point.dominant_emotion}: ${point.avg_score.toFixed(2)}`}
-                    />
-                  </div>
-                )
+            {(() => {
+              // Generate the 7 days of the current week (Monday to Sunday)
+              const today = new Date()
+              const dayOfWeek = today.getDay() // 0 = Sunday, 1 = Monday, ...
+              const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+
+              const weekDays: { date: Date; dateStr: string }[] = []
+              for (let i = 0; i < 7; i++) {
+                const d = new Date(today)
+                d.setDate(today.getDate() + mondayOffset + i)
+                weekDays.push({
+                  date: d,
+                  dateStr: d.toISOString().split('T')[0] // YYYY-MM-DD format
+                })
+              }
+
+              // Create a map of date -> data point from weeklyReport
+              const dataByDate: Record<string, { avg_score: number; dominant_emotion: string }> = {}
+              if (weeklyReport?.emotion_trend?.data_points) {
+                weeklyReport.emotion_trend.data_points.forEach(point => {
+                  // Normalize the date format (handle both YYYY-MM-DD and ISO formats)
+                  const pointDate = point.date.split('T')[0]
+                  dataByDate[pointDate] = point
+                })
+              }
+
+              const todayStr = today.toISOString().split('T')[0]
+
+              return weekDays.map((day, i) => {
+                const data = dataByDate[day.dateStr]
+                const isToday = day.dateStr === todayStr
+                const isFuture = day.date > today
+
+                if (data) {
+                  // Has data: show emotion color + height based on score
+                  const height = Math.max(20, ((data.avg_score + 1) / 2) * 100)
+                  const barColor = getEmotionColor(data.dominant_emotion)
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        className="w-full rounded-t-lg transition-all hover:opacity-80"
+                        style={{
+                          height: `${height}%`,
+                          minHeight: '20px',
+                          backgroundColor: barColor
+                        }}
+                        title={`${data.dominant_emotion}: ${data.avg_score.toFixed(2)}`}
+                      />
+                    </div>
+                  )
+                } else {
+                  // No data: show gray placeholder
+                  // Today without data = darker gray, past = medium gray, future = light gray
+                  const bgColor = isToday ? '#9CA3AF' : isFuture ? '#E5E7EB' : '#D1D5DB'
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        className="w-full rounded-t-lg transition-all"
+                        style={{ height: '30%', minHeight: '20px', backgroundColor: bgColor }}
+                        title={isToday ? 'Today (no data yet)' : isFuture ? 'Future' : 'No data'}
+                      />
+                    </div>
+                  )
+                }
               })
-            ) : (
-              // Placeholder bars when no data
-              ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((_, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full rounded-t-lg bg-gray-200 transition-all" style={{ height: '30%', minHeight: '20px' }} />
-                </div>
-              ))
-            )}
+            })()}
           </div>
           <div className="flex justify-between text-[12px] font-black uppercase tracking-widest text-gray-400 px-4">
             <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>

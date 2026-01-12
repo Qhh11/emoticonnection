@@ -426,15 +426,24 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   }
 
   const getEmotionColor = (emotion: string): string => {
-    const emotionColors: Record<string, string> = {
-      'Joy': '#F9D849',
-      'Sad': '#3266B1',
-      'Angry': '#D32F2F',
-      'Anxious': '#E67E22',
-      'Bored': '#4B4E91',
-      'Neutral': '#808080'
+    if (!emotion) return '#808080'
+    const e = emotion.toLowerCase()
+    // 情绪名称映射到 MOOD_DATA 的 label
+    const emotionToLabel: Record<string, string> = {
+      'joy': 'Joy', 'happy': 'Joy',
+      'sad': 'Sad', 'sadness': 'Sad',
+      'angry': 'Angry', 'anger': 'Angry',
+      'anxious': 'Anxious', 'anxiety': 'Anxious',
+      'bored': 'Bored',
+      'fear': 'Fear',
+      'disgust': 'Disgust',
+      'awkward': 'Awkward', 'embarrassment': 'Awkward',
+      'envy': 'Envy',
+      'neutral': 'Bored' // 默认用 Bored 的颜色
     }
-    return emotionColors[emotion] || '#808080'
+    const label = emotionToLabel[e]
+    const mood = MOOD_DATA.find(m => m.label === label)
+    return mood?.color || '#808080'
   }
 
   const currentSession = sessions.find(s => s.id === currentSessionId)
@@ -718,7 +727,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
                           {m.text}
                         </div>
                         <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-black/5 text-[12px] font-black uppercase tracking-widest text-gray-400 ${m.role === 'user' ? 'float-right' : 'float-left'}`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: m.emotion_color }}></span>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getEmotionColor(m.emotion) }}></span>
                           <span>{m.emotion}</span>
                         </div>
                       </div>

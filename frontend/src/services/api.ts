@@ -488,7 +488,7 @@ export const aiChatApi = {
   createSession: (userId: string) =>
     request<AISession>('/api/ai-chat/sessions', {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify({ user_id: userId, message: '', history: [] }),
     }),
 
   getSessionMessages: (sessionId: string) =>

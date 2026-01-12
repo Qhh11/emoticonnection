@@ -39,7 +39,16 @@ export default function Dashboard() {
   const [points, setPoints] = useState(0)
   const [level, setLevel] = useState(1)
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([])
-  const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[THEMES.length - 1])
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('currentTheme')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // 找到匹配的主题，确保引用完整的 Theme 对象
+      const found = THEMES.find(t => t.name === parsed.name)
+      return found || THEMES[THEMES.length - 1]
+    }
+    return THEMES[THEMES.length - 1]
+  })
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [userPosts, setUserPosts] = useState<Post[]>([])
 
@@ -107,6 +116,8 @@ export default function Dashboard() {
     root.style.setProperty('--accent-color', currentTheme.color)
     root.style.setProperty('--accent-soft', currentTheme.soft)
     root.style.setProperty('--accent-text', currentTheme.text)
+    // 保存主题到 localStorage
+    localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
   // Fetch social stats, points, and diaries when user is available
@@ -190,15 +201,32 @@ export default function Dashboard() {
     }, 1000)
   }
 
-  const addDiaryEntry = (entry: {mood: string, color: string, text: string}) => {
+  const addDiaryEntry = async (entry: {mood: string, color: string, text: string}) => {
     const newEntry = {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
       ...entry
     }
-    // Add to local state
-    // Note: AI-generated diaries are automatically saved by the generateDiary API endpoint
-    // Manual diaries are stored locally (backend POST /diaries endpoint would be needed for persistence)
-    setDiaryEntries(prev => [newEntry, ...prev])
+
+    // Save to backend if user is logged in
+    if (user?._id) {
+      try {
+        await aiChatApi.createDiary({
+          user_id: user._id,
+          title: `Journal - ${newEntry.date}`,
+          content: entry.text,
+          mood: entry.mood
+        })
+        // Refresh diaries from backend to get the saved entry with ID
+        refreshDiaries()
+      } catch (err) {
+        console.error('Failed to save diary:', err)
+        // Fall back to local state if save fails
+        setDiaryEntries(prev => [newEntry, ...prev])
+      }
+    } else {
+      // No user logged in, only store locally (will be lost on refresh)
+      setDiaryEntries(prev => [newEntry, ...prev])
+    }
   }
 
   const refreshDiaries = () => {

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from app.modules.ai.core.ai_chat import AIChatService
 from app.modules.ai.repository.ai_repository import AIChatRepository
+from app.modules.ai.repository.diary_repository import DiaryRepository
 from config.mongodb_config import get_database
 import importlib.util
 import sys
@@ -16,6 +17,11 @@ def get_ai_repo() -> AIChatRepository:
     """Dependency to get AIChatRepository instance"""
     db = get_database()
     return AIChatRepository(db)
+
+def get_diary_repo() -> DiaryRepository:
+    """Dependency to get DiaryRepository instance"""
+    db = get_database()
+    return DiaryRepository(db)
 
 # 定义请求和响应的数据模型
 
@@ -209,3 +215,99 @@ async def get_monthly_report(user_id: str, end_date: Optional[str] = None):
         return emotion_analytics.EmotionAnalytics.to_json(report)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate monthly report: {str(e)}")
+
+
+# ============================================================================
+# DIARY ENDPOINTS
+# ============================================================================
+
+class DiaryRequest(BaseModel):
+    """日记创建请求模型"""
+    user_id: str
+    session_id: Optional[str] = None
+    title: str
+    content: str
+    mood: str = "Neutral"
+
+class GenerateDiaryRequest(BaseModel):
+    """AI 生成日记请求模型"""
+    user_id: str
+    session_id: str
+
+@router.get("/diaries")
+async def get_user_diaries(user_id: str, repo: DiaryRepository = Depends(get_diary_repo)):
+    """获取用户的所有日记"""
+    try:
+        diaries = await repo.get_user_diaries(user_id)
+        return diaries
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get diaries: {str(e)}")
+
+@router.get("/diaries/{diary_id}")
+async def get_diary(diary_id: str, repo: DiaryRepository = Depends(get_diary_repo)):
+    """获取单个日记"""
+    try:
+        diary = await repo.get_diary(diary_id)
+        if not diary:
+            raise HTTPException(status_code=404, detail="Diary not found")
+        return diary
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get diary: {str(e)}")
+
+@router.post("/diaries")
+async def create_diary(request: DiaryRequest, repo: DiaryRepository = Depends(get_diary_repo)):
+    """创建新日记"""
+    try:
+        diary = await repo.create_diary(
+            user_id=request.user_id,
+            session_id=request.session_id or "",
+            title=request.title,
+            content=request.content,
+            mood=request.mood
+        )
+        return diary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create diary: {str(e)}")
+
+@router.post("/diaries/generate")
+async def generate_diary(
+    request: GenerateDiaryRequest,
+    ai_repo: AIChatRepository = Depends(get_ai_repo),
+    diary_repo: DiaryRepository = Depends(get_diary_repo)
+):
+    """基于聊天历史 AI 生成日记"""
+    try:
+        # 1. 获取会话消息历史
+        messages = await ai_repo.get_session_messages(request.session_id)
+
+        if not messages:
+            raise HTTPException(status_code=400, detail="No messages found in session")
+
+        # 2. 转换为 AI 服务需要的格式
+        history = []
+        for msg in messages:
+            role = "user" if msg.get("sender_type") == "user" else "model"
+            history.append({
+                "role": role,
+                "parts": [msg.get("content", "")]
+            })
+
+        # 3. 调用 AI 生成日记
+        diary_data = await ai_service.generate_diary_summary(history)
+
+        # 4. 保存到数据库
+        diary = await diary_repo.create_diary(
+            user_id=request.user_id,
+            session_id=request.session_id,
+            title=diary_data.get("title", "Untitled"),
+            content=diary_data.get("content", ""),
+            mood=diary_data.get("mood", "Neutral")
+        )
+
+        return diary
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate diary: {str(e)}")
