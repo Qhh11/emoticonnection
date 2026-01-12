@@ -39,7 +39,16 @@ export default function Dashboard() {
   const [points, setPoints] = useState(0)
   const [level, setLevel] = useState(1)
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([])
-  const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[THEMES.length - 1])
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('currentTheme')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // 找到匹配的主题，确保引用完整的 Theme 对象
+      const found = THEMES.find(t => t.name === parsed.name)
+      return found || THEMES[THEMES.length - 1]
+    }
+    return THEMES[THEMES.length - 1]
+  })
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [userPosts, setUserPosts] = useState<Post[]>([])
 
@@ -107,6 +116,8 @@ export default function Dashboard() {
     root.style.setProperty('--accent-color', currentTheme.color)
     root.style.setProperty('--accent-soft', currentTheme.soft)
     root.style.setProperty('--accent-text', currentTheme.text)
+    // 保存主题到 localStorage
+    localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
   // Fetch social stats, points, and diaries when user is available
