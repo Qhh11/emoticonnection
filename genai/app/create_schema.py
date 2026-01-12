@@ -92,6 +92,12 @@ def create_schema():
                 # userId: User ID, not vectorized, used for exact filtering
                 wc.Property(name="userId", data_type=wc.DataType.TEXT, skip_vectorization=True),
                 
+                # sessionId: AI chat session ID, used for grouping conversations
+                wc.Property(name="sessionId", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # isNewSession: Whether this is the first message in a new session
+                wc.Property(name="isNewSession", data_type=wc.DataType.BOOL, skip_vectorization=True),
+                
                 # timestamp: Date type, used for time range filtering
                 wc.Property(name="timestamp", data_type=wc.DataType.DATE, skip_vectorization=True),
                 

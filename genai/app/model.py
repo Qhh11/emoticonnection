@@ -147,12 +147,14 @@ class AIConversationRecord:
         self.timestamp = timestamp
         self.ai_response = ai_response
         self.confidence_score = confidence_score
+        self.conversation_id = f"conv_{int(timestamp.timestamp())}_{user_id}"
 
     def to_weaviate_dict(self) -> Dict[str, Any]:
         """Converts the class instance into a dictionary suitable for Weaviate ingestion."""
         ts_str = self.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
         return {
             "userId": self.user_id,
+            "conversationId": self.conversation_id,
             "timestamp": ts_str,
             "aiResponse": self.ai_response,
             "confidenceScore": self.confidence_score,

@@ -119,7 +119,7 @@ class AIChatService:
             base_url="https://api.deepseek.com"
         )
 
-    async def chat_with_ai(self, message: str, history: list, user_id: str = None):
+    async def chat_with_ai(self, message: str, history: list, user_id: str = None, session_id: str = None):
         """
         发送消息给 AI 并获取回复，同时保存到 Weaviate。
         
@@ -127,6 +127,7 @@ class AIChatService:
             message: 用户发送的消息文本
             history: 聊天历史列表，包含 'role' ('user' 或 'model') 和 'parts' (消息内容列表)
             user_id: 用户ID，用于保存到 Weaviate
+            session_id: 会话ID，用于关联同一会话的消息
             
         Returns:
             str: AI 的回复文本
@@ -138,11 +139,14 @@ class AIChatService:
         
         # 保存对话到 Weaviate
         if self.save_to_weaviate and user_id:
-            await self._save_conversation_to_weaviate(user_id, message, response_text)
+            # 判断是否为新会话 (history 为空或只有当前消息)
+            is_new_session = len(history) == 0
+            await self._save_conversation_to_weaviate(user_id, message, response_text, session_id, is_new_session)
         
         return response_text
     
-    async def _save_conversation_to_weaviate(self, user_id: str, user_query: str, ai_response: str):
+    async def _save_conversation_to_weaviate(self, user_id: str, user_query: str, ai_response: str, 
+                                               session_id: str = None, is_new_session: bool = False):
         """
         保存 AI 对话记录到 Weaviate
         
@@ -150,6 +154,8 @@ class AIChatService:
             user_id: 用户ID
             user_query: 用户的消息
             ai_response: AI 的回复
+            session_id: 会话ID
+            is_new_session: 是否为新会话的第一条消息
         """
         if not self.weaviate_manager or not self.weaviate_manager.client:
             print("⚠️  Weaviate not available, skipping conversation save.")
@@ -161,6 +167,8 @@ class AIChatService:
             # 构造 AIConversationRecord 格式的数据
             conversation_data = {
                 "userId": user_id,
+                "sessionId": session_id or "",
+                "isNewSession": is_new_session,
                 "timestamp": timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "userQuery": user_query,
                 "aiResponse": ai_response,
@@ -170,7 +178,7 @@ class AIChatService:
             # 写入 Weaviate (使用 AIConversations 集合)
             success = self.weaviate_manager.write_data("AIConversations", [conversation_data])
             if success:
-                print(f"✅ AI conversation saved to Weaviate for user {user_id}")
+                print(f"✅ AI conversation saved to Weaviate for user {user_id}, session {session_id}")
             else:
                 print(f"⚠️  Failed to save AI conversation to Weaviate")
         except Exception as e:

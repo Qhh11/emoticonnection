@@ -77,8 +77,13 @@ async def chat(request: ChatRequest, repo: AIChatRepository = Depends(get_ai_rep
             {"role": msg.role, "parts": msg.parts} for msg in request.history
         ]
         
-        # 调用 AI 服务获取回复 (传入 user_id 以保存到 Weaviate)
-        response_text = await ai_service.chat_with_ai(request.message, history_data, user_id=request.user_id)
+        # 调用 AI 服务获取回复 (传入 user_id 和 session_id 以保存到 Weaviate)
+        response_text = await ai_service.chat_with_ai(
+            request.message, 
+            history_data, 
+            user_id=request.user_id,
+            session_id=session_id
+        )
         
         # 3. 保存 AI 回复
         # AI 的 sender_id 可以设为 "ai_assistant" 或固定值
