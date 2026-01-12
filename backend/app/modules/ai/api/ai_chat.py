@@ -166,8 +166,8 @@ async def get_daily_report(user_id: str, end_date: Optional[str] = None):
             user_id=user_id,
             end_date=end_date
         )
-        # Convert to JSON-serializable format
-        return emotion_analytics.EmotionAnalytics(None, None).to_json(report)
+        # Convert to JSON-serializable format using static method
+        return emotion_analytics.EmotionAnalytics.to_json(report)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate daily report: {str(e)}")
 
@@ -180,8 +180,8 @@ async def get_weekly_report(user_id: str, end_date: Optional[str] = None):
             user_id=user_id,
             end_date=end_date
         )
-        # Convert to JSON-serializable format
-        return emotion_analytics.EmotionAnalytics(None, None).to_json(report)
+        # Convert to JSON-serializable format using static method
+        return emotion_analytics.EmotionAnalytics.to_json(report)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate weekly report: {str(e)}")
 
@@ -194,7 +194,7 @@ async def get_monthly_report(user_id: str, end_date: Optional[str] = None):
             user_id=user_id,
             end_date=end_date
         )
-        # Convert to JSON-serializable format
-        return emotion_analytics.EmotionAnalytics(None, None).to_json(report)
+        # Convert to JSON-serializable format using static method
+        return emotion_analytics.EmotionAnalytics.to_json(report)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate monthly report: {str(e)}")
