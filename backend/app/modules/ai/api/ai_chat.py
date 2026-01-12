@@ -122,6 +122,21 @@ async def get_session_history(session_id: str, repo: AIChatRepository = Depends(
     return await repo.get_session_messages(session_id)
 
 
+@router.get("/sessions/{session_id}/summary")
+async def get_session_summary(session_id: str):
+    """
+    获取指定会话的对话总结
+    
+    从 Weaviate 读取该 session_id 下的所有 AIConversations，
+    然后使用 LLM 生成对话总结。
+    """
+    try:
+        summary = await ai_service.generate_session_summary(session_id)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate session summary: {str(e)}")
+
+
 # ============================================================================
 # EMOTION REPORT ENDPOINTS
 # ============================================================================

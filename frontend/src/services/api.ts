@@ -494,6 +494,9 @@ export const aiChatApi = {
   getSessionMessages: (sessionId: string) =>
     request<AIMessage[]>(`/api/ai-chat/sessions/${sessionId}/messages`),
 
+  getSessionSummary: (sessionId: string) =>
+    request<SessionSummary>(`/api/ai-chat/sessions/${sessionId}/summary`),
+
   generateDiary: (sessionId: string, userId: string) =>
     request<Diary>('/api/ai-chat/diaries/generate', {
       method: 'POST',
@@ -534,6 +537,18 @@ export const aiChatApi = {
     const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
     return request<EmotionReport>(`/api/ai-chat/reports/monthly${query}`)
   },
+}
+
+// Session Summary Response
+export interface SessionSummary {
+  session_id: string
+  message_count: number
+  summary: string
+  key_topics: string[]
+  emotional_journey: string
+  dominant_emotion: 'Bored' | 'Fear' | 'Joy' | 'Sad' | 'Disgust' | 'Anxious' | 'Angry' | 'Awkward' | 'Envy'
+  user_needs?: string
+  suggestions: string[]
 }
 
 // VIP Context Emotion Analysis Response

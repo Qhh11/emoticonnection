@@ -134,7 +134,27 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
     try {
       if (userId && sessionId) {
         try {
-          await aiChatApi.generateDiary(sessionId, userId)
+          // 调用 session summary API 生成总结
+          const summaryData = await aiChatApi.getSessionSummary(sessionId)
+          
+          // 使用总结内容创建日记
+          const diaryContent = [
+            `## 对话总结\n${summaryData.summary}`,
+            summaryData.key_topics.length > 0 ? `\n## 关键话题\n${summaryData.key_topics.map(t => `- ${t}`).join('\n')}` : '',
+            summaryData.emotional_journey ? `\n## 情绪历程\n${summaryData.emotional_journey}` : '',
+            summaryData.user_needs ? `\n## 核心需求\n${summaryData.user_needs}` : '',
+            summaryData.suggestions.length > 0 ? `\n## 建议\n${summaryData.suggestions.map(s => `- ${s}`).join('\n')}` : ''
+          ].filter(Boolean).join('\n')
+          
+          // 创建日记
+          await aiChatApi.createDiary({
+            user_id: userId,
+            session_id: sessionId,
+            title: summaryData.key_topics[0] || '对话记录',
+            content: diaryContent,
+            mood: summaryData.dominant_emotion || 'Joy'
+          })
+          
           if (onRefreshDiaries) {
             onRefreshDiaries()
           }
@@ -142,7 +162,7 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
           setTimeout(() => setSaveSuccess(false), 3000)
           return
         } catch (err) {
-          console.error('Failed to generate diary:', err)
+          console.error('Failed to generate summary:', err)
         }
       }
 
