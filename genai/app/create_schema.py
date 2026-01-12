@@ -95,6 +95,9 @@ def create_schema():
                 # timestamp: Date type, used for time range filtering
                 wc.Property(name="timestamp", data_type=wc.DataType.DATE, skip_vectorization=True),
                 
+                # userQuery: User's message/query to AI
+                wc.Property(name="userQuery", data_type=wc.DataType.TEXT),
+                
                 # aiResponse: AI-generated response content
                 wc.Property(name="aiResponse", data_type=wc.DataType.TEXT),
                 

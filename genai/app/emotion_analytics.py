@@ -239,7 +239,8 @@ class EmotionAnalytics:
         end_date: str
     ) -> List[Dict[str, Any]]:
         """
-        Fetch user conversations within the specified date range.
+        Fetch user conversations within the specified date range from both
+        Conversations and AIConversations collections.
         
         Args:
             user_id: User identifier
@@ -247,14 +248,17 @@ class EmotionAnalytics:
             end_date: ISO format end date
             
         Returns:
-            List of conversation records
+            List of conversation records (merged and sorted by timestamp)
         """
         if not self.weaviate_manager or not self.weaviate_manager.client:
             raise RuntimeError("Weaviate client not initialized")
             
         if not self.weaviate_manager.client.is_connected():
             self.weaviate_manager.client.connect()
-            
+        
+        all_conversations = []
+        
+        # 1. 从 Conversations 集合获取对话 (用户之间的对话)
         try:
             collection = self.weaviate_manager.client.collections.get("Conversations")
             
@@ -269,15 +273,66 @@ class EmotionAnalytics:
                 sort=wq.Sort.by_property("timestamp", ascending=True)
             )
             
-            conversations = []
             for obj in response.objects:
-                conversations.append(obj.properties)
-                
-            return conversations
+                conv = obj.properties.copy()
+                conv['source'] = 'peer_chat'  # 标记来源
+                all_conversations.append(conv)
             
+            logger.info(f"Fetched {len(response.objects)} records from Conversations")
+                
         except Exception as e:
-            logger.error(f"Error fetching conversations: {e}")
-            raise
+            logger.warning(f"Error fetching from Conversations: {e}")
+        
+        # 2. 从 AIConversations 集合获取对话 (用户与AI的对话)
+        try:
+            ai_collection = self.weaviate_manager.client.collections.get("AIConversations")
+            
+            ai_response = ai_collection.query.fetch_objects(
+                filters=(
+                    Filter.by_property("userId").equal(user_id) &
+                    Filter.by_property("timestamp").greater_or_equal(start_date) &
+                    Filter.by_property("timestamp").less_or_equal(end_date)
+                ),
+                limit=1000,
+                sort=wq.Sort.by_property("timestamp", ascending=True)
+            )
+            
+            for obj in ai_response.objects:
+                # 转换 AIConversations 格式为统一格式
+                props = obj.properties
+                conv = {
+                    'timestamp': props.get('timestamp', ''),
+                    'userQuery': props.get('userQuery', ''),
+                    'llmResponse': props.get('aiResponse', ''),
+                    'userId1': user_id,
+                    'userId2': 'ai_assistant',
+                    'source': 'ai_chat'  # 标记来源
+                }
+                all_conversations.append(conv)
+            
+            logger.info(f"Fetched {len(ai_response.objects)} records from AIConversations")
+                
+        except Exception as e:
+            logger.warning(f"Error fetching from AIConversations: {e}")
+        
+        # 3. 标准化时间戳并按时间排序
+        def normalize_timestamp(ts):
+            """将时间戳转换为字符串以便排序"""
+            if ts is None:
+                return ''
+            if isinstance(ts, datetime):
+                return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+            return str(ts)
+        
+        # 标准化所有时间戳
+        for conv in all_conversations:
+            conv['timestamp'] = normalize_timestamp(conv.get('timestamp'))
+        
+        # 按时间戳排序
+        all_conversations.sort(key=lambda x: x.get('timestamp', ''))
+        
+        logger.info(f"Total conversations fetched: {len(all_conversations)}")
+        return all_conversations
 
     def analyze_emotions_from_text(self, conversations: List[Dict]) -> List[EmotionDataPoint]:
         """

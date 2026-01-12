@@ -35,6 +35,12 @@ class ChatRequest(BaseModel):
     message: str # 当前用户发送的消息
     history: Optional[List[ChatMessage]] = [] # 历史聊天记录
 
+class CreateSessionRequest(BaseModel):
+    """
+    创建会话请求模型
+    """
+    user_id: str
+
 class ChatResponse(BaseModel):
     """
     聊天响应模型
@@ -71,8 +77,8 @@ async def chat(request: ChatRequest, repo: AIChatRepository = Depends(get_ai_rep
             {"role": msg.role, "parts": msg.parts} for msg in request.history
         ]
         
-        # 调用 AI 服务获取回复
-        response_text = await ai_service.chat_with_ai(request.message, history_data)
+        # 调用 AI 服务获取回复 (传入 user_id 以保存到 Weaviate)
+        response_text = await ai_service.chat_with_ai(request.message, history_data, user_id=request.user_id)
         
         # 3. 保存 AI 回复
         # AI 的 sender_id 可以设为 "ai_assistant" 或固定值
@@ -95,7 +101,7 @@ async def get_user_sessions(user_id: str, repo: AIChatRepository = Depends(get_a
     return await repo.get_user_sessions(user_id)
 
 @router.post("/sessions", response_model=dict)
-async def create_new_session(request: ChatRequest, repo: AIChatRepository = Depends(get_ai_repo)):
+async def create_new_session(request: CreateSessionRequest, repo: AIChatRepository = Depends(get_ai_repo)):
     """Force create a new AI chat session"""
     return await repo.create_session(request.user_id)
 

@@ -1,25 +1,76 @@
 import os
 import json
+import importlib.util
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any
+from pathlib import Path
 import google.generativeai as genai
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _load_weaviate_manager():
+    """动态加载 WeaviateManager"""
+    try:
+        # 尝试多种路径查找 genai/app
+        current_file = Path(__file__).resolve()
+        
+        # 方法1: 从 backend/app/modules/ai/core 向上走 5 层到项目根目录
+        project_root = current_file.parents[5]  # backend 的父目录是 emoticonnection
+        genai_app_path = project_root / "genai" / "app"
+        
+        # 方法2: 如果方法1失败，尝试 WSL 路径
+        if not genai_app_path.exists():
+            wsl_path = Path("/mnt/c/Users/10857/Desktop/emoticonnection/genai/app")
+            if wsl_path.exists():
+                genai_app_path = wsl_path
+        
+        if not genai_app_path.exists():
+            print(f"⚠️  genai/app path not found: {genai_app_path}")
+            return None
+        
+        # 加载 .env 文件
+        env_path = genai_app_path / ".env"
+        if env_path.exists():
+            from dotenv import load_dotenv
+            load_dotenv(env_path)
+        
+        # 导入 weaviate_client
+        weaviate_spec = importlib.util.spec_from_file_location(
+            "weaviate_client", genai_app_path / "weaviate_client.py"
+        )
+        weaviate_module = importlib.util.module_from_spec(weaviate_spec)
+        weaviate_spec.loader.exec_module(weaviate_module)
+        return weaviate_module.WeaviateManager()
+    except Exception as e:
+        print(f"⚠️  Failed to load WeaviateManager: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 class AIChatService:
     """
     封装了 Gemini 和 DeepSeek API，支持切换 LLM provider
     """
-    def __init__(self, llm_provider: str = 'deepseek'):
+    def __init__(self, llm_provider: str = 'deepseek', save_to_weaviate: bool = True):
         """
         初始化 AI 聊天服务
         
         Args:
             llm_provider: 使用的 LLM 提供商 - 'gemini' 或 'deepseek' (默认: 'deepseek')
+            save_to_weaviate: 是否保存对话到 Weaviate (默认: True)
         """
         self.llm_provider = llm_provider.lower()
         self.model = None
         self.deepseek_client = None
+        self.save_to_weaviate = save_to_weaviate
+        self.weaviate_manager = None
+        
+        if self.save_to_weaviate:
+            self.weaviate_manager = _load_weaviate_manager()
         
         # 设定 AI 为一个温柔、理解和富有同理心的陪伴者
         self.system_instruction = """
@@ -68,21 +119,62 @@ class AIChatService:
             base_url="https://api.deepseek.com"
         )
 
-    async def chat_with_ai(self, message: str, history: list):
+    async def chat_with_ai(self, message: str, history: list, user_id: str = None):
         """
-        发送消息给 AI 并获取回复。
+        发送消息给 AI 并获取回复，同时保存到 Weaviate。
         
         Args:
             message: 用户发送的消息文本
             history: 聊天历史列表，包含 'role' ('user' 或 'model') 和 'parts' (消息内容列表)
+            user_id: 用户ID，用于保存到 Weaviate
             
         Returns:
             str: AI 的回复文本
         """
         if self.llm_provider == 'deepseek':
-            return await self._chat_with_deepseek(message, history)
+            response_text = await self._chat_with_deepseek(message, history)
         else:
-            return await self._chat_with_gemini(message, history)
+            response_text = await self._chat_with_gemini(message, history)
+        
+        # 保存对话到 Weaviate
+        if self.save_to_weaviate and user_id:
+            await self._save_conversation_to_weaviate(user_id, message, response_text)
+        
+        return response_text
+    
+    async def _save_conversation_to_weaviate(self, user_id: str, user_query: str, ai_response: str):
+        """
+        保存 AI 对话记录到 Weaviate
+        
+        Args:
+            user_id: 用户ID
+            user_query: 用户的消息
+            ai_response: AI 的回复
+        """
+        if not self.weaviate_manager or not self.weaviate_manager.client:
+            print("⚠️  Weaviate not available, skipping conversation save.")
+            return
+        
+        try:
+            timestamp = datetime.now(timezone.utc)
+            
+            # 构造 AIConversationRecord 格式的数据
+            conversation_data = {
+                "userId": user_id,
+                "timestamp": timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "userQuery": user_query,
+                "aiResponse": ai_response,
+                "confidenceScore": 1.0,  # 默认置信度
+            }
+            
+            # 写入 Weaviate (使用 AIConversations 集合)
+            success = self.weaviate_manager.write_data("AIConversations", [conversation_data])
+            if success:
+                print(f"✅ AI conversation saved to Weaviate for user {user_id}")
+            else:
+                print(f"⚠️  Failed to save AI conversation to Weaviate")
+        except Exception as e:
+            print(f"⚠️  Error saving conversation to Weaviate: {e}")
     
     async def _chat_with_gemini(self, message: str, history: list):
         """使用 Gemini 进行聊天"""
