@@ -190,15 +190,32 @@ export default function Dashboard() {
     }, 1000)
   }
 
-  const addDiaryEntry = (entry: {mood: string, color: string, text: string}) => {
+  const addDiaryEntry = async (entry: {mood: string, color: string, text: string}) => {
     const newEntry = {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
       ...entry
     }
-    // Add to local state
-    // Note: AI-generated diaries are automatically saved by the generateDiary API endpoint
-    // Manual diaries are stored locally (backend POST /diaries endpoint would be needed for persistence)
-    setDiaryEntries(prev => [newEntry, ...prev])
+
+    // Save to backend if user is logged in
+    if (user?._id) {
+      try {
+        await aiChatApi.createDiary({
+          user_id: user._id,
+          title: `Journal - ${newEntry.date}`,
+          content: entry.text,
+          mood: entry.mood
+        })
+        // Refresh diaries from backend to get the saved entry with ID
+        refreshDiaries()
+      } catch (err) {
+        console.error('Failed to save diary:', err)
+        // Fall back to local state if save fails
+        setDiaryEntries(prev => [newEntry, ...prev])
+      }
+    } else {
+      // No user logged in, only store locally (will be lost on refresh)
+      setDiaryEntries(prev => [newEntry, ...prev])
+    }
   }
 
   const refreshDiaries = () => {

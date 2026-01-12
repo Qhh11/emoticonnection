@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { aiChatApi } from '../../services/api'
 import { Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
@@ -61,6 +61,16 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isLoading])
 
   // Create session on mount
   useEffect(() => {
@@ -309,7 +319,7 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
@@ -334,10 +344,11 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-8 border-t border-black/5">
+      {/* Input - Fixed at bottom, never shrinks */}
+      <div className="flex-shrink-0 p-6 border-t border-black/5 bg-white">
         <div className="flex items-center space-x-4">
           <input
             type="text"
@@ -462,7 +473,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
         </div>
       </div>
       ) : (
-        <div className="h-[580px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
+        <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
           <ChatAIView onSaveToDiary={onAddEntry} userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} embedded />
         </div>
       )}
