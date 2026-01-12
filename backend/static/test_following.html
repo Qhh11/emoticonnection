@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Following System</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Following System Test Page</h1>
+
+    <div class="test-section">
+        <h2>1. Check Authentication</h2>
+        <p>Current User: <strong id="authUser">Not logged in</strong></p>
+        <p>User ID: <strong id="authUserId">N/A</strong></p>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Get Contacts (Following Users)</h2>
+        <button onclick="getContacts()">Load Contacts</button>
+        <div id="contactsResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Get All Users (for debugging)</h2>
+        <button onclick="getAllUsers()">Load All Users</button>
+        <div id="usersResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Get Following Stats</h2>
+        <button onclick="getStats()">Load Stats</button>
+        <div id="statsResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Debug Info</h2>
+        <button onclick="clearCache()">Clear Browser Cache</button>
+        <button onclick="window.location.reload(true)">Hard Refresh</button>
+        <div id="debugInfo"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        const currentUserId = localStorage.getItem('chat_user_id');
+        const currentUsername = localStorage.getItem('chat_username');
+
+        // Check auth
+        if (!currentUserId) {
+            document.getElementById('authUser').innerHTML = '<span class="error">NOT LOGGED IN</span>';
+            document.getElementById('authUserId').innerHTML = '<span class="error">Please login first</span>';
+        } else {
+            document.getElementById('authUser').textContent = currentUsername || 'Unknown';
+            document.getElementById('authUserId').textContent = currentUserId;
+        }
+
+        async function getContacts() {
+            const resultDiv = document.getElementById('contactsResult');
+            resultDiv.innerHTML = '<p>Loading...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/social/contacts/${currentUserId}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Loaded ${data.length} contacts</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ Error: ${JSON.stringify(data)}</p>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<p class="error">❌ Network error: ${e.message}</p>`;
+            }
+        }
+
+        async function getAllUsers() {
+            const resultDiv = document.getElementById('usersResult');
+            resultDiv.innerHTML = '<p>Loading...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/users`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Loaded ${data.length} users</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ Error: ${JSON.stringify(data)}</p>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<p class="error">❌ Network error: ${e.message}</p>`;
+            }
+        }
+
+        async function getStats() {
+            const resultDiv = document.getElementById('statsResult');
+            resultDiv.innerHTML = '<p>Loading...</p>';
+
+            try {
+                const response = await fetch(`${API_BASE}/social/stats/${currentUserId}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ Stats loaded</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ Error: ${JSON.stringify(data)}</p>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<p class="error">❌ Network error: ${e.message}</p>`;
+            }
+        }
+
+        function clearCache() {
+            if (confirm('This will log you out. Continue?')) {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Show debug info
+        document.getElementById('debugInfo').innerHTML = `
+            <h3>LocalStorage:</h3>
+            <pre>${JSON.stringify({
+                chat_user_id: localStorage.getItem('chat_user_id'),
+                chat_username: localStorage.getItem('chat_username'),
+                chat_nickname: localStorage.getItem('chat_nickname')
+            }, null, 2)}</pre>
+        `;
+    </script>
+</body>
+</html>

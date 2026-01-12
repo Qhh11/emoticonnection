@@ -75,6 +75,12 @@ export default function Dashboard() {
   // Follow list modal state
   const [followListType, setFollowListType] = useState<'following' | 'followers' | null>(null)
 
+  // SoulSync emotion analysis state (triggered by Avatar click)
+  const [showEmotionAnalysis, setShowEmotionAnalysis] = useState(false)
+
+  // Track if user is in a peer chat session (for VIP hint display)
+  const [hasActiveSession, setHasActiveSession] = useState(false)
+
   // Sync userAvatar when user data changes (e.g., after login loads user data)
   useEffect(() => {
     if (AuthUser?.user_id) {
@@ -239,6 +245,13 @@ export default function Dashboard() {
     localStorage.removeItem('selectedAvatar')
   }
 
+  // Handle Avatar click based on current tab
+  const handleAvatarClick = () => {
+    if (activeTab === 'soulsync') {
+      setShowEmotionAnalysis(true)
+    }
+  }
+
   const handleOpenSettings = () => {
     console.log('Opening settings for user:', user)
     setSettingsNickname(user?.nickname || user?.username || '')
@@ -309,17 +322,11 @@ export default function Dashboard() {
           onViewFollowers={() => setFollowListType('followers')}
         />
       case 'diary':
-        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} />
+        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} avatar={selectedAvatar} />
       case 'community':
-<<<<<<< HEAD
-        return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} />
+        return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
       case 'soulsync':
-        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} />
-=======
-        return <CommunityView onInteract={triggerCheckIn} userId={user?.user_id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
-      case 'soulsync':
-        return <SoulSyncView onInteract={triggerCheckIn} userId={user?.user_id} onViewProfile={setViewingUserId} />
->>>>>>> df67ae8 (feat: add other users' profile view)
+        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} onViewProfile={setViewingUserId} avatar={selectedAvatar} userLevel={level} showEmotionAnalysis={showEmotionAnalysis} onCloseEmotionAnalysis={() => setShowEmotionAnalysis(false)} onSessionChange={setHasActiveSession} />
       default:
         return <PlaceholderView title={activeTab} />
     }
@@ -365,13 +372,17 @@ export default function Dashboard() {
         onClose={() => setShowAvatarGallery(false)}
         onSelectAvatar={handleSelectAvatar}
         selectedAvatarId={selectedAvatar?.id}
+        userLevel={level}
       />
 
-      {/* Avatar Companion - Floating on dashboard */}
-      {selectedAvatar && (
+      {/* Avatar Companion - Floating on dashboard (hidden on diary page since Avatar is embedded in chat) */}
+      {selectedAvatar && activeTab !== 'diary' && (
         <AvatarCompanion
           avatar={selectedAvatar}
           onClose={handleCloseCompanion}
+          activeTab={activeTab}
+          onClick={handleAvatarClick}
+          showVipHint={activeTab === 'soulsync' && hasActiveSession}
         />
       )}
 
@@ -493,17 +504,17 @@ export default function Dashboard() {
       {viewingUserId && (
         <UserProfileModal
           userId={viewingUserId}
-          currentUserId={user?.user_id || ''}
+          currentUserId={user?._id || ''}
           isOpen={!!viewingUserId}
           onClose={() => setViewingUserId(null)}
         />
       )}
 
       {/* Follow List Modal */}
-      {followListType && user?.user_id && (
+      {followListType && user?._id && (
         <FollowListModal
-          userId={user.user_id}
-          currentUserId={user.user_id}
+          userId={user._id}
+          currentUserId={user._id}
           type={followListType}
           isOpen={!!followListType}
           onClose={() => setFollowListType(null)}

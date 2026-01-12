@@ -86,6 +86,7 @@ class RoomListItem(BaseModel):
     room_id: str  # MongoDB ObjectId as string
     other_user_id: str
     other_user_name: Optional[str] = None  # None when anonymous
+    other_user_avatar: Optional[str] = None  # User's emoji avatar (None when anonymous)
     is_anonymous: bool
     last_message: Optional[str] = None
     last_message_time: Optional[datetime] = None

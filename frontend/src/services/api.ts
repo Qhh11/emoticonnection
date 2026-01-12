@@ -391,6 +391,7 @@ export interface UserRoom {
   room_id: string
   other_user_id: string
   other_user_name: string
+  other_user_avatar?: string  // User's emoji avatar (e.g., 🦊)
   is_anonymous: boolean
   last_message?: string
   last_message_time?: string
@@ -510,6 +511,22 @@ export const aiChatApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // VIP Feature: Context-aware emotion analysis (placeholder for backend implementation)
+  analyzeContextEmotion: (messages: { role: string; content: string; emotion?: string }[], userId: string) =>
+    request<ContextEmotionAnalysis>('/api/ai-chat/analyze-context', {
+      method: 'POST',
+      body: JSON.stringify({ messages, user_id: userId }),
+    }),
+}
+
+// VIP Context Emotion Analysis Response
+export interface ContextEmotionAnalysis {
+  overall_mood: string
+  mood_trend: 'improving' | 'stable' | 'declining'
+  key_emotions: { emotion: string; count: number }[]
+  analysis_summary: string
+  suggested_response?: string
 }
 
 // ============ 社交 API ============
@@ -518,6 +535,7 @@ export interface FollowUser {
   id: string
   username: string
   nickname: string
+  avatar?: string  // User's emoji avatar
   is_following: boolean
   is_follower: boolean
   is_mutual: boolean

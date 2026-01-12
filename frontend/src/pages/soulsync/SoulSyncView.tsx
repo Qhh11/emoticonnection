@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { matchApi, chatApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage } from '../../services/api'
+import { matchApi, chatApi, socialApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser } from '../../services/api'
+import { Avatar3D } from '../../config/avatars'
+import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -41,9 +43,16 @@ interface SoulSyncViewProps {
   onInteract: (e: React.MouseEvent) => void
   userId?: string
   onViewProfile?: (userId: string) => void
+  avatar?: Avatar3D | null
+  userLevel?: number
+  showEmotionAnalysis?: boolean       // Controlled from parent (via Avatar click)
+  onCloseEmotionAnalysis?: () => void // Close callback
+  onSessionChange?: (hasSession: boolean) => void // Notify parent when in/out of chat
 }
 
-export default function SoulSyncView({ onInteract, userId, onViewProfile }: SoulSyncViewProps) {
+const VIP_REQUIRED_LEVEL = 3
+
+export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar, userLevel = 0, showEmotionAnalysis: propShowAnalysis, onCloseEmotionAnalysis, onSessionChange }: SoulSyncViewProps) {
   const [isSearching, setIsSearching] = useState(false)
   const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean } | null>(null)
   const [sessions, setSessions] = useState<PeerSession[]>([])
@@ -53,16 +62,45 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
   const [chatInput, setChatInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
+  // VIP Emotion Analysis state - controlled by prop or internal state
+  const [internalShowAnalysis, setInternalShowAnalysis] = useState(false)
+  const showEmotionAnalysis = propShowAnalysis ?? internalShowAnalysis
+  const closeEmotionAnalysis = () => {
+    setInternalShowAnalysis(false)
+    onCloseEmotionAnalysis?.()
+  }
+
+  // Mutual friends (互相关注的好友)
+  const [mutualFriends, setMutualFriends] = useState<FollowUser[]>([])
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false)
+
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Load existing chat rooms on mount
+  // Load existing chat rooms and mutual friends on mount
   useEffect(() => {
     if (userId) {
       loadUserRooms()
+      loadMutualFriends()
     }
   }, [userId])
+
+  // Load mutual friends (互相关注的好友)
+  const loadMutualFriends = async () => {
+    if (!userId) return
+    setIsLoadingFriends(true)
+    try {
+      const following = await socialApi.getFollowing(userId)
+      // Filter to only mutual friends
+      const mutuals = following.filter(user => user.is_mutual)
+      setMutualFriends(mutuals)
+    } catch (err) {
+      console.error('Failed to load mutual friends:', err)
+    } finally {
+      setIsLoadingFriends(false)
+    }
+  }
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -83,6 +121,11 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
     }
   }, [currentSessionId, userId])
 
+  // Notify parent when session state changes (for VIP hint display)
+  useEffect(() => {
+    onSessionChange?.(!!currentSessionId)
+  }, [currentSessionId, onSessionChange])
+
   const loadUserRooms = async () => {
     if (!userId) return
     try {
@@ -90,18 +133,57 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
       const sessionsFromRooms: PeerSession[] = rooms.map((room: UserRoom) => ({
         id: room.room_id,
         roomId: room.room_id,
-        partnerName: room.other_user_name || 'Anonymous',
+        // For non-anonymous chats, show actual username; for anonymous, show "Anonymous"
+        partnerName: room.is_anonymous ? 'Anonymous' : (room.other_user_name || 'User'),
         partnerId: room.other_user_id,
-        partnerAvatar: room.is_anonymous ? '🎭' : '👤',
+        // Use actual avatar for friends, mask for anonymous
+        partnerAvatar: room.is_anonymous ? '🎭' : (room.other_user_avatar || '👤'),
         isAnonymous: room.is_anonymous,
         isRevealed: !room.is_anonymous,
         lastMessage: room.last_message || 'Start chatting...',
-        moodColor: '#4B4E91',
+        moodColor: room.is_anonymous ? '#9381BA' : '#4B4E91', // Purple for anonymous, blue for friend
         messages: []
       }))
       setSessions(sessionsFromRooms)
     } catch (err) {
       console.error('Failed to load rooms:', err)
+    }
+  }
+
+  // Start or open chat with a friend
+  const startChatWithFriend = async (friend: FollowUser) => {
+    if (!userId) return
+
+    // Check if we already have a chat room with this friend
+    const existingSession = sessions.find(s => s.partnerId === friend.id)
+    if (existingSession) {
+      // Open existing chat
+      setCurrentSessionId(existingSession.id)
+      return
+    }
+
+    // Create new chat room (non-anonymous since it's a friend)
+    try {
+      const room = await chatApi.createRoom(userId, friend.id, false)
+
+      // Add new session with friend's actual avatar
+      const newSession: PeerSession = {
+        id: room.id,
+        roomId: room.id,
+        partnerName: friend.nickname || friend.username,
+        partnerId: friend.id,
+        partnerAvatar: friend.avatar || '👤',  // Use friend's avatar
+        isAnonymous: false,
+        isRevealed: true,
+        lastMessage: 'Start chatting...',
+        moodColor: '#4B4E91',
+        messages: []
+      }
+
+      setSessions(prev => [newSession, ...prev])
+      setCurrentSessionId(newSession.id)
+    } catch (err) {
+      console.error('Failed to create chat room:', err)
     }
   }
 
@@ -272,7 +354,8 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
             role: 'peer',
             text: 'Connection established. How are you vibrating today?',
             timestamp: Date.now(),
-            emotion: selectedMood.label
+            emotion: selectedMood.label,
+            emotion_color: selectedMood.color
           }]
         }
         setSessions(prev => [fallbackSession, ...prev])
@@ -306,12 +389,14 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
       }).catch(err => console.error('Failed to send message:', err))
 
       // Add message locally
+      const emotion = detectEmotion(chatInput)
       const newMsg: ChatMessage = {
         id: Date.now().toString(),
         role: 'user',
         text: chatInput,
         timestamp: Date.now(),
-        emotion: detectEmotion(chatInput)
+        emotion: emotion,
+        emotion_color: getEmotionColor(emotion)
       }
       setSessions(prev => prev.map(s =>
         s.id === currentSessionId
@@ -338,6 +423,18 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
     if (t.includes('anxious') || t.includes('stress') || t.includes('worried')) return 'Anxious'
     if (t.includes('bored') || t.includes('nothing')) return 'Bored'
     return 'Neutral'
+  }
+
+  const getEmotionColor = (emotion: string): string => {
+    const emotionColors: Record<string, string> = {
+      'Joy': '#F9D849',
+      'Sad': '#3266B1',
+      'Angry': '#D32F2F',
+      'Anxious': '#E67E22',
+      'Bored': '#4B4E91',
+      'Neutral': '#808080'
+    }
+    return emotionColors[emotion] || '#808080'
   }
 
   const currentSession = sessions.find(s => s.id === currentSessionId)
@@ -456,8 +553,45 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
             </div>
           </div>
 
-          {/* Sync Connections List */}
+          {/* Right Column: Friends + Connections */}
           <div className="lg:col-span-5 space-y-8">
+            {/* Mutual Friends Section */}
+            <div className="bg-white p-6 rounded-[2rem] border border-black/[0.03] shadow-sm">
+              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300 mb-4">Friends Online</h4>
+              {isLoadingFriends ? (
+                <div className="flex justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-gray-200 border-t-accent rounded-full animate-spin"></div>
+                </div>
+              ) : mutualFriends.length === 0 ? (
+                <p className="text-gray-400 text-sm font-bold text-center py-4">
+                  No mutual friends yet. Follow someone who follows you back!
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {mutualFriends.map(friend => (
+                    <button
+                      key={friend.id}
+                      onClick={() => startChatWithFriend(friend)}
+                      className="group flex flex-col items-center space-y-2 p-3 rounded-2xl hover:bg-gray-50 transition-all"
+                      title={`Chat with @${friend.username}`}
+                    >
+                      <div className="relative">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center text-2xl shadow-sm border-2 border-white group-hover:scale-110 transition-transform">
+                          {friend.avatar || '👤'}
+                        </div>
+                        {/* Online indicator */}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 truncate max-w-[60px]">
+                        {friend.nickname || friend.username}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sync Connections List */}
             <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300 px-4">Synchronized Echoes</h4>
             <div className="space-y-4">
               {sessions.length === 0 ? (
@@ -471,12 +605,24 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
                     onClick={() => setCurrentSessionId(session.id)}
                     className="w-full p-6 bg-white rounded-[2rem] border border-black/[0.03] shadow-sm hover:shadow-xl transition-all flex items-center space-x-6 text-left group"
                   >
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-inner bg-gray-50 border-2 border-white group-hover:rotate-6 transition-transform" style={{ borderColor: session.moodColor + '40' }}>
+                    <div
+                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-inner border-2 border-white group-hover:rotate-6 transition-transform ${session.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'}`}
+                      style={{ borderColor: session.moodColor + '40' }}
+                    >
                       {session.partnerAvatar}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
-                        <p className="text-sm font-black uppercase tracking-tight text-gray-800 truncate">@{session.partnerName}</p>
+                        <div className="flex items-center space-x-2">
+                          <p className="text-sm font-black uppercase tracking-tight text-gray-800 truncate">
+                            {session.isAnonymous ? '🎭 Anonymous' : `@${session.partnerName}`}
+                          </p>
+                          {!session.isAnonymous && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-black uppercase rounded-full">
+                              Friend
+                            </span>
+                          )}
+                        </div>
                         <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-green-500"></span>
                       </div>
                       <p className="text-[13px] font-black uppercase text-gray-300 tracking-[0.1em] truncate">{session.lastMessage}</p>
@@ -495,9 +641,16 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
               <button
                 key={s.id}
                 onClick={() => setCurrentSessionId(s.id)}
-                className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-md ${currentSessionId === s.id ? 'bg-black text-white scale-110' : 'bg-white hover:bg-black/5'}`}
+                title={s.isAnonymous ? 'Anonymous Chat' : `@${s.partnerName}`}
+                className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-md relative ${currentSessionId === s.id ? 'bg-black text-white scale-110' : s.isAnonymous ? 'bg-purple-100 hover:bg-purple-200' : 'bg-blue-100 hover:bg-blue-200'}`}
               >
                 {s.partnerAvatar}
+                {/* Friend badge indicator */}
+                {!s.isAnonymous && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center">
+                    <span className="text-[8px] text-white">✓</span>
+                  </span>
+                )}
               </button>
             ))}
             <button
@@ -514,25 +667,33 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
               <header className="p-6 border-b border-black/5 flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div
-                    className={`w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl shadow-inner border-2 border-white ${!currentSession.isAnonymous ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center text-3xl shadow-inner border-2 border-white ${currentSession.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'} ${!currentSession.isAnonymous ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
                     style={{ borderColor: currentSession.moodColor + '40' }}
                     onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
                   >
                     {currentSession.partnerAvatar}
                   </div>
                   <div>
-                    <h3
-                      className={`font-black text-sm uppercase ${!currentSession.isAnonymous ? 'cursor-pointer hover:underline' : ''}`}
-                      onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
-                    >
-                      @{currentSession.partnerName}
-                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <h3
+                        className={`font-black text-sm uppercase ${!currentSession.isAnonymous ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
+                      >
+                        {currentSession.isAnonymous ? 'Anonymous' : `@${currentSession.partnerName}`}
+                      </h3>
+                      {!currentSession.isAnonymous && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-black uppercase rounded-full">
+                          Friend
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[13px] font-black uppercase text-gray-300 tracking-widest">
-                      {currentSession.isAnonymous ? '🎭 Ghost Mode' : '👤 Echo Pulse'}
+                      {currentSession.isAnonymous ? '🎭 Ghost Mode' : '👤 Friend Chat'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">
+                  {/* VIP Emotion Analysis is now triggered by clicking the floating Avatar */}
                   {currentSession.isAnonymous && !currentSession.isRevealed && (
                     <button className="px-5 py-2.5 bg-accent text-white rounded-full text-[12px] font-black uppercase tracking-widest hover:scale-105 shadow-xl transition-all">
                       Reveal Echo
@@ -584,6 +745,112 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile }: Soul
             </div>
           )}
         </div>
+      )}
+
+      {/* VIP Emotion Analysis Modal */}
+      {showEmotionAnalysis && avatar && currentSession && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+          onClick={() => closeEmotionAnalysis()}
+        >
+          <div
+            className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header with Avatar */}
+            <div
+              className="p-6 flex items-center justify-between"
+              style={{ background: `linear-gradient(135deg, ${avatar.color}20 0%, ${avatar.color}05 100%)` }}
+            >
+              <div className="flex items-center space-x-4">
+                <div
+                  className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
+                  style={{ background: `${avatar.color}30` }}
+                >
+                  <ModelViewer3D
+                    modelPath={avatar.modelPath}
+                    avatarName={avatar.name}
+                    avatarColor={avatar.color}
+                    size="small"
+                    exposure={avatar.exposure}
+                    environmentImage={avatar.environmentImage}
+                    shadowIntensity={0}
+                  />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg uppercase" style={{ color: avatar.color }}>{avatar.name}'s Analysis</h3>
+                  <p className="text-[11px] font-black uppercase text-gray-400 tracking-widest">VIP Emotion Insights</p>
+                </div>
+              </div>
+              <button
+                onClick={() => closeEmotionAnalysis()}
+                className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Analysis Content */}
+            <div className="p-6 space-y-6">
+              {/* Analyzed Messages Count */}
+              <div className="text-center p-4 bg-gray-50 rounded-2xl">
+                <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-1">
+                  Based on recent messages
+                </p>
+                <p className="text-2xl font-black">
+                  {Math.min(currentSession.messages.length, 20)} / 20
+                </p>
+              </div>
+
+              {/* Coming Soon Notice */}
+              <div className="text-center py-8 space-y-4">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-yellow-400 via-orange-500 to-pink-500 flex items-center justify-center shadow-xl">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-xl font-black uppercase tracking-tight">Coming Soon</h4>
+                  <p className="text-gray-400 font-bold text-sm mt-2">
+                    Advanced context-aware emotion analysis is being developed.
+                  </p>
+                </div>
+
+                {/* Preview of what's coming */}
+                <div className="mt-6 space-y-3 text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-300 text-center">
+                    What to expect
+                  </p>
+                  <div className="grid gap-2">
+                    {[
+                      { icon: '📊', text: 'Overall mood trajectory' },
+                      { icon: '🎯', text: 'Key emotions detected' },
+                      { icon: '💡', text: 'Suggested responses' },
+                      { icon: '🔍', text: 'Conversation insights' }
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
+                        <span className="text-lg">{item.icon}</span>
+                        <span className="text-sm font-bold text-gray-600">{item.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => closeEmotionAnalysis()}
+                className="w-full py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )
