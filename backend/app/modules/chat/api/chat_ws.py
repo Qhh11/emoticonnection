@@ -275,10 +275,19 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                 })
 
     except WebSocketDisconnect:
-        # ====================================================================
-        # STEP 4: Handle disconnection
-        # ====================================================================
         await manager.disconnect(room_id_str, websocket)
         print(f"[WebSocket] Client disconnected from room {room_id}")
+
+        try:
+            await manager.broadcast(
+                room_id=room_id_str,
+                message={
+                    "type": "peer_disconnected",
+                    "room_id": room_id_str,
+                }
+            )
+        except Exception as e:
+            print(f"[WebSocket] Failed to broadcast disconnect: {e}")
+
 
 

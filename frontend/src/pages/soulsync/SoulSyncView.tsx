@@ -45,6 +45,7 @@ const TOPIC_DATA: { value: TopicTag; label: string; emoji: string }[] = [
   { value: 'self_esteem', label: 'Self Esteem', emoji: '🪞' },
 ]
 
+
 interface ChatMessage {
   id: string
   role: 'user' | 'peer'
@@ -89,6 +90,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   const [isAnonymousMatch, setIsAnonymousMatch] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const pollTimerRef = useRef<number | null>(null)
 
   // V2 Matching preferences
   const [selectedRole, setSelectedRole] = useState<SupportRole>('either')
@@ -140,6 +142,68 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
       setIsLoadingFriends(false)
     }
   }
+
+  useEffect(() => {
+  if (!isSearching) {
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    return
+  }
+
+  ;(async () => {
+    try {
+      const status = await matchApi.getStatus()
+      if (status.matched && status.room_id) {
+        setMatchedPartner({
+          roomId: status.room_id,
+          partnerId: status.matched_user_id || 'unknown',
+          isAnonymous: status.is_anonymous ?? isAnonymousMatch,
+          matchScore: status.match_score,
+          matchReason: status.match_reason
+        })
+        setIsSearching(false)
+        return
+      }
+
+      if (status.in_queue) {
+        setQueuePosition(status.queue_position || null)
+        setEstimatedWait(status.estimated_wait || null)
+      }
+    } catch (e) {
+      console.error('Initial status check failed:', e)
+    }
+  })()
+
+  pollTimerRef.current = window.setInterval(async () => {
+    try {
+      const status = await matchApi.getStatus()
+      if (status.matched && status.room_id) {
+        setMatchedPartner({
+          roomId: status.room_id,
+          partnerId: status.matched_user_id || 'unknown',
+          isAnonymous: status.is_anonymous ?? isAnonymousMatch,
+          matchScore: status.match_score,
+          matchReason: status.match_reason
+        })
+        setIsSearching(false) // 会触发 cleanup 停止轮询
+      } else if (status.in_queue) {
+        setQueuePosition(status.queue_position || null)
+        setEstimatedWait(status.estimated_wait || null)
+      }
+    } catch (e) {
+      console.error('Status polling failed:', e)
+    }
+  }, 1500)
+
+  return () => {
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+  }
+}, [isSearching, isAnonymousMatch])
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -271,6 +335,21 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
           emotion_color: data.emotion_color || '#4B4E91'
         }
 
+        if (data.type === 'peer_disconnected') {
+          const sysMsg: ChatMessage = {
+            id: `sys-${Date.now()}`,
+            role: 'peer',
+            text: '⚠️ The other user disconnected.',
+            timestamp: Date.now(),
+            emotion: 'Neutral',
+            emotion_color: '#808080'
+          }
+          setSessions(prev => prev.map(s =>
+            s.roomId === roomId ? { ...s, messages: [...s.messages, sysMsg] } : s
+          ))
+          return
+        }
+        
         setSessions(prev => prev.map(s =>
           s.roomId === roomId
             ? { ...s, messages: [...s.messages, newMessage], lastMessage: data.content }
@@ -293,7 +372,9 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   }, [userId])
 
   const startMatching = async (e: React.MouseEvent) => {
-    if (!userId) return
+    console.log('[debug] userId prop =', userId)
+    console.log('[debug] token prefix =', (localStorage.getItem('access_token') || '').slice(0, 16))
+
     onInteract(e)
     setIsSearching(true)
     setIsLoading(true)
@@ -331,8 +412,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
         if (response.safety_tips) {
           setSafetyTips(response.safety_tips)
         }
-        // Start polling for match status
-        pollMatchStatus()
+        
       }
     } catch (err) {
       console.error('Match failed:', err)
@@ -344,30 +424,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     }
   }
 
-  // Poll for match status when in queue
-  const pollMatchStatus = useCallback(async () => {
-    if (!isSearching) return
-
-    try {
-      const status = await matchApi.getStatus()
-      if (status.matched && status.room_id) {
-        setMatchedPartner({
-          roomId: status.room_id,
-          partnerId: status.matched_user_id || 'unknown',
-          isAnonymous: status.is_anonymous || isAnonymousMatch,
-          matchScore: status.match_score,
-          matchReason: status.match_reason
-        })
-      } else if (status.in_queue) {
-        setQueuePosition(status.queue_position || null)
-        setEstimatedWait(status.estimated_wait || null)
-        // Continue polling
-        setTimeout(pollMatchStatus, 3000)
-      }
-    } catch (err) {
-      console.error('Status check failed:', err)
-    }
-  }, [isSearching, isAnonymousMatch])
 
   const cancelMatching = async () => {
     try {
@@ -382,57 +438,38 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     setSafetyTips([])
   }
 
-  const confirmMatch = async () => {
-    if (matchedPartner && userId) {
-      try {
-        // Create or get the chat room
-        const room = await chatApi.createRoom(userId, matchedPartner.partnerId, matchedPartner.isAnonymous)
+    const confirmMatch = async () => {
+    if (!matchedPartner || !userId) return
 
-        const newSession: PeerSession = {
-          id: room.id,
-          roomId: room.id,
-          partnerName: matchedPartner.isAnonymous ? 'Ghost_Vibe' : 'Echo_Explorer',
-          partnerId: matchedPartner.partnerId,
-          partnerAvatar: matchedPartner.isAnonymous ? '🎭' : '💠',
-          isAnonymous: matchedPartner.isAnonymous,
-          isRevealed: !matchedPartner.isAnonymous,
-          lastMessage: 'Connection established',
-          moodColor: selectedMood.color,
-          messages: []
-        }
+    const roomId = matchedPartner.roomId
 
-        setSessions(prev => [newSession, ...prev])
-        setCurrentSessionId(newSession.id)
-      } catch (err) {
-        console.error('Failed to create room:', err)
-        // Fallback to local session
-        const fallbackSession: PeerSession = {
-          id: matchedPartner.roomId,
-          roomId: matchedPartner.roomId,
-          partnerName: matchedPartner.isAnonymous ? 'Ghost_Vibe' : 'Echo_Explorer',
-          partnerId: matchedPartner.partnerId,
-          partnerAvatar: matchedPartner.isAnonymous ? '🎭' : '💠',
-          isAnonymous: matchedPartner.isAnonymous,
-          isRevealed: !matchedPartner.isAnonymous,
-          lastMessage: 'Connection established',
-          moodColor: selectedMood.color,
-          messages: [{
-            id: 'init',
-            role: 'peer',
-            text: 'Connection established. How are you vibrating today?',
-            timestamp: Date.now(),
-            emotion: selectedMood.label,
-            emotion_color: selectedMood.color
-          }]
-        }
-        setSessions(prev => [fallbackSession, ...prev])
-        setCurrentSessionId(fallbackSession.id)
-      }
-
+    const existing = sessions.find(s => s.roomId === roomId)
+    if (existing) {
+      setCurrentSessionId(existing.id)
       setMatchedPartner(null)
       setIsSearching(false)
+      return
     }
+
+    const newSession: PeerSession = {
+      id: roomId,
+      roomId,
+      partnerName: matchedPartner.isAnonymous ? 'Ghost_Vibe' : 'Echo_Explorer',
+      partnerId: matchedPartner.partnerId,
+      partnerAvatar: matchedPartner.isAnonymous ? '🎭' : '💠',
+      isAnonymous: matchedPartner.isAnonymous,
+      isRevealed: !matchedPartner.isAnonymous,
+      lastMessage: 'Connection established',
+      moodColor: selectedMood.color,
+      messages: []
+    }
+
+    setSessions(prev => [newSession, ...prev])
+    setCurrentSessionId(newSession.id)
+    setMatchedPartner(null)
+    setIsSearching(false)
   }
+
 
   const sendPeerMessage = () => {
     if (!chatInput.trim() || !currentSessionId || !userId) return

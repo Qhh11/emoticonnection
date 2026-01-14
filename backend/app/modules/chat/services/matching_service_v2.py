@@ -123,10 +123,10 @@ class MatchResponseV2(BaseModel):
 
 
 class QueueEntry(BaseModel):
-    """Queue entry"""
-    request: MatchRequestV2
+    request: MatchRequestV2Internal
     joined_at: datetime = Field(default_factory=datetime.utcnow)
     match_attempts: int = 0
+
 
 
 class MatchingServiceV2:
@@ -175,7 +175,7 @@ class MatchingServiceV2:
             EmotionType.CALM, EmotionType.HOPEFUL, EmotionType.CURIOUS
         }
 
-    async def find_match(self, request: MatchRequestV2) -> MatchResponseV2:
+    async def find_match(self, request: MatchRequestV2Internal) -> MatchResponseV2:
         """Main matching entry point"""
         request.user_id = str(request.user_id)
         if request.risk_level == RiskLevel.CRISIS:
@@ -203,7 +203,7 @@ class MatchingServiceV2:
             safety_tips=self._get_safety_tips(request)
         )
 
-    def _find_best_match(self, request: MatchRequestV2, queue: List[QueueEntry]) -> Optional[QueueEntry]:
+    def _find_best_match(self, request: MatchRequestV2Internal, queue: List[QueueEntry]) -> Optional[QueueEntry]:
         """Find the best match from queue"""
         candidates: List[Tuple[QueueEntry, float, str]] = []
         
@@ -226,7 +226,7 @@ class MatchingServiceV2:
         print(f"[MatchV2] Found match candidate: score={best[1]:.2f}, reason={best[2]}")
         return best[0]
 
-    def _is_safe_to_match(self, a: MatchRequestV2, b: MatchRequestV2) -> bool:
+    def _is_safe_to_match(self, a: MatchRequestV2Internal, b: MatchRequestV2Internal) -> bool:
         """Check if two users can be safely paired"""
         if a.risk_level == RiskLevel.CRISIS or b.risk_level == RiskLevel.CRISIS:
             return False
@@ -243,7 +243,7 @@ class MatchingServiceV2:
                 return False
         return True
 
-    def _calculate_match_score(self, a: MatchRequestV2, b: MatchRequestV2) -> Tuple[float, str]:
+    def _calculate_match_score(self, a: MatchRequestV2Internal, b: MatchRequestV2Internal) -> Tuple[float, str]:
         """Calculate match score (0-10 scale)"""
         score = 0.0
         reasons = []
@@ -353,7 +353,7 @@ class MatchingServiceV2:
         """Get emotion category"""
         return self.emotion_categories.get(emotion, EmotionCategory.NEUTRAL)
 
-    async def _create_match(self, request: MatchRequestV2, matched_entry: QueueEntry) -> MatchResponseV2:
+    async def _create_match(self, request: MatchRequestV2Internal, matched_entry: QueueEntry) -> MatchResponseV2:
         """Create match and generate chat room"""
         matched_request = matched_entry.request
         
@@ -394,7 +394,7 @@ class MatchingServiceV2:
             safety_tips=self._generate_match_tips(request, matched_request)
         )
 
-    def _add_to_queue(self, request: MatchRequestV2) -> None:
+    def _add_to_queue(self, request: MatchRequestV2Internal) -> None:
         """Add to matching queue"""
         queue = self.queues.get(request.mode, [])
         self.queues[request.mode] = [e for e in queue if e.request.user_id != request.user_id]

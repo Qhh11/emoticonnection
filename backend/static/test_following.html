@@ -145,14 +145,14 @@
         function clearCache() {
             if (confirm('This will log you out. Continue?')) {
                 localStorage.clear();
-                sessionStorage.clear();
+                localStorage.clear();
                 window.location.href = 'login.html';
             }
         }
 
         // Show debug info
         document.getElementById('debugInfo').innerHTML = `
-            <h3>LocalStorage:</h3>
+            <h3>localStorage:</h3>
             <pre>${JSON.stringify({
                 chat_user_id: localStorage.getItem('chat_user_id'),
                 chat_username: localStorage.getItem('chat_username'),
