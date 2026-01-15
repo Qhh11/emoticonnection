@@ -8,7 +8,7 @@ import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, MBTIProfile, UserPreferences } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
 
@@ -59,11 +59,18 @@ export default function Dashboard() {
 
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsUsername, setSettingsUsername] = useState('')
   const [settingsNickname, setSettingsNickname] = useState('')
   const [settingsPassword, setSettingsPassword] = useState('')
+  const [settingsEmail, setSettingsEmail] = useState('')
+  const [settingsBio, setSettingsBio] = useState('')
   const [settingsAvatar, setSettingsAvatar] = useState('🦊')
+  const [settingsAge, setSettingsAge] = useState<number>()
+  const [settingsGender, setSettingsGender] = useState('')
+  const [settingsMbti, setSettingsMbti] = useState<MBTIProfile>()
+  const [settingsPreferences, setSettingsPreferences] = useState<UserPreferences>()
   const [settingsSaving, setSettingsSaving] = useState(false)
-
+  
   // User avatar state
   const [userAvatar, setUserAvatar] = useState('🦊')
 
@@ -75,7 +82,7 @@ export default function Dashboard() {
     if (user?.avatar) {
       setUserAvatar(user.avatar)
     }
-  }, [user?.avatar])
+  }, [user?.avatar, AuthUser?.user_id])
 
   useEffect(() => {
     const root = document.documentElement
@@ -132,6 +139,18 @@ export default function Dashboard() {
         .catch(err => console.error('Failed to fetch today check-in:', err))
     }
   }, [user?._id])
+
+  // Prevent background scroll when settings modal is open
+  useEffect(() => {
+    if (showSettings) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+      return () => {
+      document.body.style.overflow = ''
+    }
+  }, [showSettings])
 
   // Helper function to get mood color
   const getMoodColor = (mood: string | undefined): string => {
@@ -233,9 +252,16 @@ export default function Dashboard() {
 
   const handleOpenSettings = () => {
     console.log('Opening settings for user:', user)
+    setSettingsUsername(user?.username || '')
     setSettingsNickname(user?.nickname || user?.username || '')
     setSettingsPassword('')
+    setSettingsEmail(user?.email || '')
+    setSettingsBio(user?.bio || '')
     setSettingsAvatar(userAvatar)
+    setSettingsAge(user?.age)
+    setSettingsGender(user?.gender || '')
+    setSettingsMbti(user?.mbti)
+    setSettingsPreferences(user?.preferences)
     setShowSettings(true)
   }
 
@@ -243,19 +269,38 @@ export default function Dashboard() {
     if (!user?._id) return
     setSettingsSaving(true)
     try {
-      const updateData: { nickname?: string; password?: string; avatar?: string } = {}
+      const updateData: { nickname?: string; password?: string; email?: string; bio?: string; avatar?: string; age?: number; gender?: string; mbti?: MBTIProfile, preferences?: UserPreferences } = {}
       if (settingsNickname.trim() && settingsNickname !== user.nickname) {
         updateData.nickname = settingsNickname.trim()
       }
       if (settingsPassword.trim()) {
         updateData.password = settingsPassword.trim()
       }
+      if (settingsEmail.trim() && settingsEmail !== user.email) {
+        updateData.email = settingsEmail.trim()
+      }
+      if (settingsBio.trim() && settingsBio !== user.bio) {
+        updateData.bio = settingsBio.trim()
+      }
       if (settingsAvatar !== userAvatar) {
         updateData.avatar = settingsAvatar
+      }
+      if (settingsAge !== user?.age) {
+        updateData.age = settingsAge
+      }
+      if (settingsGender !== user?.gender) {
+        updateData.gender = settingsGender
+      }
+      if (settingsMbti !== user?.mbti) {
+        updateData.mbti = settingsMbti
+      }
+      if (settingsPreferences !== user?.preferences) {
+        updateData.preferences = settingsPreferences
       }
       if (Object.keys(updateData).length > 0) {
         await userApi.updateUser(user._id, updateData)
         userApi.getUser(user._id).then(user => { setUser(user) })
+        console.log('User updated successfully:', user)
         // Update local avatar state immediately without page reload
         if (updateData.avatar) {
           setUserAvatar(updateData.avatar)
@@ -485,7 +530,7 @@ export default function Dashboard() {
           onClick={() => setShowSettings(false)}
         >
           <div
-            className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500"
+            className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500 max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-8">
@@ -502,9 +547,23 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-6">
+
+              {/* Username (read-only) */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={user?.username || ''}
+                  readOnly
+                  className="w-full px-5 py-4 bg-gray-100 rounded-2xl border border-black/5 text-sm font-bold text-gray-500 cursor-not-allowed"
+                />
+              </div>
+
               {/* Nickname */}
               <div className="space-y-2">
-                <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
                   Display Name
                 </label>
                 <input
@@ -518,7 +577,7 @@ export default function Dashboard() {
 
               {/* Password */}
               <div className="space-y-2">
-                <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
                   New Password
                 </label>
                 <input
@@ -530,9 +589,36 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* Email */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={settingsEmail}
+                  onChange={(e) => setSettingsEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Bio */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  Bio
+                </label>
+                <textarea
+                  value={settingsBio}
+                  onChange={(e) => setSettingsBio(e.target.value)}
+                  placeholder="Tell us about yourself"
+                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300 resize-none h-24"
+                />
+              </div>
+
               {/* Avatar Selection */}
               <div className="space-y-2">
-                <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
                   Avatar
                 </label>
                 <div className="grid grid-cols-6 gap-2">
@@ -551,6 +637,156 @@ export default function Dashboard() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Age */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  Age
+                </label>
+                <input
+                  type="number"
+                  value={settingsAge || ''}
+                  onChange={(e) => setSettingsAge(Number(e.target.value))}
+                  placeholder="Enter your age"
+                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                />
+              </div>
+
+              {/* Gender */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  Gender
+                </label>
+                <select
+                  value={settingsGender || ''}
+                  onChange={(e) => setSettingsGender(e.target.value)}
+                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                >
+                  <option value="">Select your gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="non-binary">Non-Binary</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* MBTI Input */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  MBTI Type
+                </label>
+                <select
+                  value={settingsMbti?.type || ''}
+                  onChange={(e) => setSettingsMbti({ type: e.target.value, completed_at: new Date().toISOString() })}
+                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                >
+                  <option value="">unknown</option>
+                    {[
+                      'INFP','INFJ','INTP','INTJ','ENFP','ENFJ','ENTP','ENTJ',
+                      'ISFP','ISFJ','ISTP','ISTJ','ESFP','ESFJ','ESTP','ESTJ'
+                    ].map(t => (
+                      <option key={t}>{t}</option>
+                    ))}
+                </select>
+              <p className="hint">
+                last time tested:{' '}
+                {settingsMbti?.completed_at
+                  ? new Date(settingsMbti.completed_at).toLocaleDateString()
+                  : '-'}
+              </p>
+
+              </div>
+
+              {/* User Preferences */}
+              <div className="space-y-2">
+                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
+                  Preferences
+                </label>
+                <label className="text-[12px]">chat duration preferred</label>
+                <select
+                  id="chat_duration_preference"
+                  value={settingsPreferences?.chat_duration_preference || ''}
+                  onChange={(e) => setSettingsPreferences({ ...settingsPreferences, chat_duration_preference: e.target.value as 'short' | 'medium' | 'long'})}
+                  className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                >
+                  <option value="short">short</option>
+                  <option value="medium">medium</option>
+                  <option value="long">long</option>
+                </select>
+
+                <label className="text-[12px]">Match age preference</label>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-10 text-right">
+                    from
+                  </span>
+                  <input
+                    id="age_range_min"
+                    type="number"
+                    min={13}
+                    max={100}
+                    value={settingsPreferences?.age_range_min || ''}
+                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, age_range_min: Number(e.target.value) })}
+                    className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                  />
+                  <span className="text-sm text-gray-500 w-6 text-center">
+                    to
+                  </span>
+                  <input
+                    id="age_range_max"
+                    type="number"
+                    min={13}
+                    max={100}
+                    value={settingsPreferences?.age_range_max || ''}
+                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, age_range_max: Number(e.target.value) })}
+                    className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                  />
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                <span className="text-[12px]">
+                  Notifications
+                </span>
+
+                <div className="relative">
+                  <input
+                    id="notification_enabled"
+                    type="checkbox"
+                    checked={settingsPreferences?.notification_enabled}
+                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, notification_enabled: e.target.checked })}
+                    className="sr-only"
+                  />
+                  <div
+                    className={`
+                      w-11 h-6 rounded-full transition-colors
+                      ${settingsPreferences?.notification_enabled
+                        ? 'bg-vivid-500'
+                        : 'bg-gray-300'}
+                    `}
+                  />
+                  <div
+                    className={`
+                      absolute top-0.5 left-0.5
+                      w-5 h-5 bg-white rounded-full shadow
+                      transition-transform
+                      ${settingsPreferences?.notification_enabled
+                        ? 'translate-x-5'
+                        : ''}
+                    `}
+                  />
+                </div>
+                </label>
+
+                <label className="text-[12px]">theme</label>
+                <select
+                  value={settingsPreferences?.theme || ''}
+                  onChange={(e) => setSettingsPreferences({ ...settingsPreferences, theme: e.target.value as 'light' | 'dark' | 'system' })}
+                  className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                >
+                  <option value="default">default</option>
+                  <option value="dark">dark</option>
+                  <option value="soft">soft</option>
+                </select>
               </div>
 
               {/* User Info Display */}
