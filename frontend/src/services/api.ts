@@ -334,48 +334,76 @@ export const postApi = {
 
 // ============ 匹配 API ============
 
+// Backend V2 Emotion Types
+export type EmotionType =
+  | 'happy' | 'excited' | 'grateful' | 'hopeful' | 'calm'  // Positive
+  | 'warm' | 'friendly' | 'neutral' | 'curious'             // Neutral
+  | 'sad' | 'anxious' | 'stressed' | 'lonely' | 'frustrated' | 'overwhelmed' | 'uncertain' | 'distant'  // Negative
+
+export type SupportRole = 'seeker' | 'supporter' | 'either'
+export type SupportNeed = 'vent' | 'advice' | 'companion' | 'distraction'
+export type TopicTag = 'general' | 'relationships' | 'anxiety' | 'depression' | 'work_stress' | 'academic' | 'family' | 'loneliness' | 'self_esteem'
+export type MatchMode = 'human_anonymous' | 'human_non_anonymous' | 'ai_chat'
+export type RiskLevel = 'safe' | 'moderate' | 'high' | 'crisis'
+
 export interface MatchRequest {
-  current_emotion: string
-  role: 'seeker' | 'supporter' | 'either'
-  need: 'vent' | 'advice' | 'companion' | 'distraction'
-  intensity: number
-  support_topics?: string[]
-  is_anonymous?: boolean
-  preferred_mode?: 'human_anonymous' | 'human_non_anonymous'
+  current_emotion: EmotionType
+  emotion_intensity?: number  // 1-5, default 3
+  role?: SupportRole          // default 'either'
+  support_need?: SupportNeed  // default 'vent'
+  topic?: TopicTag            // default 'general'
+  preferred_topics?: TopicTag[]
+  mode?: MatchMode            // default 'human_anonymous'
+  risk_level?: RiskLevel      // default 'safe'
 }
 
 export interface MatchResponse {
   matched: boolean
   room_id?: string
   matched_user_id?: string
-  is_anonymous?: boolean
-  match_type?: string
+  is_anonymous: boolean
+  match_type: MatchMode
   match_score?: number
-  wait_time_seconds?: number
+  match_reason?: string
+  safety_tips?: string[]
+  queue_position?: number
+  estimated_wait?: string
 }
 
 export interface MatchStatus {
-  in_queue: boolean
-  position?: number
-  wait_time_estimate?: number
+  matched: boolean
+  in_queue?: boolean
+  room_id?: string
+  matched_user_id?: string
+  is_anonymous?: boolean
+  match_type?: MatchMode
+  match_score?: number
+  match_reason?: string
+  mode?: string
   emotion?: string
-  intensity?: number
+  role?: string
+  need?: string
+  queued_at?: string
+  queue_position?: number
+  total_in_queue?: number
+  estimated_wait?: string
 }
 
 export const matchApi = {
-  findMatch: (userId: string, data: MatchRequest) =>
-    request<MatchResponse>(`/api/match/find?user_id=${userId}`, {
+  // JWT auth - no user_id in query params
+  findMatch: (data: MatchRequest) =>
+    request<MatchResponse>('/api/match/find', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  cancelMatch: (userId: string) =>
-    request<{ success: boolean; message: string }>(`/api/match/cancel?user_id=${userId}`, {
+  cancelMatch: () =>
+    request<{ success: boolean; message: string }>('/api/match/cancel', {
       method: 'POST',
     }),
 
-  getStatus: (userId: string) =>
-    request<MatchStatus>(`/api/match/status?user_id=${userId}`),
+  getStatus: () =>
+    request<MatchStatus>('/api/match/status'),
 
   getEmotions: () =>
     request<{ emotions: Record<string, Array<{ value: string; label: string; emoji: string }>> }>('/api/match/emotions'),
@@ -388,6 +416,9 @@ export const matchApi = {
 
   getTopics: () =>
     request<{ topics: Array<{ value: string; label: string; emoji: string }> }>('/api/match/topics'),
+
+  getStats: () =>
+    request<{ total_in_queue: number; by_mode: Record<string, number>; by_role: Record<string, number>; by_emotion_category: Record<string, number> }>('/api/match/stats'),
 }
 
 // ============ 聊天 API ============
@@ -408,6 +439,7 @@ export interface ChatMessage {
   content: string
   media_url?: string | null
   emotion?: string | null
+  emotion_color?: string | null
   created_at: string
 }
 
@@ -415,6 +447,7 @@ export interface UserRoom {
   room_id: string
   other_user_id: string
   other_user_name: string
+  other_user_avatar?: string  // User's emoji avatar (e.g., 🦊)
   is_anonymous: boolean
   last_message?: string
   last_message_time?: string
@@ -511,11 +544,14 @@ export const aiChatApi = {
   createSession: (userId: string) =>
     request<AISession>('/api/ai-chat/sessions', {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify({ user_id: userId, message: '', history: [] }),
     }),
 
   getSessionMessages: (sessionId: string) =>
     request<AIMessage[]>(`/api/ai-chat/sessions/${sessionId}/messages`),
+
+  getSessionSummary: (sessionId: string) =>
+    request<SessionSummary>(`/api/ai-chat/sessions/${sessionId}/summary`),
 
   generateDiary: (sessionId: string, userId: string) =>
     request<Diary>('/api/ai-chat/diaries/generate', {
@@ -534,6 +570,96 @@ export const aiChatApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // VIP Feature: Context-aware emotion analysis (placeholder for backend implementation)
+  analyzeContextEmotion: (messages: { role: string; content: string; emotion?: string }[], userId: string) =>
+    request<ContextEmotionAnalysis>('/api/ai-chat/analyze-context', {
+      method: 'POST',
+      body: JSON.stringify({ messages, user_id: userId }),
+    }),
+
+  // Emotion Reports
+  getDailyReport: (userId: string, endDate?: string) => {
+    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
+    return request<EmotionReport>(`/api/ai-chat/reports/daily${query}`)
+  },
+
+  getWeeklyReport: (userId: string, endDate?: string) => {
+    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
+    return request<EmotionReport>(`/api/ai-chat/reports/weekly${query}`)
+  },
+
+  getMonthlyReport: (userId: string, endDate?: string) => {
+    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
+    return request<EmotionReport>(`/api/ai-chat/reports/monthly${query}`)
+  },
+}
+
+// Session Summary Response
+export interface SessionSummary {
+  session_id: string
+  message_count: number
+  summary: string
+  key_topics: string[]
+  emotional_journey: string
+  dominant_emotion: 'Bored' | 'Fear' | 'Joy' | 'Sad' | 'Disgust' | 'Anxious' | 'Angry' | 'Awkward' | 'Envy'
+  user_needs?: string
+  suggestions: string[]
+}
+
+// VIP Context Emotion Analysis Response
+export interface ContextEmotionAnalysis {
+  overall_mood: string
+  mood_trend: 'improving' | 'stable' | 'declining'
+  key_emotions: { emotion: string; count: number }[]
+  analysis_summary: string
+  suggested_response?: string
+}
+
+// Emotion Report Types
+export interface EmotionTrendDataPoint {
+  date: string
+  avg_score: number
+  dominant_emotion: string
+}
+
+export interface EmotionTrend {
+  period: string
+  data_points: EmotionTrendDataPoint[]
+  trend_direction: 'improving' | 'declining' | 'stable'
+  volatility: number
+}
+
+export interface EmotionWordCloud {
+  words: Record<string, number>
+  top_emotions: string[]
+  total_count: number
+}
+
+export interface TriggerAnalysis {
+  trigger_type: string
+  frequency: number
+  associated_emotions: string[]
+  example_contexts: string[]
+  impact_score: number
+}
+
+export interface EmotionReport {
+  user_id: string
+  period_type: 'daily' | 'weekly' | 'monthly'
+  start_date: string
+  end_date: string
+  average_mood_score: number
+  mood_stability: number
+  total_interactions: number
+  emotion_distribution: Record<string, number>
+  emotion_trend: EmotionTrend
+  word_cloud: EmotionWordCloud
+  triggers: TriggerAnalysis[]
+  summary_text: string
+  key_insights: string[]
+  suggestions: string[]
+  trend_prediction: string
 }
 
 // ============ 社交 API ============
@@ -542,6 +668,7 @@ export interface FollowUser {
   id: string
   username: string
   nickname: string
+  avatar?: string  // User's emoji avatar
   is_following: boolean
   is_follower: boolean
   is_mutual: boolean

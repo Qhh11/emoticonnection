@@ -17,6 +17,7 @@ EmotionConnect 是一个面向年轻人与学生群体的 **情绪支持应用**
    * [匿名树洞社区 Emotion Hub](#匿名树洞社区-emotion-hub)
    * [情绪分析与可视化 Emotion Insight](#情绪分析与可视化-emotion-insight)
    * [积分体系与个性化 Personalization](#积分体系与个性化-personalization)
+   * [VIP 体系](#vip-体系)
 3. [用户系统](#用户系统)
 4. [安全与伦理设计](#安全与伦理设计)
 5. [推荐产品流程（User Journey）](#推荐产品流程user-journey)
@@ -281,6 +282,9 @@ EmotionConnect/
 * 社区排名与勋章系统
 
 ---
+### VIP 体系
+
+* unlock AI 分析模式
 
 # 🚀 快速开始 (Getting Started)
 

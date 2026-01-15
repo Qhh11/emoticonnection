@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { aiChatApi } from '../../services/api'
+import { Avatar3D } from '../../config/avatars'
+import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -31,6 +33,7 @@ interface DiaryViewProps {
   userId?: string
   onRefreshDiaries?: () => void
   onOpenEntryDetail: (entry: DiaryEntry) => void
+  avatar?: Avatar3D | null
 }
 
 interface ChatAIViewProps {
@@ -38,6 +41,7 @@ interface ChatAIViewProps {
   embedded?: boolean
   userId?: string
   onRefreshDiaries?: () => void
+  avatar?: Avatar3D | null
 }
 
 interface ChatMessage {
@@ -45,9 +49,12 @@ interface ChatMessage {
   content: string
 }
 
-function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps) {
+function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'ai', content: "Hey there! I'm here to help you reflect on your emotions. How are you feeling today?" }
+    { role: 'ai', content: avatar
+      ? `Hey there! I'm ${avatar.name}, your ${avatar.emotion.toLowerCase()} companion. How are you feeling today?`
+      : "Hey there! I'm here to help you reflect on your emotions. How are you feeling today?"
+    }
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -56,10 +63,14 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
   const [saveSuccess, setSaveSuccess] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto scroll to bottom
-  useEffect(() => {
+  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, isLoading])
 
   // Create session on mount
   useEffect(() => {
@@ -70,6 +81,10 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
     }
   }, [userId])
 
+  // Get the latest AI message to display
+  const latestAiMessage = messages.filter(m => m.role === 'ai').slice(-1)[0]?.content || ''
+  const latestUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]?.content || ''
+
   const handleSend = async () => {
     if (!input.trim()) return
 
@@ -79,8 +94,9 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
     setIsLoading(true)
 
     try {
-      // Build history for context
-      const history = messages.map(m => ({
+      // Build history for context - skip the first hardcoded welcome message
+      // Only include messages after the initial greeting (index > 0)
+      const history = messages.slice(1).map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [m.content]
       }))
@@ -95,16 +111,9 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
       setMessages(prev => [...prev, { role: 'ai', content: response.response }])
     } catch (err) {
       console.error('Failed to get AI response:', err)
-      // Fallback to simulated response
-      const fallbackResponses = [
-        "That's really interesting. Can you tell me more about what triggered this feeling?",
-        "I hear you. It sounds like you're experiencing something important. What stands out most about this moment?",
-        "Thank you for sharing that. How does this emotion feel in your body right now?",
-        "I appreciate your openness. What would help you process this feeling?",
-        "That makes sense. Have you experienced something similar before?"
-      ]
-      const aiResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)]
-      setMessages(prev => [...prev, { role: 'ai', content: aiResponse }])
+      // Show error message to user instead of fake fallback
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to AI service'
+      setMessages(prev => [...prev, { role: 'ai', content: `⚠️ Error: ${errorMessage}. Please check if the backend server is running.` }])
     } finally {
       setIsLoading(false)
     }
@@ -123,11 +132,29 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
     setSaveSuccess(false)
 
     try {
-      // Try to generate diary from AI
       if (userId && sessionId) {
         try {
-          await aiChatApi.generateDiary(sessionId, userId)
-          // Backend automatically saves the diary, so refresh from backend
+          // 调用 session summary API 生成总结
+          const summaryData = await aiChatApi.getSessionSummary(sessionId)
+          
+          // 使用总结内容创建日记
+          const diaryContent = [
+            `## 对话总结\n${summaryData.summary}`,
+            summaryData.key_topics.length > 0 ? `\n## 关键话题\n${summaryData.key_topics.map(t => `- ${t}`).join('\n')}` : '',
+            summaryData.emotional_journey ? `\n## 情绪历程\n${summaryData.emotional_journey}` : '',
+            summaryData.user_needs ? `\n## 核心需求\n${summaryData.user_needs}` : '',
+            summaryData.suggestions.length > 0 ? `\n## 建议\n${summaryData.suggestions.map(s => `- ${s}`).join('\n')}` : ''
+          ].filter(Boolean).join('\n')
+          
+          // 创建日记
+          await aiChatApi.createDiary({
+            user_id: userId,
+            session_id: sessionId,
+            title: summaryData.key_topics[0] || '对话记录',
+            content: diaryContent,
+            mood: summaryData.dominant_emotion || 'Joy'
+          })
+          
           if (onRefreshDiaries) {
             onRefreshDiaries()
           }
@@ -135,11 +162,10 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
           setTimeout(() => setSaveSuccess(false), 3000)
           return
         } catch (err) {
-          console.error('Failed to generate diary:', err)
+          console.error('Failed to generate summary:', err)
         }
       }
 
-      // Fallback: Extract the conversation and save as a diary entry
       const conversationText = messages.map(m => `${m.role === 'user' ? 'Me' : 'AI'}: ${m.content}`).join('\n\n')
       const randomMood = MOOD_DATA[Math.floor(Math.random() * MOOD_DATA.length)]
       onSaveToDiary({
@@ -154,9 +180,141 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
     }
   }
 
+  // VIP Immersive View - Dark background with centered 3D Avatar
+  if (avatar) {
+    return (
+      <div className="h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
+        {/* Ambient glow effect */}
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            background: `radial-gradient(ellipse at center, ${avatar.color}40 0%, transparent 70%)`
+          }}
+        />
+
+        {/* Top bar with save button */}
+        <div className="relative z-10 flex items-center justify-between p-6">
+          <div className="flex items-center space-x-3">
+            <span className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
+              VIP
+            </span>
+            <span className="text-white/60 text-[11px] font-black uppercase tracking-widest">
+              {avatar.name}
+            </span>
+          </div>
+          <button
+            onClick={handleSaveReflection}
+            disabled={isSaving || messages.length < 2}
+            className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${
+              saveSuccess
+                ? 'bg-green-500 text-white'
+                : 'bg-white/10 text-white/80 hover:bg-white/20'
+            } disabled:opacity-30 disabled:cursor-not-allowed`}
+          >
+            {isSaving ? '...' : saveSuccess ? 'Saved!' : 'Save'}
+          </button>
+        </div>
+
+        {/* Main content area with Avatar */}
+        <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-8">
+          {/* 3D Avatar - Large centered display */}
+          <div className="relative w-48 h-48 mb-8">
+            {/* Glow ring */}
+            <div
+              className="absolute inset-0 rounded-full animate-pulse"
+              style={{
+                background: `radial-gradient(circle, ${avatar.color}30 0%, transparent 70%)`,
+                transform: 'scale(1.5)'
+              }}
+            />
+            <ModelViewer3D
+              modelPath={avatar.modelPath}
+              avatarName={avatar.name}
+              avatarColor={avatar.color}
+              size="large"
+              exposure={avatar.exposure}
+              environmentImage={avatar.environmentImage}
+              shadowIntensity={0}
+            />
+          </div>
+
+          {/* Message display area */}
+          <div className="w-full max-w-md text-center space-y-4">
+            {/* AI Response */}
+            <div className="min-h-[80px]">
+              {isLoading ? (
+                <div className="flex justify-center space-x-2">
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: avatar.color, animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: avatar.color, animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: avatar.color, animationDelay: '300ms' }}></div>
+                </div>
+              ) : (
+                <p className="text-white text-lg font-bold leading-relaxed animate-in fade-in duration-500">
+                  {latestAiMessage}
+                </p>
+              )}
+            </div>
+
+            {/* User's last message (if any) */}
+            {latestUserMessage && (
+              <p className="text-white/40 text-sm font-bold">
+                You: "{latestUserMessage}"
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom input area */}
+        <div className="relative z-10 p-6 pb-8">
+          <div className="flex items-center justify-center space-x-4 max-w-md mx-auto">
+            {/* Redo button */}
+            <button
+              onClick={() => setMessages([messages[0]])}
+              className="w-12 h-12 rounded-full bg-white/10 text-white/60 flex items-center justify-center hover:bg-white/20 transition-all"
+              title="Start over"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+
+            {/* Text input button - opens input */}
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Share your thoughts..."
+                className="w-full px-6 py-4 bg-white/10 backdrop-blur-sm rounded-full border border-white/10 focus:outline-none focus:border-white/30 text-white text-sm font-bold placeholder:text-white/30"
+              />
+            </div>
+
+            {/* Send button */}
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || isLoading}
+              className="w-14 h-14 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+              style={{
+                background: `linear-gradient(135deg, ${avatar.color} 0%, ${avatar.color}80 100%)`,
+                boxShadow: `0 0 30px ${avatar.color}40`
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Non-VIP: Regular chat interface
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
+      {/* Regular Header */}
       <div className="flex items-center justify-between p-8 border-b border-black/5">
         <div className="flex items-center space-x-4">
           <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center">
@@ -181,17 +339,23 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-6 rounded-3xl ${msg.role === 'user' ? 'bg-black text-white' : 'bg-gray-100 text-gray-800'}`}>
+            <div
+              className={`max-w-[75%] p-5 rounded-2xl ${
+                msg.role === 'user'
+                  ? 'bg-black text-white rounded-br-sm'
+                  : 'bg-gray-100 text-gray-800'
+              }`}
+            >
               <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
             </div>
           </div>
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] p-6 rounded-3xl bg-gray-100">
+            <div className="max-w-[75%] p-5 rounded-2xl bg-gray-100">
               <div className="flex space-x-2">
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -203,8 +367,8 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-8 border-t border-black/5">
+      {/* Input - Fixed at bottom, never shrinks */}
+      <div className="flex-shrink-0 p-6 border-t border-black/5 bg-white">
         <div className="flex items-center space-x-4">
           <input
             type="text"
@@ -226,7 +390,7 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries }: ChatAIViewProps
   )
 }
 
-export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail }: DiaryViewProps) {
+export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar }: DiaryViewProps) {
   const [mode, setMode] = useState<DiaryMode>('manual')
   const [content, setContent] = useState('')
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0] | null>(null)
@@ -329,8 +493,8 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
         </div>
       </div>
       ) : (
-        <div className="h-[580px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
-          <ChatAIView onSaveToDiary={onAddEntry} userId={userId} onRefreshDiaries={onRefreshDiaries} embedded />
+        <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
+          <ChatAIView onSaveToDiary={onAddEntry} userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} embedded />
         </div>
       )}
 

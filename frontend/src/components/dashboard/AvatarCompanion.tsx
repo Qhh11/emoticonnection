@@ -5,9 +5,12 @@ import ModelViewer3D from './ModelViewer3D'
 interface AvatarCompanionProps {
   avatar: Avatar3D
   onClose: () => void
+  onClick?: () => void           // Click callback for VIP features
+  activeTab?: string             // Current page tab
+  showVipHint?: boolean          // Show VIP feature hint
 }
 
-export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from localStorage or use default
     const saved = localStorage.getItem('avatarCompanionPosition')
@@ -18,6 +21,9 @@ export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProp
   const [isHovered, setIsHovered] = useState(false)
   const companionRef = useRef<HTMLDivElement>(null)
 
+  // Track click start for differentiating click vs drag
+  const [clickStart, setClickStart] = useState({ x: 0, y: 0, time: 0 })
+
   // Save position to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('avatarCompanionPosition', JSON.stringify(position))
@@ -25,6 +31,9 @@ export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProp
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return // Don't drag when clicking buttons
+
+    // Record click start position and time
+    setClickStart({ x: e.clientX, y: e.clientY, time: Date.now() })
 
     setIsDragging(true)
     setDragOffset({
@@ -50,7 +59,18 @@ export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProp
       }
     }
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isDragging) {
+        // Check if this was a click (small movement, short duration)
+        const dx = Math.abs(e.clientX - clickStart.x)
+        const dy = Math.abs(e.clientY - clickStart.y)
+        const dt = Date.now() - clickStart.time
+
+        // If movement < 5px and time < 300ms, treat as click
+        if (dx < 5 && dy < 5 && dt < 300 && onClick) {
+          onClick()
+        }
+      }
       setIsDragging(false)
     }
 
@@ -63,12 +83,20 @@ export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProp
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDragging, dragOffset])
+  }, [isDragging, dragOffset, clickStart, onClick])
+
+  // Get tooltip text based on activeTab
+  const getTooltipText = () => {
+    if (activeTab === 'soulsync' && showVipHint) {
+      return 'Click for emotion analysis'
+    }
+    return avatar.name
+  }
 
   return (
     <div
       ref={companionRef}
-      className={`fixed z-[90] transition-transform ${isDragging ? 'cursor-grabbing scale-110' : 'cursor-grab'} ${isHovered ? 'scale-105' : ''}`}
+      className={`fixed z-[90] transition-transform ${isDragging ? 'cursor-grabbing scale-110' : onClick ? 'cursor-pointer' : 'cursor-grab'} ${isHovered ? 'scale-105' : ''}`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
@@ -98,7 +126,7 @@ export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProp
         {/* Hover tooltip */}
         {isHovered && !isDragging && (
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-2 bg-black/90 backdrop-blur-sm text-white rounded-2xl text-xs font-black uppercase tracking-widest whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 duration-300">
-            {avatar.name}
+            {getTooltipText()}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/90"></div>
           </div>
         )}
@@ -121,8 +149,18 @@ export default function AvatarCompanion({ avatar, onClose }: AvatarCompanionProp
           </div>
         )}
 
-        {/* Drag hint - only show briefly on first render */}
-        {!isDragging && (
+        {/* VIP Feature Hint Badge - Show when showVipHint is true */}
+        {showVipHint && !isDragging && (
+          <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
+            <div className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg whitespace-nowrap flex items-center space-x-1">
+              <span>✨</span>
+              <span>Click me!</span>
+            </div>
+          </div>
+        )}
+
+        {/* Drag hint - only show when no VIP hint */}
+        {!isDragging && !showVipHint && (
           <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
             Drag to move
           </div>

@@ -31,12 +31,93 @@ interface AvatarGalleryProps {
   onClose: () => void
   onSelectAvatar: (avatar: Avatar3D) => void
   selectedAvatarId?: string
+  userLevel?: number
 }
 
-export default function AvatarGallery({ isOpen, onClose, onSelectAvatar, selectedAvatarId }: AvatarGalleryProps) {
+const VIP_REQUIRED_LEVEL = 3
+
+export default function AvatarGallery({ isOpen, onClose, onSelectAvatar, selectedAvatarId, userLevel = 0 }: AvatarGalleryProps) {
   const [viewingAvatar, setViewingAvatar] = useState<Avatar3D | null>(null)
+  const isVip = userLevel >= VIP_REQUIRED_LEVEL
 
   if (!isOpen) return null
+
+  // Show VIP locked state for non-VIP users
+  if (!isVip) {
+    return createPortal(
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] overflow-hidden animate-in zoom-in-95 duration-500">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors z-10"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* VIP Lock Content */}
+          <div className="p-10 text-center">
+            {/* Lock Icon with gradient background */}
+            <div className="relative mx-auto w-28 h-28 mb-6">
+              <div className="absolute inset-0 bg-gradient-to-br from-yellow-400 via-orange-500 to-pink-500 rounded-[2rem] animate-pulse opacity-20"></div>
+              <div className="relative w-full h-full bg-gradient-to-br from-yellow-400 via-orange-500 to-pink-500 rounded-[2rem] flex items-center justify-center shadow-xl">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className="text-2xl font-black uppercase tracking-tight mb-2">
+              VIP Exclusive
+            </h2>
+            <p className="text-gray-500 font-bold text-sm mb-6">
+              3D Avatars are available for Level {VIP_REQUIRED_LEVEL}+ members
+            </p>
+
+            {/* Current Level Badge */}
+            <div className="inline-flex items-center space-x-2 px-5 py-3 bg-gray-100 rounded-2xl mb-6">
+              <span className="text-sm font-bold text-gray-600">Current Level:</span>
+              <span className="px-3 py-1 bg-white rounded-full text-sm font-black shadow-sm">
+                Lv.{userLevel}
+              </span>
+            </div>
+
+            {/* Progress hint */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold text-gray-400">
+                <span>Progress to VIP</span>
+                <span>Lv.{userLevel} / Lv.{VIP_REQUIRED_LEVEL}</span>
+              </div>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min((userLevel / VIP_REQUIRED_LEVEL) * 100, 100)}%` }}
+                ></div>
+              </div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                {VIP_REQUIRED_LEVEL - userLevel > 0
+                  ? `${VIP_REQUIRED_LEVEL - userLevel} more level${VIP_REQUIRED_LEVEL - userLevel > 1 ? 's' : ''} to unlock`
+                  : 'Almost there!'}
+              </p>
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={onClose}
+              className="mt-8 w-full py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
+  }
 
   if (viewingAvatar) {
     return createPortal(

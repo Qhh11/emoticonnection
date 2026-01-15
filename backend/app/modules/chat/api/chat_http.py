@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 database_path = Path(__file__).resolve().parents[5] / "database"
 sys.path.insert(0, str(database_path))
-from config.mongodb_config import get_database  # type: ignore
+from config.mongodb_config import get_database, get_sync_database  # type: ignore
 
 
 
@@ -52,6 +52,33 @@ def get_chat_repo() -> ChatRepository:
 # ============================================================================
 # HELPER FUNCTIONS (Database operations via ChatRepository)
 # ============================================================================
+
+def _get_username_by_id(user_id: str) -> Optional[str]:
+    """根据 user_id 获取用户的 username"""
+    try:
+        db = get_sync_database()
+        user = db.users.find_one({"_id": ObjectId(user_id)})
+        if user:
+            return user.get("username") or user.get("nickname")
+        return None
+    except Exception:
+        return None
+
+
+def _get_user_info_by_id(user_id: str) -> dict:
+    """根据 user_id 获取用户的 username 和 avatar"""
+    try:
+        db = get_sync_database()
+        user = db.users.find_one({"_id": ObjectId(user_id)})
+        if user:
+            return {
+                "username": user.get("nickname") or user.get("username"),
+                "avatar": user.get("avatar")  # emoji avatar like 🦊
+            }
+        return {"username": None, "avatar": None}
+    except Exception:
+        return {"username": None, "avatar": None}
+
 
 async def _get_or_create_room(repo: ChatRepository, user1_id: Union[int, str], user2_id: Union[int, str], is_anonymous: bool = False) -> dict:
     """
@@ -189,8 +216,26 @@ async def get_room_messages(
     # Get all messages for this room
     messages = await _get_room_messages(repo, room_id)
 
-    # Convert dicts to MessageOut models and return
-    return [MessageOut(**msg) for msg in messages]
+    # 情绪颜色映射
+    EMOTION_COLORS = {
+        'bored': '#4B4E91',
+        'fear': '#9381BA',
+        'joy': '#F9D849',
+        'sadness': '#3266B1',
+        'disgust': '#66B04C',
+        'anxiety': '#E67E22',
+        'anger': '#D32F2F',
+        'embarrassment': '#D278A3',
+        'envy': '#2BA8A4',
+    }
+    
+    # Convert dicts to MessageOut models with emotion_color
+    result = []
+    for msg in messages:
+        if msg.get('emotion'):
+            msg['emotion_color'] = EMOTION_COLORS.get(msg['emotion'].lower(), '#808080')
+        result.append(MessageOut(**msg))
+    return result
 
 
 @router.post("/rooms/{room_id}/messages", response_model=MessageOut)
@@ -317,10 +362,16 @@ async def get_user_rooms(user_id: str, repo: ChatRepository = Depends(get_chat_r
         room_messages = await _get_room_messages(repo, room["id"], limit=1)
         last_msg = room_messages[-1] if room_messages else None
 
+        # Get user info (name and avatar) for non-anonymous chats
+        other_user_info = {"username": None, "avatar": None}
+        if not is_other_anonymous:
+            other_user_info = _get_user_info_by_id(other_user_id)
+
         result.append(RoomListItem(
             room_id=room["id"],
-            other_user_id=other_user_id if not is_other_anonymous else -1,
-            other_user_name=None if is_other_anonymous else f"User {other_user_id}",
+            other_user_id=other_user_id if not is_other_anonymous else "-1",
+            other_user_name=other_user_info["username"],
+            other_user_avatar=other_user_info["avatar"],
             is_anonymous=room.get("is_anonymous", False),
             last_message=last_msg["content"][:50] if last_msg else None,
             last_message_time=last_msg["created_at"] if last_msg else None

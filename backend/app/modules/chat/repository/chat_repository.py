@@ -98,13 +98,14 @@ class ChatRepository:
         return self._session_to_dict(session) if session else None
 
     async def get_user_sessions(self, user_id: str) -> List[Dict]:
-        """Get all sessions for a user"""
+        """Get all PEER chat sessions for a user (excludes AI chat sessions)"""
         try:
             user_oid = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
         except:
             user_oid = user_id
 
         cursor = self.sessions.find({
+            "session_type": "peer",  # Only return peer chat sessions, not AI chat
             "$or": [
                 {"user_id": user_oid},
                 {"peer_user_id": user_oid}

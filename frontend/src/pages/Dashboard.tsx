@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
+import UserProfileModal from '../components/UserProfileModal'
+import FollowListModal from '../components/FollowListModal'
+import EmotionReportModal from '../components/EmotionReportModal'
 import { Avatar3D } from '../config/avatars'
 import CommunityView from './community/CommunityView'
 import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, MBTIProfile, UserPreferences } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
 
@@ -36,7 +39,16 @@ export default function Dashboard() {
   const [points, setPoints] = useState(0)
   const [level, setLevel] = useState(1)
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([])
-  const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[THEMES.length - 1])
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('currentTheme')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // 找到匹配的主题，确保引用完整的 Theme 对象
+      const found = THEMES.find(t => t.name === parsed.name)
+      return found || THEMES[THEMES.length - 1]
+    }
+    return THEMES[THEMES.length - 1]
+  })
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([])
   const [userPosts, setUserPosts] = useState<Post[]>([])
 
@@ -74,11 +86,33 @@ export default function Dashboard() {
   // User avatar state
   const [userAvatar, setUserAvatar] = useState('🦊')
 
-  // Sync userAvatar when user data changes (e.g., after login loads user data)
+  // User profile modal state (for viewing other users)
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null)
+
+  // Follow list modal state
+  const [followListType, setFollowListType] = useState<'following' | 'followers' | null>(null)
+
+  // SoulSync emotion analysis state (triggered by Avatar click)
+  const [showEmotionAnalysis, setShowEmotionAnalysis] = useState(false)
+
+  // Track if user is in a peer chat session (for VIP hint display)
+  const [hasActiveSession, setHasActiveSession] = useState(false)
+
+  // Emotion Report Modal state
+  const [showEmotionReport, setShowEmotionReport] = useState(false)
+
+  // Weekly emotion report for Profile card preview
+  const [weeklyReport, setWeeklyReport] = useState<EmotionReport | null>(null)
+
+  // Load user data from AuthUser on mount or when AuthUser changes
   useEffect(() => {
     if (AuthUser?.user_id) {
-      userApi.getUser(AuthUser?.user_id).then(user => { setUser(user) })
+      userApi.getUser(AuthUser.user_id).then(userData => { setUser(userData) })
     }
+  }, [AuthUser?.user_id])
+
+  // Sync userAvatar when user data changes
+  useEffect(() => {
     if (user?.avatar) {
       setUserAvatar(user.avatar)
     }
@@ -89,6 +123,8 @@ export default function Dashboard() {
     root.style.setProperty('--accent-color', currentTheme.color)
     root.style.setProperty('--accent-soft', currentTheme.soft)
     root.style.setProperty('--accent-text', currentTheme.text)
+    // 保存主题到 localStorage
+    localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
   // Fetch social stats, points, and diaries when user is available
@@ -137,6 +173,15 @@ export default function Dashboard() {
           }
         })
         .catch(err => console.error('Failed to fetch today check-in:', err))
+
+      // Load weekly emotion report for Profile card preview
+      aiChatApi.getWeeklyReport(user._id)
+        .then(rawData => {
+          // Handle double-serialized JSON from backend
+          const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
+          setWeeklyReport(data)
+        })
+        .catch(err => console.error('Failed to fetch weekly report:', err))
     }
   }, [user?._id])
 
@@ -175,15 +220,32 @@ export default function Dashboard() {
     }, 1000)
   }
 
-  const addDiaryEntry = (entry: {mood: string, color: string, text: string}) => {
+  const addDiaryEntry = async (entry: {mood: string, color: string, text: string}) => {
     const newEntry = {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
       ...entry
     }
-    // Add to local state
-    // Note: AI-generated diaries are automatically saved by the generateDiary API endpoint
-    // Manual diaries are stored locally (backend POST /diaries endpoint would be needed for persistence)
-    setDiaryEntries(prev => [newEntry, ...prev])
+
+    // Save to backend if user is logged in
+    if (user?._id) {
+      try {
+        await aiChatApi.createDiary({
+          user_id: user._id,
+          title: `Journal - ${newEntry.date}`,
+          content: entry.text,
+          mood: entry.mood
+        })
+        // Refresh diaries from backend to get the saved entry with ID
+        refreshDiaries()
+      } catch (err) {
+        console.error('Failed to save diary:', err)
+        // Fall back to local state if save fails
+        setDiaryEntries(prev => [newEntry, ...prev])
+      }
+    } else {
+      // No user logged in, only store locally (will be lost on refresh)
+      setDiaryEntries(prev => [newEntry, ...prev])
+    }
   }
 
   const refreshDiaries = () => {
@@ -248,6 +310,13 @@ export default function Dashboard() {
   const handleCloseCompanion = () => {
     setSelectedAvatar(null)
     localStorage.removeItem('selectedAvatar')
+  }
+
+  // Handle Avatar click based on current tab
+  const handleAvatarClick = () => {
+    if (activeTab === 'soulsync') {
+      setShowEmotionAnalysis(true)
+    }
   }
 
   const handleOpenSettings = () => {
@@ -342,13 +411,17 @@ export default function Dashboard() {
           onOpenPostDetail={setSelectedPostModal}
           todayCheckIn={todayCheckIn}
           onOpenSettings={handleOpenSettings}
+          onViewFollowing={() => setFollowListType('following')}
+          onViewFollowers={() => setFollowListType('followers')}
+          onOpenEmotionReport={() => setShowEmotionReport(true)}
+          weeklyReport={weeklyReport}
         />
       case 'diary':
-        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} />
+        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} avatar={selectedAvatar} />
       case 'community':
-        return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} />
+        return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
       case 'soulsync':
-        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} />
+        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} onViewProfile={setViewingUserId} avatar={selectedAvatar} userLevel={level} showEmotionAnalysis={showEmotionAnalysis} onCloseEmotionAnalysis={() => setShowEmotionAnalysis(false)} onSessionChange={setHasActiveSession} />
       default:
         return <PlaceholderView title={activeTab} />
     }
@@ -394,13 +467,26 @@ export default function Dashboard() {
         onClose={() => setShowAvatarGallery(false)}
         onSelectAvatar={handleSelectAvatar}
         selectedAvatarId={selectedAvatar?.id}
+        userLevel={level}
       />
 
-      {/* Avatar Companion - Floating on dashboard */}
-      {selectedAvatar && (
+      {/* Avatar Companion - Floating on dashboard (hidden on diary page since Avatar is embedded in chat) */}
+      {selectedAvatar && activeTab !== 'diary' && (
         <AvatarCompanion
           avatar={selectedAvatar}
           onClose={handleCloseCompanion}
+          activeTab={activeTab}
+          onClick={handleAvatarClick}
+          showVipHint={activeTab === 'soulsync' && hasActiveSession}
+        />
+      )}
+
+      {/* Emotion Report Modal */}
+      {user?._id && (
+        <EmotionReportModal
+          isOpen={showEmotionReport}
+          onClose={() => setShowEmotionReport(false)}
+          userId={user._id}
         />
       )}
 
@@ -517,6 +603,31 @@ export default function Dashboard() {
           </div>
         )
       })()}
+
+      {/* User Profile Modal (for viewing other users) */}
+      {viewingUserId && (
+        <UserProfileModal
+          userId={viewingUserId}
+          currentUserId={user?._id || ''}
+          isOpen={!!viewingUserId}
+          onClose={() => setViewingUserId(null)}
+        />
+      )}
+
+      {/* Follow List Modal */}
+      {followListType && user?._id && (
+        <FollowListModal
+          userId={user._id}
+          currentUserId={user._id}
+          type={followListType}
+          isOpen={!!followListType}
+          onClose={() => setFollowListType(null)}
+          onViewProfile={(userId) => {
+            setFollowListType(null)
+            setViewingUserId(userId)
+          }}
+        />
+      )}
 
       {/* Settings Modal */}
       {showSettings && (

@@ -63,6 +63,7 @@ class UserInfo(BaseModel):
     id: str
     username: str
     nickname: str
+    avatar: str = ""  # User's emoji avatar
     is_following: bool = False
     is_follower: bool = False
     is_mutual: bool = False
@@ -140,6 +141,7 @@ def get_following(user_id: str) -> List[UserInfo]:
                 id=user_id_str,
                 username=user.get("username", ""),
                 nickname=user.get("nickname", user.get("username", "")),
+                avatar=user.get("avatar", ""),
                 is_following=True,
                 is_follower=is_following(user_id_str, user_id),
                 is_mutual=is_following(user_id_str, user_id)
@@ -167,6 +169,7 @@ def get_followers(user_id: str) -> List[UserInfo]:
                 id=user_id_str,
                 username=user.get("username", ""),
                 nickname=user.get("nickname", user.get("username", "")),
+                avatar=user.get("avatar", ""),
                 is_following=is_following(user_id, user_id_str),
                 is_follower=True,
                 is_mutual=is_following(user_id, user_id_str)
@@ -201,6 +204,7 @@ def get_contacts(user_id: str) -> List[UserInfo]:
                 id=user_id_str,
                 username=user.get("username", ""),
                 nickname=user.get("nickname", user.get("username", "")),
+                avatar=user.get("avatar", ""),
                 is_following=True,
                 is_follower=is_following(user_id_str, user_id),
                 is_mutual=is_following(user_id_str, user_id)
@@ -230,6 +234,7 @@ def discover_users(user_id: str) -> List[UserInfo]:
                 id=user_id_str,
                 username=user.get("username", ""),
                 nickname=user.get("nickname", user.get("username", "")),
+                avatar=user.get("avatar", ""),
                 is_following=False,
                 is_follower=is_following(user_id_str, user_id),
                 is_mutual=False
