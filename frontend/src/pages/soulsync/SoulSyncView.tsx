@@ -326,14 +326,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        const newMessage: ChatMessage = {
-          id: data.id || Date.now().toString(),
-          role: data.sender_id === userId ? 'user' : 'peer',
-          text: data.content,
-          timestamp: new Date(data.created_at || Date.now()).getTime(),
-          emotion: data.emotion || 'Neutral',
-          emotion_color: data.emotion_color || '#4B4E91'
-        }
 
         if (data.type === 'peer_disconnected') {
           const sysMsg: ChatMessage = {
@@ -349,7 +341,16 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
           ))
           return
         }
-        
+
+        const newMessage: ChatMessage = {
+          id: data.id || Date.now().toString(),
+          role: data.sender_id === userId ? 'user' : 'peer',
+          text: data.content,
+          timestamp: new Date(data.created_at || Date.now()).getTime(),
+          emotion: data.emotion || 'Neutral',
+          emotion_color: data.emotion_color || '#4B4E91'
+        }
+
         setSessions(prev => prev.map(s =>
           s.roomId === roomId
             ? { ...s, messages: [...s.messages, newMessage], lastMessage: data.content }
@@ -492,7 +493,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
         content: chatInput
       }).catch(err => console.error('Failed to send message:', err))
 
-      // Add message locally
+      // Add message locally (only for HTTP fallback)
       const emotion = detectEmotion(chatInput)
       const newMsg: ChatMessage = {
         id: Date.now().toString(),

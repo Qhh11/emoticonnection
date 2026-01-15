@@ -9,6 +9,7 @@ interface FollowListModalProps {
   isOpen: boolean
   onClose: () => void
   onViewProfile: (userId: string) => void
+  onStatsChange?: () => void  // 当 follow/unfollow 后刷新统计
 }
 
 export default function FollowListModal({
@@ -17,7 +18,8 @@ export default function FollowListModal({
   type,
   isOpen,
   onClose,
-  onViewProfile
+  onViewProfile,
+  onStatsChange
 }: FollowListModalProps) {
   const [users, setUsers] = useState<FollowUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -65,6 +67,8 @@ export default function FollowListModal({
         await socialApi.follow(currentUserId, targetUserId)
       }
       setFollowingStates(prev => ({ ...prev, [targetUserId]: !isCurrentlyFollowing }))
+      // 通知父组件刷新统计
+      onStatsChange?.()
     } catch (err) {
       console.error('Failed to toggle follow:', err)
     } finally {

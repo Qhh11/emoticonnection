@@ -127,14 +127,24 @@ export default function Dashboard() {
     localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
-  // Fetch social stats, points, and diaries when user is available
-  useEffect(() => {
+  // 刷新社交统计的函数
+  const refreshSocialStats = () => {
     if (user?._id) {
       userApi.getSocialStats(user._id)
         .then(stats => setSocialStats(stats))
         .catch(err => console.error('Failed to fetch social stats:', err))
+    }
+  }
 
-      // Load user points and level from API
+  // Fetch social stats, points, and diaries when user is available
+  useEffect(() => {
+    if (user?._id) {
+      // 加载社交统计
+      userApi.getSocialStats(user._id)
+        .then(stats => setSocialStats(stats))
+        .catch(err => console.error('Failed to fetch social stats:', err))
+
+      // 加载积分和等级
       userApi.getPoints(user._id)
         .then(data => {
           setPoints(data.points)
@@ -142,7 +152,7 @@ export default function Dashboard() {
         })
         .catch(err => console.error('Failed to fetch points:', err))
 
-      // Load diaries from API
+      // 加载日记
       aiChatApi.getDiaries(user._id)
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
@@ -155,14 +165,14 @@ export default function Dashboard() {
         })
         .catch(err => console.error('Failed to fetch diaries:', err))
 
-      // Load user's posts from API
+      // 加载用户帖子
       postApi.getUserPosts(user._id)
         .then(response => {
           setUserPosts(response.posts)
         })
         .catch(err => console.error('Failed to fetch user posts:', err))
 
-      // Check if user has checked in today
+      // 加载今日签到状态
       userApi.getTodayCheckIn(user._id)
         .then(response => {
           if (response.checked_in && response.check_in) {
@@ -172,12 +182,11 @@ export default function Dashboard() {
             }
           }
         })
-        .catch(err => console.error('Failed to fetch today check-in:', err))
+        .catch(err => console.error('Failed to fetch check-in status:', err))
 
-      // Load weekly emotion report for Profile card preview
+      // 加载周报
       aiChatApi.getWeeklyReport(user._id)
         .then(rawData => {
-          // Handle double-serialized JSON from backend
           const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
           setWeeklyReport(data)
         })
@@ -626,6 +635,7 @@ export default function Dashboard() {
             setFollowListType(null)
             setViewingUserId(userId)
           }}
+          onStatsChange={refreshSocialStats}
         />
       )}
 
