@@ -36,12 +36,19 @@ class EmotionService:
             str: 情绪分类结果 (例如: 焦虑, 难过, 疲惫, 开心, 平静)
         """
         prompt = f"""
-        Please analyze the emotion of the following text and categorize it into one of these categories:
-        [Anxiety, Sadness, Fatigue, Happiness, Calm, Anger, Confusion].
+        Please analyze the emotion of the following text.
+        Identify the top 2 emotions and their approximate percentages.
+        
+        Categories to choose from:
+        [Anxiety, Sadness, Fatigue, Happiness, Calm, Anger, Confusion]
         
         Text: "{text}"
         
-        Return ONLY the category name.
+        Return the result in EXACTLY this format:
+        "Emotion1: X%, Emotion2: Y%"
+        
+        Example:
+        "Happiness: 80%, Calm: 20%"
         """
         response = await self.model.generate_content_async(prompt)
         return response.text.strip()
