@@ -1,942 +1,357 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EmotiConnect Test</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: 280px 1fr 350px;
-            gap: 20px;
-            height: 90vh;
-        }
-
-        .panel {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .panel-header {
-            padding: 20px;
-            background: #667eea;
-            color: white;
-        }
-
-        .panel-header h2 {
-            font-size: 18px;
-            margin-bottom: 5px;
-        }
-
-        .panel-header p {
-            font-size: 12px;
-            opacity: 0.9;
-        }
-
-        .panel-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-        }
-
-        /* User Selection */
-        .user-btn {
-            width: 100%;
-            padding: 15px;
-            margin-bottom: 10px;
-            border: 2px solid #e0e0e0;
-            background: white;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.2s;
-            text-align: left;
-        }
-
-        .user-btn:hover {
-            border-color: #667eea;
-            background: #f0f4ff;
-        }
-
-        .user-btn.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .user-btn .user-icon {
-            font-size: 20px;
-            margin-right: 10px;
-        }
-
-        /* Matching Section */
-        .section {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .section h3 {
-            font-size: 14px;
-            color: #667eea;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-
-        .select-group {
-            margin-bottom: 10px;
-        }
-
-        .select-group label {
-            display: block;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
-        .select-group select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .select-group select:focus {
-            border-color: #667eea;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 14px;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-        }
-
-        .btn-success {
-            background: #4caf50;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #43a047;
-        }
-
-        .btn-warning {
-            background: #ff9800;
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #f57c00;
-        }
-
-        .btn-danger {
-            background: #f44336;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #d32f2f;
-        }
-
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-
-        /* Status Display */
-        .status-box {
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            margin-top: 10px;
-        }
-
-        .status-box.waiting {
-            background: #fff3e0;
-            color: #e65100;
-        }
-
-        .status-box.matched {
-            background: #e8f5e9;
-            color: #2e7d32;
-        }
-
-        .status-box.info {
-            background: #e3f2fd;
-            color: #1565c0;
-        }
-
-        /* Chat Area */
-        .chat-header {
-            padding: 15px 20px;
-            background: #f8f9fa;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        .chat-title {
-            font-weight: 600;
-            color: #333;
-        }
-
-        .chat-subtitle {
-            font-size: 12px;
-            color: #666;
-            margin-top: 3px;
-        }
-
-        .chat-subtitle.connected {
-            color: #4caf50;
-        }
-
-        .chat-subtitle.anonymous {
-            color: #ff9800;
-        }
-
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: #f9fafb;
-        }
-
-        .message {
-            margin-bottom: 15px;
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message.sent {
-            text-align: right;
-        }
-
-        .message.received {
-            text-align: left;
-        }
-
-        .message-bubble {
-            display: inline-block;
-            padding: 10px 15px;
-            border-radius: 18px;
-            max-width: 80%;
-            word-wrap: break-word;
-        }
-
-        .message.sent .message-bubble {
-            background: #667eea;
-            color: white;
-        }
-
-        .message.received .message-bubble {
-            background: #e5e7eb;
-            color: #1f2937;
-        }
-
-        .message-time {
-            font-size: 10px;
-            color: #9ca3af;
-            margin-top: 3px;
-        }
-
-        .input-area {
-            padding: 15px;
-            background: white;
-            border-top: 2px solid #e0e0e0;
-            display: flex;
-            gap: 10px;
-        }
-
-        .input-area input {
-            flex: 1;
-            padding: 12px 15px;
-            border: 2px solid #e5e7eb;
-            border-radius: 25px;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .input-area input:focus {
-            border-color: #667eea;
-        }
-
-        .input-area button {
-            padding: 12px 25px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .input-area button:hover {
-            background: #5568d3;
-        }
-
-        .no-chat {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #999;
-            font-size: 16px;
-            text-align: center;
-            padding: 20px;
-        }
-
-        /* Room List */
-        .room-item {
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .room-item:hover {
-            border-color: #667eea;
-            background: #f0f4ff;
-        }
-
-        .room-item.active {
-            border-color: #667eea;
-            background: #e8eaf6;
-        }
-
-        .room-item .room-name {
-            font-weight: 600;
-            margin-bottom: 3px;
-        }
-
-        .room-item .room-info {
-            font-size: 11px;
-            color: #666;
-        }
-
-        .room-item .room-info.anonymous {
-            color: #ff9800;
-        }
-
-        /* Log Panel */
-        .log-content {
-            font-family: 'Monaco', 'Consolas', monospace;
-            font-size: 11px;
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 8px;
-            height: 100%;
-            overflow-y: auto;
-        }
-
-        .log-entry {
-            margin-bottom: 5px;
-            padding: 5px;
-            border-radius: 4px;
-        }
-
-        .log-entry.info {
-            color: #4fc3f7;
-        }
-
-        .log-entry.success {
-            color: #81c784;
-        }
-
-        .log-entry.error {
-            color: #e57373;
-        }
-
-        .log-entry.warning {
-            color: #ffb74d;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        /* Reveal Button */
-        .reveal-section {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #e0e0e0;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EmotiConnect - Match Test (Auth Unified)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; background:#0f172a; color:#e2e8f0; margin:0; }
+    .wrap { max-width: 880px; margin: 24px auto; padding: 0 16px; }
+    .card { background:#111c33; border:1px solid #22304f; border-radius:14px; padding:18px; margin-bottom:16px; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    h2 { margin: 0 0 12px; font-size: 16px; color:#cbd5e1; }
+    label { display:block; margin:10px 0 6px; color:#cbd5e1; font-size: 13px; }
+    input, select { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #2a3a60; background:#0b1224; color:#e2e8f0; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button { padding:10px 14px; border-radius:12px; border:0; cursor:pointer; font-weight:600; }
+    .btn { background:#4f46e5; color:white; }
+    .btn2 { background:#334155; color:#e2e8f0; }
+    .btnDanger { background:#b91c1c; color:white; }
+    .muted { color:#94a3b8; font-size: 12px; }
+    .ok { color:#22c55e; }
+    .warn { color:#f59e0b; }
+    .err { color:#ef4444; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:#0b1224; border:1px solid #2a3a60; margin-right:8px; font-size:12px; }
+    .hidden { display:none; }
+    a { color:#93c5fd; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Left Panel: User & Matching -->
-        <div class="panel">
-            <div class="panel-header">
-                <h2>🎭 Identity & Matching</h2>
-                <p>Select user and find matches</p>
-            </div>
-            <div class="panel-content">
-                <!-- User Selection -->
-                <div class="section">
-                    <h3>Select Your Identity</h3>
-                    <button class="user-btn active" onclick="selectUser(1)">
-                        <span class="user-icon">👤</span> User 1
-                    </button>
-                    <button class="user-btn" onclick="selectUser(2)">
-                        <span class="user-icon">👤</span> User 2
-                    </button>
-                    <button class="user-btn" onclick="selectUser(3)">
-                        <span class="user-icon">👤</span> User 3
-                    </button>
-                    <button class="user-btn" onclick="selectUser(4)">
-                        <span class="user-icon">👤</span> User 4
-                    </button>
-                </div>
+<div class="wrap">
+  <h1>🎯 Match Test (Auth Unified)</h1>
+  <div class="muted">Open this page in <b>two windows</b> (normal + incognito). Login as two different users, then click Find Match.</div>
 
-                <!-- Matching -->
-                <div class="section">
-                    <h3>🎯 Find a Match</h3>
-                    <div class="select-group">
-                        <label>Your Current Emotion</label>
-                        <select id="emotionSelect">
-                            <option value="happy">😊 Happy</option>
-                            <option value="warm">🤗 Warm</option>
-                            <option value="neutral">😐 Neutral</option>
-                            <option value="anxious">😰 Anxious</option>
-                            <option value="sad">😢 Sad</option>
-                            <option value="excited">🎉 Excited</option>
-                            <option value="stressed">😫 Stressed</option>
-                            <option value="friendly">😄 Friendly</option>
-                        </select>
-                    </div>
-                    <div class="select-group">
-                        <label>Match Mode</label>
-                        <select id="modeSelect">
-                            <option value="human_anonymous">🎭 Anonymous</option>
-                            <option value="human_non_anonymous">👤 Non-Anonymous</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary" onclick="findMatch()" id="matchBtn">
-                        Find Match
-                    </button>
-                    <button class="btn btn-danger hidden" onclick="cancelMatch()" id="cancelBtn">
-                        Cancel Search
-                    </button>
-                    <div id="matchStatus"></div>
-                </div>
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>1) Login (use Auth users)</h2>
+    <label>Username</label>
+    <input id="username" placeholder="e.g. alice" />
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••" />
+    <div style="display:flex; gap:10px; margin-top:12px;">
+      <button class="btn" id="btnLogin">Login</button>
+      <button class="btn2" id="btnLogout">Logout</button>
+      <a class="muted" href="/static/register.html" target="_blank" style="align-self:center;">No account? Register</a>
+    </div>
+    <div style="margin-top:10px;">
+      <span class="pill">Current User: <span id="whoami">-</span></span>
+      <span id="loginMsg" class="muted"></span>
+    </div>
+    <div class="muted" style="margin-top:10px;">
+      Token: <span id="tokenState">-</span>
+    </div>
+  </div>
 
-                <!-- My Rooms -->
-                <div class="section">
-                    <h3>💬 My Conversations</h3>
-                    <div id="roomList">
-                        <p style="color: #999; font-size: 12px;">No conversations yet</p>
-                    </div>
-                    <button class="btn btn-warning" onclick="loadMyRooms()" style="margin-top: 10px;">
-                        Refresh Rooms
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Middle Panel: Chat -->
-        <div class="panel">
-            <div class="chat-header" id="chatHeader">
-                <div class="chat-title" id="chatTitle">Select a conversation</div>
-                <div class="chat-subtitle" id="chatSubtitle">Or find a match to start chatting</div>
-            </div>
-
-            <div class="no-chat" id="noChat">
-                <div>
-                    <div style="font-size: 48px; margin-bottom: 15px;">💬</div>
-                    <div>Select a conversation or find a match</div>
-                </div>
-            </div>
-
-            <div class="messages hidden" id="messages"></div>
-
-            <div class="input-area hidden" id="inputArea">
-                <input
-                    type="text"
-                    id="messageInput"
-                    placeholder="Type a message..."
-                    onkeypress="if(event.key==='Enter') sendMessage()"
-                >
-                <button onclick="sendMessage()">Send</button>
-            </div>
-
-            <!-- Reveal Identity Section -->
-            <div class="reveal-section hidden" id="revealSection" style="padding: 10px 15px; background: #fff3e0;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 12px; color: #e65100;">
-                        🎭 You are anonymous in this chat
-                    </span>
-                    <button class="btn btn-warning" onclick="revealIdentity()" style="width: auto; padding: 8px 15px; font-size: 12px;">
-                        Reveal My Identity
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Panel: Logs -->
-        <div class="panel">
-            <div class="panel-header">
-                <h2>📋 Activity Log</h2>
-                <p>API calls and WebSocket events</p>
-            </div>
-            <div class="panel-content" style="padding: 0;">
-                <div class="log-content" id="logContent"></div>
-            </div>
-        </div>
+  <!-- MATCH -->
+  <div class="card" id="matchCard">
+    <h2>2) Match Request</h2>
+    <div class="row">
+      <div>
+        <label>Current Emotion</label>
+        <select id="emotion">
+          <option value="happy">happy</option>
+          <option value="warm">warm</option>
+          <option value="neutral">neutral</option>
+          <option value="sad">sad</option>
+          <option value="anxious" selected>anxious</option>
+          <option value="stressed">stressed</option>
+          <option value="uncertain">uncertain</option>
+          <option value="lonely">lonely</option>
+          <option value="grateful">grateful</option>
+          <option value="calm">calm</option>
+        </select>
+      </div>
+      <div>
+        <label>Emotion Intensity (1-5)</label>
+        <input id="intensity" type="number" min="1" max="5" value="3"/>
+      </div>
     </div>
 
-    <script>
-        // ====================================================================
-        // Configuration
-        // ====================================================================
-        const API_BASE = 'http://localhost:8000/api';
-        const WS_BASE = 'ws://localhost:8000';
+    <div class="row">
+      <div>
+        <label>Role</label>
+        <select id="role">
+          <option value="seeker" selected>seeker</option>
+          <option value="supporter">supporter</option>
+          <option value="either">either</option>
+        </select>
+      </div>
+      <div>
+        <label>Support Need</label>
+        <select id="need">
+          <option value="vent" selected>vent</option>
+          <option value="advice">advice</option>
+          <option value="companion">companion</option>
+          <option value="distraction">distraction</option>
+        </select>
+      </div>
+    </div>
 
-        // ====================================================================
-        // State
-        // ====================================================================
-        let currentUserId = 1;
-        let currentRoomId = null;
-        let currentWebSocket = null;
-        let isAnonymousRoom = false;
-        let isUserRevealed = false;
+    <div class="row">
+      <div>
+        <label>Topic</label>
+        <select id="topic">
+          <option value="general" selected>general</option>
+          <option value="relationships">relationships</option>
+          <option value="anxiety">anxiety</option>
+          <option value="depression">depression</option>
+          <option value="work_stress">work_stress</option>
+          <option value="academic">academic</option>
+          <option value="family">family</option>
+          <option value="loneliness">loneliness</option>
+        </select>
+      </div>
+      <div>
+        <label>Mode</label>
+        <select id="mode">
+          <option value="human_anonymous" selected>human_anonymous</option>
+          <option value="human_non_anonymous">human_non_anonymous</option>
+        </select>
+      </div>
+    </div>
 
-        // ====================================================================
-        // Logging
-        // ====================================================================
-        function log(message, type = 'info') {
-            const logContent = document.getElementById('logContent');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            const time = new Date().toLocaleTimeString();
-            entry.textContent = `[${time}] ${message}`;
-            logContent.appendChild(entry);
-            logContent.scrollTop = logContent.scrollHeight;
+    <div style="display:flex; gap:10px; margin-top:12px;">
+      <button class="btn" id="btnFind">Find Match</button>
+      <button class="btnDanger" id="btnCancel">Cancel</button>
+      <button class="btn2" id="btnStatus">Check Status</button>
+    </div>
+
+    <div style="margin-top:12px;">
+      <span class="pill">Status: <span id="statusText">-</span></span>
+      <span class="pill">Room: <span id="roomText">-</span></span>
+      <span class="pill">Peer: <span id="peerText">-</span></span>
+    </div>
+
+    <div style="margin-top:12px;" id="matchActions" class="hidden">
+      <a id="openChat" class="btn" style="display:inline-block; text-decoration:none;" target="_blank">Open Chat</a>
+    </div>
+
+    <div class="muted" style="margin-top:12px;" id="log"></div>
+  </div>
+</div>
+
+<script>
+  const API_AUTH = "/api/auth";
+  const API_MATCH = "/api/match";
+  let pollTimer = null;
+
+  function log(msg, cls="muted") {
+    const el = document.getElementById("log");
+    el.innerHTML = `<span class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</span><br/>` + el.innerHTML;
+  }
+
+  function authHeaders(extra = {}) {
+    const token = localStorage.getItem("access_token");
+    return {
+      ...extra,
+      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+  }
+
+  function getCurrentUser() {
+    const id = localStorage.getItem("chat_user_id");
+    const name = localStorage.getItem("chat_username");
+    return { id, name };
+  }
+
+  function renderWhoami() {
+    const { id, name } = getCurrentUser();
+    document.getElementById("whoami").textContent = (id && name) ? `${name} (${id})` : "-";
+
+    const token = localStorage.getItem("access_token");
+    document.getElementById("tokenState").textContent = token ? "✅ present" : "❌ none";
+    document.getElementById("tokenState").className = token ? "ok" : "err";
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  // --- AUTH ---
+  async function login(username, password) {
+    // ✅ login/register 不要带 Authorization
+    const res = await fetch(`${API_AUTH}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  }
+
+  // --- MATCH APIs (token required) ---
+  async function fetchStatus() {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("Not logged in");
+
+    // ✅ 后端统一：GET /api/match/status （不带 user_id）
+    const res = await fetch(`${API_MATCH}/status`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  }
+
+  function applyMatched(data) {
+    document.getElementById("statusText").textContent = "Matched!";
+    document.getElementById("statusText").className = "ok";
+    document.getElementById("roomText").textContent = data.room_id || "-";
+    document.getElementById("peerText").textContent = data.matched_user_id || "-";
+
+    const open = document.getElementById("openChat");
+    // ✅ 更正规：不传 me，me 应该由 token 决定（peer_chat 未来也建议这么做）
+    open.href = `/static/peer_chat.html?room=${encodeURIComponent(data.room_id)}&peer=${encodeURIComponent(data.matched_user_id)}`;
+    document.getElementById("matchActions").classList.remove("hidden");
+  }
+
+  async function doFindMatch() {
+    const token = localStorage.getItem("access_token");
+    if (!token) { alert("Please login first"); return; }
+
+    // ✅ 不再传 user_id，让后端从 JWT 里取 me["id"]
+    const body = {
+      current_emotion: document.getElementById("emotion").value,
+      emotion_intensity: Number(document.getElementById("intensity").value || 3),
+      role: document.getElementById("role").value,
+      support_need: document.getElementById("need").value,
+      topic: document.getElementById("topic").value,
+      mode: document.getElementById("mode").value,
+      risk_level: "safe"
+    };
+
+    document.getElementById("statusText").textContent = "Searching...";
+    document.getElementById("statusText").className = "warn";
+    document.getElementById("matchActions").classList.add("hidden");
+
+    log(`POST /api/match/find`, "muted");
+
+    const res = await fetch(`${API_MATCH}/find`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.matched) {
+      applyMatched(data);
+      stopPolling();
+      log(`Matched immediately. room=${data.room_id}`, "ok");
+      return;
+    }
+
+    document.getElementById("statusText").textContent = "In Queue";
+    document.getElementById("statusText").className = "warn";
+    log(`In queue. Start polling status...`, "muted");
+
+    stopPolling();
+    pollTimer = setInterval(async () => {
+      try {
+        const s = await fetchStatus();
+        if (s.matched) {
+          applyMatched(s);
+          stopPolling();
+          log(`Matched via polling. room=${s.room_id}`, "ok");
         }
-
-        // ====================================================================
-        // User Selection
-        // ====================================================================
-        function selectUser(userId) {
-            if (currentWebSocket) {
-                currentWebSocket.close();
-            }
-
-            currentUserId = userId;
-            currentRoomId = null;
-
-            // Update UI
-            document.querySelectorAll('.user-btn').forEach((btn, i) => {
-                btn.classList.toggle('active', i + 1 === userId);
-            });
-
-            // Reset chat
-            resetChat();
-            loadMyRooms();
-
-            log(`Switched to User ${userId}`, 'info');
-        }
-
-        // ====================================================================
-        // Matching
-        // ====================================================================
-        async function findMatch() {
-            const emotion = document.getElementById('emotionSelect').value;
-            const mode = document.getElementById('modeSelect').value;
-
-            log(`Finding match: emotion=${emotion}, mode=${mode}`, 'info');
-
-            try {
-                const response = await fetch(`${API_BASE}/match/find`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: currentUserId,
-                        current_emotion: emotion,
-                        mode: mode
-                    })
-                });
-
-                const result = await response.json();
-                log(`Match response: ${JSON.stringify(result)}`, result.matched ? 'success' : 'warning');
-
-                if (result.matched) {
-                    document.getElementById('matchStatus').innerHTML = `
-                        <div class="status-box matched">
-                            ✓ Matched! Room ID: ${result.room_id}<br>
-                            Partner: ${result.is_anonymous ? 'Anonymous' : 'User ' + result.matched_user_id}
-                        </div>
-                    `;
-                    document.getElementById('matchBtn').classList.add('hidden');
-                    document.getElementById('cancelBtn').classList.add('hidden');
-
-                    // Auto-open the chat
-                    setTimeout(() => openRoom(result.room_id, result.is_anonymous), 500);
-                    loadMyRooms();
-                } else {
-                    document.getElementById('matchStatus').innerHTML = `
-                        <div class="status-box waiting">
-                            ⏳ Waiting for match...<br>
-                            You are in the queue
-                        </div>
-                    `;
-                    document.getElementById('matchBtn').classList.add('hidden');
-                    document.getElementById('cancelBtn').classList.remove('hidden');
-
-                    // Poll for match status
-                    pollMatchStatus();
-                }
-            } catch (error) {
-                log(`Match error: ${error.message}`, 'error');
-                alert('Failed to find match. Is the server running?');
-            }
-        }
-
-        async function cancelMatch() {
-            log(`Cancelling match search`, 'info');
-
-            try {
-                const response = await fetch(`${API_BASE}/match/cancel/${currentUserId}`, {
-                    method: 'POST'
-                });
-
-                const result = await response.json();
-                log(`Cancel response: ${JSON.stringify(result)}`, 'info');
-
-                document.getElementById('matchStatus').innerHTML = '';
-                document.getElementById('matchBtn').classList.remove('hidden');
-                document.getElementById('cancelBtn').classList.add('hidden');
-            } catch (error) {
-                log(`Cancel error: ${error.message}`, 'error');
-            }
-        }
-
-        async function pollMatchStatus() {
-            try {
-                const response = await fetch(`${API_BASE}/match/status/${currentUserId}`);
-                const result = await response.json();
-
-                if (!result.in_queue) {
-                    // User might have been matched, refresh rooms
-                    loadMyRooms();
-                    document.getElementById('matchBtn').classList.remove('hidden');
-                    document.getElementById('cancelBtn').classList.add('hidden');
-                    document.getElementById('matchStatus').innerHTML = '';
-                } else {
-                    // Still waiting, poll again
-                    setTimeout(pollMatchStatus, 2000);
-                }
-            } catch (error) {
-                log(`Poll error: ${error.message}`, 'error');
-            }
-        }
-
-        // ====================================================================
-        // Room Management
-        // ====================================================================
-        async function loadMyRooms() {
-            try {
-                const response = await fetch(`${API_BASE}/chat/users/${currentUserId}/rooms`);
-                const rooms = await response.json();
-
-                log(`Loaded ${rooms.length} rooms`, 'info');
-
-                const roomList = document.getElementById('roomList');
-
-                if (rooms.length === 0) {
-                    roomList.innerHTML = '<p style="color: #999; font-size: 12px;">No conversations yet</p>';
-                    return;
-                }
-
-                roomList.innerHTML = '';
-                rooms.forEach(room => {
-                    const div = document.createElement('div');
-                    div.className = `room-item ${currentRoomId === room.room_id ? 'active' : ''}`;
-                    div.onclick = () => openRoom(room.room_id, room.is_anonymous);
-
-                    const partnerName = room.is_anonymous && !room.other_user_name
-                        ? '🎭 Anonymous'
-                        : room.other_user_name || `User ${room.other_user_id}`;
-
-                    div.innerHTML = `
-                        <div class="room-name">${partnerName}</div>
-                        <div class="room-info ${room.is_anonymous ? 'anonymous' : ''}">
-                            Room #${room.room_id} ${room.is_anonymous ? '• Anonymous' : ''}
-                        </div>
-                    `;
-                    roomList.appendChild(div);
-                });
-            } catch (error) {
-                log(`Load rooms error: ${error.message}`, 'error');
-            }
-        }
-
-        async function openRoom(roomId, isAnonymous = false) {
-            if (currentWebSocket) {
-                currentWebSocket.close();
-            }
-
-            currentRoomId = roomId;
-            isAnonymousRoom = isAnonymous;
-
-            log(`Opening room ${roomId} (anonymous: ${isAnonymous})`, 'info');
-
-            // Update room list UI
-            document.querySelectorAll('.room-item').forEach(item => {
-                item.classList.remove('active');
-            });
-
-            // Show chat UI
-            document.getElementById('noChat').classList.add('hidden');
-            document.getElementById('messages').classList.remove('hidden');
-            document.getElementById('inputArea').classList.remove('hidden');
-            document.getElementById('messages').innerHTML = '';
-
-            try {
-                // Get room details
-                const roomResponse = await fetch(`${API_BASE}/chat/rooms/${roomId}`);
-                const room = await roomResponse.json();
-
-                // Determine partner name and anonymous status
-                const partnerId = room.user1_id === currentUserId ? room.user2_id : room.user1_id;
-                const isPartnerAnonymous = room.is_anonymous && (
-                    (room.user1_id === partnerId && !room.user1_revealed) ||
-                    (room.user2_id === partnerId && !room.user2_revealed)
-                );
-
-                // Check if current user is revealed
-                isUserRevealed = room.is_anonymous ? (
-                    (room.user1_id === currentUserId && room.user1_revealed) ||
-                    (room.user2_id === currentUserId && room.user2_revealed)
-                ) : true;
-
-                const partnerName = isPartnerAnonymous ? '🎭 Anonymous' : `User ${partnerId}`;
-
-                document.getElementById('chatTitle').textContent = `Chat with ${partnerName}`;
-                document.getElementById('chatSubtitle').textContent = 
-                    room.is_anonymous ? '🎭 Anonymous Chat' : 'Direct Chat';
-                document.getElementById('chatSubtitle').className = 
-                    `chat-subtitle ${room.is_anonymous ? 'anonymous' : ''}`;
-
-                // Show/hide reveal button
-                if (room.is_anonymous && !isUserRevealed) {
-                    document.getElementById('revealSection').classList.remove('hidden');
-                } else {
-                    document.getElementById('revealSection').classList.add('hidden');
-                }
-
-                // Load message history
-                const messagesResponse = await fetch(`${API_BASE}/chat/rooms/${roomId}/messages`);
-                const messages = await messagesResponse.json();
-
-                messages.forEach(msg => {
-                    displayMessage(msg, msg.sender_id === currentUserId);
-                });
-
-                log(`Loaded ${messages.length} messages`, 'info');
-
-                // Connect WebSocket
-                connectWebSocket(roomId);
-
-            } catch (error) {
-                log(`Open room error: ${error.message}`, 'error');
-                alert('Failed to open room. Is the server running?');
-            }
-        }
-
-        // ====================================================================
-        // WebSocket
-        // ====================================================================
-        function connectWebSocket(roomId) {
-            const wsUrl = `${WS_BASE}/ws/rooms/${roomId}`;
-            log(`Connecting WebSocket: ${wsUrl}`, 'info');
-
-            currentWebSocket = new WebSocket(wsUrl);
-
-            currentWebSocket.onopen = () => {
-                log(`WebSocket connected to room ${roomId}`, 'success');
-                document.getElementById('chatSubtitle').textContent += ' • Connected';
-            };
-
-            currentWebSocket.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                log(`Received: ${message.content?.substring(0, 30) || 'message'}...`, 'info');
-
-                // Only display if from other user
-                if (message.sender_id !== currentUserId) {
-                    displayMessage(message, false);
-                }
-            };
-
-            currentWebSocket.onerror = (error) => {
-                log(`WebSocket error`, 'error');
-            };
-
-            currentWebSocket.onclose = () => {
-                log(`WebSocket disconnected`, 'warning');
-            };
-        }
-
-        // ====================================================================
-        // Messaging
-        // ====================================================================
-        function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const content = input.value.trim();
-
-            if (!content) return;
-
-            if (!currentWebSocket || currentWebSocket.readyState !== WebSocket.OPEN) {
-                alert('Not connected! Please wait or reconnect.');
-                return;
-            }
-
-            const message = {
-                sender_id: currentUserId,
-                content: content
-            };
-
-            log(`Sending: ${content.substring(0, 30)}...`, 'info');
-            currentWebSocket.send(JSON.stringify(message));
-
-            // Display locally
-            displayMessage({
-                sender_id: currentUserId,
-                content: content,
-                created_at: new Date().toISOString()
-            }, true);
-
-            input.value = '';
-        }
-
-        function displayMessage(message, isSent) {
-            const messagesDiv = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-
-            const bubble = document.createElement('div');
-            bubble.className = 'message-bubble';
-            bubble.textContent = message.content;
-
-            const time = document.createElement('div');
-            time.className = 'message-time';
-            time.textContent = new Date(message.created_at).toLocaleTimeString();
-
-            messageDiv.appendChild(bubble);
-            messageDiv.appendChild(time);
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // ====================================================================
-        // Reveal Identity
-        // ====================================================================
-        async function revealIdentity() {
-            if (!currentRoomId) return;
-
-            log(`Revealing identity in room ${currentRoomId}`, 'info');
-
-            try {
-                const response = await fetch(`${API_BASE}/chat/rooms/${currentRoomId}/reveal`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        room_id: currentRoomId,
-                        user_id: currentUserId
-                    })
-                });
-
-                const result = await response.json();
-                log(`Reveal response: ${JSON.stringify(result)}`, result.success ? 'success' : 'error');
-
-                if (result.success) {
-                    document.getElementById('revealSection').classList.add('hidden');
-                    isUserRevealed = true;
-                    
-                    // Add system message
-                    displayMessage({
-                        sender_id: -1,
-                        content: `✓ You revealed your identity as User ${currentUserId}`,
-                        created_at: new Date().toISOString()
-                    }, true);
-
-                    // Refresh room to update UI
-                    openRoom(currentRoomId, isAnonymousRoom);
-                }
-            } catch (error) {
-                log(`Reveal error: ${error.message}`, 'error');
-            }
-        }
-
-        // ====================================================================
-        // Reset
-        // ====================================================================
-        function resetChat() {
-            document.getElementById('noChat').classList.remove('hidden');
-            document.getElementById('messages').classList.add('hidden');
-            document.getElementById('inputArea').classList.add('hidden');
-            document.getElementById('revealSection').classList.add('hidden');
-            document.getElementById('messages').innerHTML = '';
-            document.getElementById('chatTitle').textContent = 'Select a conversation';
-            document.getElementById('chatSubtitle').textContent = 'Or find a match to start chatting';
-            document.getElementById('matchStatus').innerHTML = '';
-            document.getElementById('matchBtn').classList.remove('hidden');
-            document.getElementById('cancelBtn').classList.add('hidden');
-        }
-
-        // ====================================================================
-        // Initialize
-        // ====================================================================
-        log('EmotiConnect Test Page loaded', 'success');
-        log(`API: ${API_BASE}`, 'info');
-        log(`WebSocket: ${WS_BASE}`, 'info');
-        loadMyRooms();
-
-        // Cleanup on page close
-        window.onbeforeunload = () => {
-            if (currentWebSocket) currentWebSocket.close();
-        };
-    </script>
+      } catch (e) {}
+    }, 1000);
+  }
+
+  async function doCancel() {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    // ✅ 后端统一：POST /api/match/cancel （不带 user_id）
+    const res = await fetch(`${API_MATCH}/cancel`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    stopPolling();
+    document.getElementById("statusText").textContent = "Cancelled";
+    document.getElementById("statusText").className = "muted";
+    document.getElementById("matchActions").classList.add("hidden");
+    log(`Cancelled`, "muted");
+  }
+
+  async function doCheckStatus() {
+    const s = await fetchStatus();
+    if (s.matched) applyMatched(s);
+    else if (s.in_queue) {
+      document.getElementById("statusText").textContent = "In Queue";
+      document.getElementById("statusText").className = "warn";
+    } else {
+      document.getElementById("statusText").textContent = "Not in Queue";
+      document.getElementById("statusText").className = "muted";
+    }
+    log(`GET /status => ${JSON.stringify(s)}`, "muted");
+  }
+
+  // buttons
+  document.getElementById("btnLogin").onclick = async () => {
+    const u = document.getElementById("username").value.trim();
+    const p = document.getElementById("password").value;
+    const msg = document.getElementById("loginMsg");
+    msg.textContent = "";
+    try {
+      const data = await login(u, p);
+
+      // ✅ 这里假设后端 /auth/login 返回: { user_id, username(or nickname), access_token }
+      // 你的 auth.py 目前返回的是 user_id + nickname，没有 access_token 的话，你需要后端补 token
+      localStorage.setItem("chat_user_id", data.user_id);
+      localStorage.setItem("chat_username", data.username || data.nickname || "user");
+      if (data.access_token) localStorage.setItem("access_token", data.access_token);
+
+      renderWhoami();
+      msg.textContent = "Login OK";
+      msg.className = "ok";
+      log(`Login OK as ${localStorage.getItem("chat_username")} (${data.user_id})`, "ok");
+
+      // 可选：登录后自动拉一下 status，验证 token 是否能用
+      try {
+        await fetchStatus();
+        log(`Token OK: /match/status accessible`, "ok");
+      } catch (e) {
+        log(`Token check failed: ${e.message}`, "err");
+      }
+
+    } catch (e) {
+      msg.textContent = String(e.message || e);
+      msg.className = "err";
+      log(`Login failed: ${e.message}`, "err");
+    }
+  };
+
+  document.getElementById("btnLogout").onclick = () => {
+    stopPolling();
+    localStorage.removeItem("chat_user_id");
+    localStorage.removeItem("chat_username");
+    localStorage.removeItem("access_token");
+    renderWhoami();
+    log("Logged out", "muted");
+  };
+
+  document.getElementById("btnFind").onclick = () => doFindMatch().catch(e => log(e.message, "err"));
+  document.getElementById("btnCancel").onclick = () => doCancel().catch(e => log(e.message, "err"));
+  document.getElementById("btnStatus").onclick = () => doCheckStatus().catch(e => log(e.message, "err"));
+
+  renderWhoami();
+</script>
 </body>
 </html>

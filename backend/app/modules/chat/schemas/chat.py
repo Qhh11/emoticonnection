@@ -7,7 +7,7 @@ This file defines all data structures for chat functionality:
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Union, Optional, List
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,21 @@ class MatchMode(str, Enum):
     HUMAN_NON_ANONYMOUS = "human_non_anonymous"
     AI_CHAT = "ai_chat"
 
+class SupportRole(str, Enum):
+    SEEKER = "seeker"      
+    SUPPORTER = "supporter"  
+    EITHER = "either"       
+
+
+class SupportNeed(str, Enum):
+    VENT = "vent"            
+    ADVICE = "advice"      
+    COMPANION = "companion" 
+
+class RiskFlag(str, Enum):
+    SAFE = "safe"
+    WARNING = "warning"
+    DANGER = "danger"
 
 class UserStatusType(str, Enum):
     ONLINE = "online"
@@ -42,44 +57,25 @@ class UserStatusType(str, Enum):
 # ============================================================================
 
 class RoomCreate(BaseModel):
-    """
-    Request model for creating/opening a chat room
-
-    Example JSON:
-    {
-        "user1_id": 1,
-        "user2_id": 2
-    }
-    """
-    user1_id: int = Field(..., description="First user ID", example=1)
-    user2_id: int = Field(..., description="Second user ID", example=2)
-
+    user1_id: str
+    user2_id: str
 
 class Room(BaseModel):
-    """
-    Response model representing a chat room
-
-    Example JSON:
-    {
-        "id": "507f1f77bcf86cd799439011",
-        "user1_id": 1,
-        "user2_id": 2
-    }
-    """
-    id: str = Field(..., description="Unique room ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439011")
-    user1_id: int = Field(..., description="First user ID", example=1)
-    user2_id: int = Field(..., description="Second user ID", example=2)
+    id: str
+    user1_id: str
+    user2_id: str
 
 class RoomCreateExtended(BaseModel):
-    user1_id: int
-    user2_id: int
+    user1_id: str
+    user2_id: str
     is_anonymous: bool = False
+
 
 
 class RoomExtended(BaseModel):
     id: str  # MongoDB ObjectId as string
-    user1_id: int
-    user2_id: int
+    user1_id: str
+    user2_id: str
     is_anonymous: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     user1_revealed: bool = True
@@ -88,8 +84,9 @@ class RoomExtended(BaseModel):
 
 class RoomListItem(BaseModel):
     room_id: str  # MongoDB ObjectId as string
-    other_user_id: int
+    other_user_id: str
     other_user_name: Optional[str] = None  # None when anonymous
+    other_user_avatar: Optional[str] = None  # User's emoji avatar (None when anonymous)
     is_anonymous: bool
     last_message: Optional[str] = None
     last_message_time: Optional[datetime] = None
@@ -111,27 +108,27 @@ class MessageCreate(BaseModel):
 
     Example JSON for text:
     {
-        "sender_id": 1,
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "text",
         "content": "Hello, how are you?"
     }
 
     Example JSON for emoji:
     {
-        "sender_id": 1,
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "emoji",
         "content": "😊"
     }
 
     Example JSON for image/video:
     {
-        "sender_id": 1,
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "image",
         "content": "/static/uploads/abc123.jpg",
         "media_url": "/static/uploads/abc123.jpg"
     }
     """
-    sender_id: int = Field(..., description="Sender user ID", example=1)
+    sender_id: str = Field(..., description="Sender user ID", example=1)
     message_type: MessageType = Field(
         default=MessageType.TEXT,
         description="Type of message: text, emoji, image, or video"
@@ -159,9 +156,9 @@ class MessageOut(BaseModel):
 
     Example JSON for text:
     {
-        "id": 456,
-        "room_id": 123,
-        "sender_id": 1,
+        "id": "507f1f77bcf86cd799439014",
+        "room_id": "507f1f77bcf86cd799439012",
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "text",
         "content": "Hello, how are you?",
         "created_at": "2025-01-25T10:30:00Z"
@@ -169,9 +166,9 @@ class MessageOut(BaseModel):
 
     Example JSON for image:
     {
-        "id": 457,
-        "room_id": 123,
-        "sender_id": 1,
+        "id": "507f1f77bcf86cd799439015",
+        "room_id": "507f1f77bcf86cd799439012",
+        "sender_id": "69444eed764be66c80bfdfdf",
         "message_type": "image",
         "content": "Check this out!",
         "media_url": "/static/uploads/abc123.jpg",
@@ -180,7 +177,7 @@ class MessageOut(BaseModel):
     """
     id: str = Field(..., description="Unique message ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439014")
     room_id: str = Field(..., description="Room ID this message belongs to (MongoDB ObjectId)", example="507f1f77bcf86cd799439012")
-    sender_id: int = Field(..., description="Sender user ID", example=1)
+    sender_id: str = Field(..., description="Sender user ID", example=1)
     message_type: MessageType = Field(
         default=MessageType.TEXT,
         description="Type of message: text, emoji, image, or video"
@@ -202,40 +199,42 @@ class MessageOut(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-# New models - Matching
+# models - Matching
 class MatchRequest(BaseModel):
-    """
-    Example:
-    {
-        "user_id": 1,
-        "current_emotion": "happy",
-        "mode": "human_anonymous",
-        "preferred_emotions": ["warm", "friendly"]
-    }
-    """
-    user_id: int
+    user_id: str
     current_emotion: EmotionType
     mode: MatchMode
     preferred_emotions: Optional[List[EmotionType]] = None
+
+    # --- V2 fields (optional for backward compatibility) ---
+    role: Optional[SupportRole] = SupportRole.EITHER
+    need: Optional[SupportNeed] = SupportNeed.VENT
+    intensity: Optional[int] = Field(default=3, ge=1, le=5)  # 1-5
+    risk_flag: Optional[str] = None  # "safe" | "warning" | "danger" 
+
 
 
 class MatchResponse(BaseModel):
     matched: bool
     room_id: Optional[str] = None  # MongoDB ObjectId as string
-    matched_user_id: Optional[int] = None
+    matched_user_id: Optional[str] = None
     is_anonymous: bool = True
     match_type: MatchMode
 
 
 class MatchQueueEntry(BaseModel):
-    user_id: int
+    user_id: str
     current_emotion: EmotionType
     mode: MatchMode
     preferred_emotions: Optional[List[EmotionType]] = None
     queued_at: datetime = Field(default_factory=datetime.utcnow)
 
+    role: Optional[SupportRole] = SupportRole.EITHER
+    need: Optional[SupportNeed] = SupportNeed.VENT
+    intensity: Optional[int] = Field(default=3, ge=1, le=5)
+    risk_flag: Optional[str] = None
 
-# New models - Anonymous
+
 class AnonymousSettings(BaseModel):
     room_id: str  # MongoDB ObjectId as string
     user1_anonymous: bool = True
@@ -244,13 +243,13 @@ class AnonymousSettings(BaseModel):
 
 class RevealIdentityRequest(BaseModel):
     room_id: str  # MongoDB ObjectId as string
-    user_id: int
+    user_id: str
 
 
 class RevealIdentityResponse(BaseModel):
     success: bool
     message: str
-    revealed_user_id: Optional[int] = None
+    revealed_user_id: Optional[str] = None
     revealed_username: Optional[str] = None
 
 

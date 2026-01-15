@@ -10,7 +10,7 @@ This file implements REST API endpoints for:
 Database: MongoDB (via PostRepository)
 """
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.modules.post.schemas.post import (
@@ -22,14 +22,14 @@ from app.modules.post.schemas.post import (
 from app.modules.post.repository.post_repository import PostRepository
 # Use unified database configuration
 import sys
+import os
 from pathlib import Path
 database_path = Path(__file__).resolve().parents[5] / "database"
 sys.path.insert(0, str(database_path))
 from config.mongodb_config import get_database  # type: ignore
 
-# Import AI emotion analysis service
-from app.modules.ai.core.emotion import EmotionService
-
+# Import points system
+from crud.check_in_crud import add_points_to_user  # type: ignore
 
 # ============================================================================
 # Initialize Router
@@ -85,9 +85,38 @@ async def create_post(
     ai_emotion = None
     if post_data.content:
         try:
-            emotion_service = EmotionService()
-            if emotion_service.model is not None:
-                ai_emotion = await emotion_service.analyze_emotion(post_data.content)
+            import importlib.util
+            from google import genai
+            
+            # 动态导入 genai/app 模块
+            genai_app_path = Path(__file__).resolve().parents[5] / "genai" / "app"
+            
+            # 导入 weaviate_client
+            weaviate_spec = importlib.util.spec_from_file_location(
+                "weaviate_client", genai_app_path / "weaviate_client.py"
+            )
+            weaviate_module = importlib.util.module_from_spec(weaviate_spec)
+            weaviate_spec.loader.exec_module(weaviate_module)
+            WeaviateManager = weaviate_module.WeaviateManager
+            
+            # 导入 emotion_analytics
+            analytics_spec = importlib.util.spec_from_file_location(
+                "emotion_analytics", genai_app_path / "emotion_analytics.py"
+            )
+            analytics_module = importlib.util.module_from_spec(analytics_spec)
+            analytics_spec.loader.exec_module(analytics_module)
+            EmotionAnalytics = analytics_module.EmotionAnalytics
+            
+            # 初始化 Gemini 客户端和 WeaviateManager
+            api_key = os.getenv("GEMINI_API_KEY")
+            gemini_client = genai.Client(api_key=api_key)
+            weaviate_manager = WeaviateManager()
+            analytics = EmotionAnalytics(weaviate_manager, gemini_client)
+            # 构造单条对话格式
+            conversations = [{"timestamp": "", "userQuery": post_data.content}]
+            data_points = analytics.analyze_emotions_from_text(conversations)
+            if data_points:
+                ai_emotion = data_points[0].emotion
                 print(f"[AI] Post emotion analyzed: {ai_emotion}")
         except Exception as e:
             print(f"[AI] Post emotion analysis failed: {e}")
@@ -106,7 +135,14 @@ async def create_post(
     )
     
     print(f"[Post] Created post {post['id']} by user {post_data.author_id} (anonymous: {post_data.is_anonymous})")
-    
+
+    # Award points for creating a post (+10)
+    try:
+        add_points_to_user(post_data.author_id, 10)
+        print(f"[Points] User {post_data.author_id} earned 10 points for creating a post")
+    except Exception as e:
+        print(f"[Points] Failed to award points: {e}")
+
     return PostOut(**post)
 
 
@@ -114,7 +150,7 @@ async def create_post(
 async def get_posts_feed(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=50, description="Posts per page"),
-    viewer_id: Optional[int] = Query(None, description="Current user ID (to check likes)"),
+    viewer_id: Optional[str] = Query(None, description="Current user ID (to check likes)"),
     tag: Optional[str] = Query(None, description="Filter by tag"),
     emotion: Optional[str] = Query(None, description="Filter by emotion"),
     repo: PostRepository = Depends(get_post_repo)
@@ -160,7 +196,7 @@ async def get_posts_feed(
 @router.get("/{post_id}", response_model=PostOut)
 async def get_post(
     post_id: str,
-    viewer_id: Optional[int] = Query(None, description="Current user ID"),
+    viewer_id: Optional[str] = Query(None, description="Current user ID"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -180,7 +216,7 @@ async def get_post(
 async def update_post(
     post_id: str,
     update_data: PostUpdate,
-    user_id: int = Query(..., description="User ID making the update"),
+    user_id: str = Query(..., description="User ID making the update"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -219,7 +255,7 @@ async def update_post(
 @router.delete("/{post_id}")
 async def delete_post(
     post_id: str,
-    user_id: int = Query(..., description="User ID making the deletion"),
+    user_id: str = Query(..., description="User ID making the deletion"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -336,7 +372,14 @@ async def create_comment(
         raise HTTPException(status_code=404, detail="Post not found")
     
     print(f"[Comment] User {comment_data.author_id} commented on post {post_id}")
-    
+
+    # Award points for creating a comment (+5)
+    try:
+        add_points_to_user(comment_data.author_id, 5)
+        print(f"[Points] User {comment_data.author_id} earned 5 points for commenting")
+    except Exception as e:
+        print(f"[Points] Failed to award points: {e}")
+
     return CommentOut(**comment)
 
 
@@ -375,7 +418,7 @@ async def get_comments(
 @router.delete("/comments/{comment_id}")
 async def delete_comment(
     comment_id: str,
-    user_id: int = Query(..., description="User ID making the deletion"),
+    user_id: str = Query(..., description="User ID making the deletion"),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -467,7 +510,7 @@ async def get_posts_by_tag(
     tag: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
-    viewer_id: Optional[int] = Query(None),
+    viewer_id: Optional[str] = Query(None),
     repo: PostRepository = Depends(get_post_repo)
 ):
     """
@@ -497,7 +540,7 @@ async def get_posts_by_tag(
 
 @router.get("/user/{user_id}", response_model=PostListResponse)
 async def get_user_posts(
-    user_id: int,
+    user_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50),
     include_anonymous: bool = Query(False, description="Include anonymous posts (only for own profile)"),

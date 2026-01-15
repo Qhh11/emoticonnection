@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Settings - EmotiConnect</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #f4f6fb;
+      margin: 0;
+      padding: 40px 16px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.08);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .back-btn {
+      border: none;
+      background: #eef2ff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    h1 { margin: 0; }
+
+    .card {
+      margin-bottom: 28px;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .card h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      font-size: 14px;
+      color: #374151;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+    }
+
+    input[disabled] {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      object-fit: cover;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .save-btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      background: #4f46e5;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .save-btn:hover {
+      background: #4338ca;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <header>
+    <button class="back-btn" onclick="location.href='index.html'">←</button>
+    <h1>Settings</h1>
+  </header>
+
+  <!-- Profile -->
+  <section class="card">
+    <h2>Profile</h2>
+
+    <label>Avatar</label>
+    <img id="avatarPreview" class="avatar">
+    <input type="file" accept="image/*" disabled>
+
+    <label>Nickname</label>
+    <input id="nickname">
+
+    <label>Username</label>
+    <input id="username" disabled>
+
+    <label>Email</label>
+    <input id="email" type="email">
+
+    <label>Age</label>
+    <input id="age" type="number" min="13" max="100">
+
+    <label>Gender</label>
+    <select id="gender">
+      <option value=""></option>
+      <option value="male">male</option>
+      <option value="female">female</option>
+      <option value="other">other</option>
+      <option value="prefer_not_to_say">prefer not to say</option>
+    </select>
+  </section>
+
+  <!-- MBTI -->
+  <section class="card">
+    <h2>🧠 MBTI</h2>
+
+    <label>MBTI type</label>
+    <select id="mbtiType">
+      <option value="">unknown</option>
+      <option>INFP</option><option>INFJ</option>
+      <option>INTP</option><option>INTJ</option>
+      <option>ENFP</option><option>ENFJ</option>
+      <option>ENTP</option><option>ENTJ</option>
+      <option>ISFP</option><option>ISFJ</option>
+      <option>ISTP</option><option>ISTJ</option>
+      <option>ESFP</option><option>ESFJ</option>
+      <option>ESTP</option><option>ESTJ</option>
+    </select>
+
+    <p class="hint">last time tested: <span id="mbtiTime">-</span></p>
+    <button onclick="startMBTITest()">🧪 have a MBTI test now! </button>
+  </section>
+
+  <!-- Preferences -->
+  <section class="card">
+    <h2>⚙️ Preferences</h2>
+
+    <label>Chat duration preferred</label>
+    <select id="chatDuration">
+      <option value="short">short</option>
+      <option value="medium">medium</option>
+      <option value="long">long</option>
+    </select>
+
+    <label>Match age preference</label>
+    <div class="card">
+      <span>from</span>
+      <input id="ageMin" type="number" min="13">
+      <span>to</span>
+      <input id="ageMax" type="number" max="100">
+    </div>
+
+    <label>
+      notification <input type="checkbox" id="notificationEnabled">
+    </label>
+
+    <label>Theme</label>
+    <select id="theme">
+      <option value="default">default</option>
+      <option value="dark">dark</option>
+      <option value="soft">soft</option>
+    </select>
+  </section>
+
+  <!-- Account -->
+  <section class="card">
+    <h2>ℹ️ Account information</h2>
+    <p>level: Lv.<span id="level"></span></p>
+    <p>points: <span id="points"></span></p>
+    <p>registration time: <span id="createdAt"></span></p>
+    <p>last login: <span id="lastLogin"></span></p>
+  </section>
+
+  <button class="save-btn" onclick="saveSettings()">💾 Save changes</button>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:8000/api'
+const userId = localStorage.getItem('chat_user_id')
+
+if (!userId) {
+  alert('Not logged in')
+  location.href = 'login.html'
+}
+
+/* ===============================
+   Load user from database
+================================ */
+async function loadUser() {
+  const res = await fetch(`${API_BASE}/users/${userId}`)
+  const user = await res.json()
+
+  document.getElementById('nickname').value = user.nickname || ''
+  document.getElementById('username').value = user.username || ''
+  document.getElementById('email').value = user.email || ''
+  document.getElementById('age').value = user.age || ''
+  document.getElementById('gender').value = user.gender || ''
+
+  if (user.avatar_url) {
+    document.getElementById('avatarPreview').src = user.avatar_url
+  }
+
+  if (user.mbti) {
+    document.getElementById('mbtiType').value = user.mbti.type
+    document.getElementById('mbtiTime').textContent =
+      new Date(user.mbti.completed_at).toLocaleDateString()
+  }
+
+  const p = user.preferences || {}
+  document.getElementById('chatDuration').value = p.chat_duration_preference || 'medium'
+  document.getElementById('ageMin').value = p.age_range_min || 18
+  document.getElementById('ageMax').value = p.age_range_max || 35
+  document.getElementById('notificationEnabled').checked = p.notification_enabled ?? true
+  document.getElementById('theme').value = p.theme || 'default'
+
+  document.getElementById('level').textContent = user.level
+  document.getElementById('points').textContent = user.points
+  document.getElementById('createdAt').textContent =
+    new Date(user.created_at).toLocaleDateString()
+  document.getElementById('lastLogin').textContent =
+    user.last_login ? new Date(user.last_login).toLocaleString() : '-'
+}
+
+/* ===============================
+   Save changes to database
+================================ */
+async function saveSettings() {
+  const payload = {
+    nickname: document.getElementById('nickname').value,
+    email: document.getElementById('email').value,
+    age: Number(document.getElementById('age').value) || null,
+    gender: document.getElementById('gender').value || null,
+    mbti: document.getElementById('mbtiType').value
+      ? { type: document.getElementById('mbtiType').value, completed_at: new Date().toISOString() }
+      : null,
+    preferences: {
+      chat_duration_preference: document.getElementById('chatDuration').value,
+      age_range_min: Number(document.getElementById('ageMin').value),
+      age_range_max: Number(document.getElementById('ageMax').value),
+      notification_enabled: document.getElementById('notificationEnabled').checked,
+      theme: document.getElementById('theme').value
+    }
+  }
+
+  const res = await fetch(`${API_BASE}/users/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+
+
+  if (res.ok) {
+    alert('Settings saved')
+  } else {
+    alert('Failed to save settings')
+  }
+}
+
+loadUser()
+</script>
+</body>
+</html>

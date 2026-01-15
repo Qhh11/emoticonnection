@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Body
 from app.modules.auth.schemas.auth import LoginRequest, RegisterRequest, AuthResponse
+from app.modules.auth.core.jwt_utils import create_access_token
 
 # Database imports
 import sys
@@ -41,35 +42,57 @@ def login(request: LoginRequest):
         # Schema has success: bool.
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
+    user_id = str(user.get("_id"))
+    username = user.get("username")
+    nickname = user.get("nickname") or username
+    avatar = user.get("avatar", "🦊")
+
+    token = create_access_token(
+        subject=user_id,
+        extra={"username": username, "nickname": nickname},
+    )
+
     return AuthResponse(
         success=True,
         message="Login successful",
-        user_id=str(user.get("_id")),
-        nickname=user.get("nickname") or user.get("username")
+        user_id=user_id,
+        username=username,
+        nickname=nickname,
+        avatar=avatar,
+        access_token=token,
+        token_type="bearer"
     )
+
 
 @router.post("/register", response_model=AuthResponse)
 def register(request: RegisterRequest):
-    """
-    Register endpoint.
-    Uses synchronous DB call (runs in threadpool).
-    """
-    # Check if create_user_with_password returns ID or None
     user_id = create_user_with_password(
         username=request.username.strip(),
         password=request.password,
         email=(request.email.strip() if request.email else None),
         nickname=(request.nickname.strip() if request.nickname else "")
     )
-
     if not user_id:
         raise HTTPException(status_code=400, detail="User already exists")
+
+    username = request.username.strip()
+    nickname = (request.nickname.strip() if request.nickname else "") or username
+    token = create_access_token(
+        subject=str(user_id),
+        extra={"username": username, "nickname": nickname},
+    )
 
     return AuthResponse(
         success=True,
         message="Registration successful",
-        user_id=str(user_id)
+        user_id=str(user_id),
+        username=username,
+        nickname=nickname,
+        avatar="🦊",  # Default avatar for new users
+        access_token=token,
+        token_type="bearer"
     )
+
 
 @router.get("/users")
 def get_users():
