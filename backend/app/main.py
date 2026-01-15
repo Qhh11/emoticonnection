@@ -20,7 +20,7 @@ from config.mongodb_config import connect_to_mongodb, close_mongodb_connection  
 
 # Import API routes from modular structure
 from app.modules.chat.api import chat_http, chat_ws, match, media
-from app.modules.ai.api import ai_chat, emotion
+from app.modules.ai.api import ai_chat, emotion, diary
 from app.modules.post.api import post_http
 from app.modules.auth.api import auth
 from app.modules.social.api import following
@@ -86,6 +86,7 @@ app.include_router(media.router, prefix="/api")
 # AI Chat routes (from teammate)
 app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
 app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
+app.include_router(diary.router, prefix="/api/diary", tags=["diary"])
 # Post/Feed routes
 app.include_router(post_http.router, prefix="/api")
 # Auth routes
@@ -170,6 +171,7 @@ async def startup_event():
     print("💬 HTTP API: http://localhost:8000/api/chat")
     print("🤖 AI Chat API: http://localhost:8000/api/ai-chat")
     print("😊 Emotion API: http://localhost:8000/api/emotion")
+    print("📓 Diary API: http://localhost:8000/api/diary")
     print("🌐 Chat test page:  http://localhost:8000/static/chat_test.html")
     print("🌐 Match test page:  http://localhost:8000/static/match_test.html")
     print("=" * 60)
