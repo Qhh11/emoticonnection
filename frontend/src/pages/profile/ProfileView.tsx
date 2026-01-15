@@ -209,7 +209,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
         day,
         isToday,
         isPast,
-        mood: isPast ? MOOD_DATA[Math.floor(Math.random() * MOOD_DATA.length)] : null
+        mood: null  // 未签到显示灰色，和未来日期一样
       })
     }
 
@@ -448,10 +448,19 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 )
               }
 
-              // Past days - show with mood color
+              // Past days - show with mood color if checked in, gray if not
               if (dateInfo.isPast) {
+                if (dateInfo.mood) {
+                  // 有签到记录，显示 mood 颜色
+                  return (
+                    <div key={i} className="aspect-square rounded-xl border border-transparent flex items-center justify-center text-[12px] font-black transition-all duration-500 shadow-sm" style={{ backgroundColor: dateInfo.mood.color, color: dateInfo.mood.text }}>
+                      {dateInfo.day}
+                    </div>
+                  )
+                }
+                // 没有签到记录，显示灰色
                 return (
-                  <div key={i} className="aspect-square rounded-xl border border-transparent flex items-center justify-center text-[12px] font-black transition-all duration-500 shadow-sm" style={{ backgroundColor: dateInfo.mood?.color || 'transparent', color: dateInfo.mood?.text || 'inherit' }}>
+                  <div key={i} className="aspect-square rounded-xl border border-black/5 flex items-center justify-center text-[12px] font-black text-black/10 transition-all duration-500">
                     {dateInfo.day}
                   </div>
                 )
