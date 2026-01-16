@@ -78,7 +78,8 @@ class AIChatService:
             base_url="https://api.deepseek.com"
         )
 
-    async def chat_with_ai(self, message: str, history: list, user_id: str = None, session_id: str = None):
+    async def chat_with_ai(self, message: str, history: list, user_id: str = None, session_id: str = None, 
+                          image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None):
         """
         发送消息给 AI 并获取回复，同时保存到 Weaviate。
         
@@ -87,20 +88,30 @@ class AIChatService:
             history: 聊天历史列表，包含 'role' ('user' 或 'model') 和 'parts' (消息内容列表)
             user_id: 用户ID，用于保存到 Weaviate
             session_id: 会话ID，用于关联同一会话的消息
+            image_data: 图片二进制数据 (Optional, 仅支持 Gemini)
+            image_mime_type: 图片 MIME 类型 (e.g. 'image/jpeg')
             
         Returns:
             str: AI 的回复文本
         """
         if self.llm_provider == 'deepseek':
+            if image_data:
+                return "DeepSeek 目前不支持图片分析，请切换到 Gemini 模型或仅发送文本。"
             response_text = await self._chat_with_deepseek(message, history)
         else:
-            response_text = await self._chat_with_gemini(message, history)
+            response_text = await self._chat_with_gemini(message, history, image_data, image_mime_type)
         
         # 保存对话到 Weaviate
         if self.save_to_weaviate and user_id:
             # 判断是否为新会话 (history 为空或只有当前消息)
             is_new_session = len(history) == 0
-            await self._save_conversation_to_weaviate(user_id, message, response_text, session_id, is_new_session)
+            # Note: storing image content in Weaviate is not implemented here, saving text only for now.
+            # Might consider adding a marker [Image Uploaded] to the saved query.
+            saved_query = message
+            if image_data:
+                saved_query = f"[Image Uploaded] {message}"
+                
+            await self._save_conversation_to_weaviate(user_id, saved_query, response_text, session_id, is_new_session)
         
         return response_text
     
@@ -143,15 +154,29 @@ class AIChatService:
         except Exception as e:
             print(f"⚠️  Error saving conversation to Weaviate: {e}")
     
-    async def _chat_with_gemini(self, message: str, history: list):
+    async def _chat_with_gemini(self, message: str, history: list, image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None):
         """使用 Gemini 进行聊天"""
         if not self.model:
             return "AI 服务暂时不可用，请稍后再试。"
+        
         # 开启聊天会话，传入历史记录
         chat = self.model.start_chat(history=history)
-        # 异步发送消息
-        response = await chat.send_message_async(message)
-        return response.text
+        
+        try:
+            content = []
+            if image_data and image_mime_type:
+                content.append({
+                    "mime_type": image_mime_type,
+                    "data": image_data
+                })
+            content.append(message)
+            
+            # 异步发送消息
+            response = await chat.send_message_async(content)
+            return response.text
+        except Exception as e:
+            print(f"❌ Gemini Error: {e}")
+            return "抱歉，处理您的请求时遇到问题。"
     
     async def _chat_with_deepseek(self, message: str, history: list):
         """使用 DeepSeek 进行聊天"""

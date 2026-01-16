@@ -141,42 +141,34 @@ async def get_session_summary(session_id: str):
 def _load_emotion_analytics():
     """Dynamically load emotion_analytics module from genai/app"""
     try:
-        # Get the project root directory
-        current_file = Path(__file__)
+        # Get the project root directory - backend is at /Users/kaikai/emoticonnection/backend
+        # genai/app is at /Users/kaikai/emoticonnection/genai/app
         
-        # Try different approaches to find the project root
-        # Method 1: Go up from current file to project root
-        backend_dir = current_file.parent.parent.parent.parent.parent
-        genai_app_dir = backend_dir / "genai" / "app"
+        # Hardcode the path relative to the backend app root for reliability in this environment
+        backend_app_path = Path(__file__).resolve().parents[4] # /Users/kaikai/emoticonnection/backend
+        project_root = backend_app_path.parent # /Users/kaikai/emoticonnection
         
-        # Method 2: If method 1 fails, try from current working directory
-        if not (genai_app_dir / "emotion_analytics.py").exists():
-            # Try from current working directory (assuming we're in backend/)
-            cwd = Path.cwd()
-            if "backend" in str(cwd):
-                project_root = cwd.parent
-            else:
-                project_root = cwd
-            genai_app_dir = project_root / "genai" / "app"
+        emotion_analytics_path = project_root / "genai" / "app" / "emotion_analytics.py"
         
-        # Method 3: Absolute path from WSL mount point
-        if not (genai_app_dir / "emotion_analytics.py").exists():
-            # Check if we're in WSL and try the /mnt/c path
-            wsl_path = Path("/mnt/c/Users/10857/Desktop/emoticonnection/genai/app")
-            if wsl_path.exists():
-                genai_app_dir = wsl_path
-        
-        emotion_analytics_path = genai_app_dir / "emotion_analytics.py"
         if not emotion_analytics_path.exists():
-            raise FileNotFoundError(f"emotion_analytics.py not found. Searched paths: {emotion_analytics_path}")
-        
+            # Fallback to absolute path if relative fails
+            emotion_analytics_path = Path("/Users/kaikai/emoticonnection/genai/app/emotion_analytics.py")
+            
+        if not emotion_analytics_path.exists():
+             raise FileNotFoundError(f"emotion_analytics.py not found at {emotion_analytics_path}")
+
+        # Add the parent directory to sys.path to allow imports within the module
+        module_dir = emotion_analytics_path.parent
+        if str(module_dir) not in sys.path:
+            sys.path.append(str(module_dir))
+
         # Load emotion_analytics module
         spec = importlib.util.spec_from_file_location(
             "emotion_analytics", 
             str(emotion_analytics_path)
         )
         if spec is None or spec.loader is None:
-            raise ImportError("Could not load emotion_analytics.py")
+            raise ImportError(f"Could not load emotion_analytics.py from {emotion_analytics_path}")
         
         emotion_analytics = importlib.util.module_from_spec(spec)
         sys.modules["emotion_analytics"] = emotion_analytics
@@ -184,6 +176,9 @@ def _load_emotion_analytics():
         
         return emotion_analytics
     except Exception as e:
+        print(f"Error loading emotion_analytics: {e}")
+        import traceback
+        traceback.print_exc()
         raise ImportError(f"Failed to load emotion_analytics module: {e}")
 
 @router.get("/reports/daily")

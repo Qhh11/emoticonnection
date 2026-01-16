@@ -110,6 +110,7 @@ class DiaryService:
         """
         
         try:
+            # Use appropriate method based on provider
             if self.llm_provider == 'deepseek':
                 text = await self._generate_with_deepseek(prompt)
             else:
