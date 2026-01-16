@@ -42,25 +42,40 @@ function PostCard({ post, onResonate, onLike, userId, onPointsChanged, onViewPro
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [isPostingComment, setIsPostingComment] = useState(false)
   const [commentCount, setCommentCount] = useState(post.comment_count)
+  const [isLiking, setIsLiking] = useState(false)
 
   const colors = getColorForMood(post.emotion || post.ai_emotion)
 
   const handleLike = async (e: React.MouseEvent) => {
-    if (!userId) return
+    console.log('handleLike called:', { postId: post.id, userId, isLiking, liked })
+    if (!userId) {
+      console.log('No userId, returning')
+      return
+    }
+    if (isLiking) {
+      console.log('Already liking, returning')
+      return
+    }
 
+    setIsLiking(true)
     try {
       if (liked) {
+        console.log('Unliking post:', post.id)
         await postApi.unlikePost(post.id, userId)
         setLikeCount(prev => prev - 1)
       } else {
+        console.log('Liking post:', post.id)
         await postApi.likePost(post.id, userId)
         setLikeCount(prev => prev + 1)
       }
       setLiked(!liked)
       onResonate(e)
       onLike(post.id)
+      console.log('Like action completed successfully')
     } catch (err) {
       console.error('Failed to like/unlike post:', err)
+    } finally {
+      setIsLiking(false)
     }
   }
 
@@ -155,7 +170,7 @@ function PostCard({ post, onResonate, onLike, userId, onPointsChanged, onViewPro
       )}
       <div className="flex justify-between items-center pt-8 border-t border-white/10">
         <div className="flex space-x-8">
-          <button onClick={handleLike} className={`flex items-center space-x-2 transition-transform active:scale-90 ${liked ? 'scale-110' : ''}`} style={{ color: colors.text }}>
+          <button onClick={handleLike} disabled={isLiking} className={`flex items-center space-x-2 transition-transform active:scale-90 ${liked ? 'scale-110' : ''} ${isLiking ? 'opacity-50' : ''}`} style={{ color: colors.text }}>
             <span className="text-lg">{liked ? '❤️' : '🤍'}</span>
             <span className="text-[13px] font-black">{likeCount}</span>
           </button>

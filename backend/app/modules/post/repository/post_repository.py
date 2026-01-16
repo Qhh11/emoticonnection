@@ -293,22 +293,24 @@ class PostRepository:
         except:
             return {"success": False, "action": "error", "new_like_count": 0}
         
-        # Check if already liked
+        # Check if already liked (check both field names for compatibility)
         existing = await self.likes.find_one({
-            "target_id": post_oid,
-            "target_type": "post",
-            "user_id": user_id
+            "$or": [
+                {"target_id": post_oid, "target_type": "post", "user_id": user_id},
+                {"post_id": post_id, "user_id": user_id}
+            ]
         })
-        
+
         if existing:
             return {
                 "success": False,
                 "action": "already_liked",
                 "new_like_count": await self._get_post_like_count(post_id)
             }
-        
-        # Create like
+
+        # Create like - include both post_id (for index) and target_id (for queries)
         await self.likes.insert_one({
+            "post_id": post_id,
             "target_id": post_oid,
             "target_type": "post",
             "user_id": user_id,
@@ -334,11 +336,12 @@ class PostRepository:
         except:
             return {"success": False, "action": "error", "new_like_count": 0}
         
-        # Remove like
+        # Remove like (try both field names for compatibility)
         result = await self.likes.delete_one({
-            "target_id": post_oid,
-            "target_type": "post",
-            "user_id": user_id
+            "$or": [
+                {"target_id": post_oid, "target_type": "post", "user_id": user_id},
+                {"post_id": post_id, "user_id": user_id}
+            ]
         })
         
         if result.deleted_count == 0:

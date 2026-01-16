@@ -86,6 +86,18 @@ export const authApi = {
 }
 
 // ============ 用户 API ============
+export type MBTIProfile = {
+  type: string
+  completed_at?: string
+}
+
+export type UserPreferences = {
+  chat_duration_preference?: 'short' | 'medium' | 'long'
+  age_range_min?: number
+  age_range_max?: number
+  notification_enabled?: boolean
+  theme?: string
+}
 
 export interface User {
   _id: string
@@ -95,12 +107,25 @@ export interface User {
   bio?: string
   avatar?: string
   created_at?: string
+  age?: number
+  gender?: string
+  mbti?: MBTIProfile
+  preferences: UserPreferences
+  level: number
+  points: number
+  last_login?: string
 }
 
 export interface UpdateUserRequest {
   nickname?: string
+  password?: string
+  email?: string
   bio?: string
   avatar?: string
+  age?: number
+  gender?: string
+  mbti?: MBTIProfile
+  preferences?: UserPreferences
 }
 
 export interface SocialStats {

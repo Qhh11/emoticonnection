@@ -79,6 +79,11 @@ def update_user(user_id: str, updates: Dict[str, Any]) -> bool:
         raise ValueError("Invalid user_id format")
     
     # 2. 验证更新字段是否合法
+    if "password" in updates.keys():
+        hashed_pw = hash_password(updates["password"])
+        updates["hashed_password"] = hashed_pw
+        updates.pop("password")
+
     for key in updates.keys():
         if key not in VALID_FIELDS:
             raise ValueError(f"Invalid field '{key}' — not allowed to update")
