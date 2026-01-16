@@ -532,11 +532,36 @@ export interface CreateDiaryRequest {
 }
 
 export const aiChatApi = {
-  chat: (data: AIChatRequest) =>
-    request<AIChatResponse>('/api/ai-chat/', {
+  chat: async (data: AIChatRequest): Promise<AIChatResponse> => {
+    const formData = new FormData()
+    formData.append('user_id', data.user_id)
+    formData.append('message', data.message)
+    if (data.session_id) {
+      formData.append('session_id', data.session_id)
+    }
+    if (data.history) {
+      formData.append('history', JSON.stringify(data.history))
+    }
+
+    const token = getToken()
+    const headers: HeadersInit = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(`${BASE_URL}/api/ai-chat/`, {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      headers,
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  },
 
   getSessions: (userId: string) =>
     request<AISession[]>(`/api/ai-chat/sessions?user_id=${userId}`),
@@ -551,22 +576,22 @@ export const aiChatApi = {
     request<AIMessage[]>(`/api/ai-chat/sessions/${sessionId}/messages`),
 
   getSessionSummary: (sessionId: string) =>
-    request<SessionSummary>(`/api/ai-chat/sessions/${sessionId}/summary`),
+    request<SessionSummary>(`/api/diary/summary/${sessionId}`),
 
   generateDiary: (sessionId: string, userId: string) =>
-    request<Diary>('/api/ai-chat/diaries/generate', {
+    request<Diary>('/api/diary/diaries/generate', {
       method: 'POST',
       body: JSON.stringify({ session_id: sessionId, user_id: userId }),
     }),
 
   getDiaries: (userId: string) =>
-    request<Diary[]>(`/api/ai-chat/diaries?user_id=${userId}`),
+    request<Diary[]>(`/api/diary/diaries?user_id=${userId}`),
 
   getDiary: (diaryId: string) =>
-    request<Diary>(`/api/ai-chat/diaries/${diaryId}`),
+    request<Diary>(`/api/diary/diaries/${diaryId}`),
 
   createDiary: (data: CreateDiaryRequest) =>
-    request<Diary>('/api/ai-chat/diaries', {
+    request<Diary>('/api/diary/diaries', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -581,17 +606,17 @@ export const aiChatApi = {
   // Emotion Reports
   getDailyReport: (userId: string, endDate?: string) => {
     const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
-    return request<EmotionReport>(`/api/ai-chat/reports/daily${query}`)
+    return request<EmotionReport>(`/api/diary/reports/daily${query}`)
   },
 
   getWeeklyReport: (userId: string, endDate?: string) => {
     const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
-    return request<EmotionReport>(`/api/ai-chat/reports/weekly${query}`)
+    return request<EmotionReport>(`/api/diary/reports/weekly${query}`)
   },
 
   getMonthlyReport: (userId: string, endDate?: string) => {
     const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
-    return request<EmotionReport>(`/api/ai-chat/reports/monthly${query}`)
+    return request<EmotionReport>(`/api/diary/reports/monthly${query}`)
   },
 }
 
