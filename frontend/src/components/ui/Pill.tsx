@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 
 interface PillProps {
-  variant?: 'vivid' | 'royal' | 'coral' | 'sunny' | 'fresh' | 'dark' | 'neutral'
+  variant?: 'vivid' | 'royal' | 'coral' | 'sunny' | 'fresh' | 'dark' | 'neutral' | 'lavender' | 'sky' | 'sunshine' | 'mint'
   size?: 'sm' | 'md' | 'lg'
   children: ReactNode
   className?: string
@@ -21,6 +21,10 @@ export default function Pill({
     fresh: 'bg-fresh-200 text-fresh-600',    // Calm
     dark: 'bg-dark-200 text-dark-600',       // Neutral dark
     neutral: 'bg-text-dark bg-opacity-10 text-text-dark',
+    lavender: 'bg-purple-100 text-purple-700',
+    sky: 'bg-sky-100 text-sky-700',
+    sunshine: 'bg-yellow-100 text-yellow-700',
+    mint: 'bg-emerald-100 text-emerald-700',
   }
 
   const sizes = {

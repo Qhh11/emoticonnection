@@ -4,7 +4,7 @@ interface SectionProps {
   children: ReactNode
   className?: string
   spacing?: 'sm' | 'md' | 'lg' | 'xl'
-  background?: 'transparent' | 'vivid' | 'royal' | 'coral' | 'sunny' | 'fresh' | 'dark' | 'paper'
+  background?: 'transparent' | 'vivid' | 'royal' | 'coral' | 'sunny' | 'fresh' | 'dark' | 'paper' | 'lavender' | 'sky' | 'sunshine' | 'mint'
   id?: string
 }
 
@@ -31,6 +31,10 @@ export default function Section({
     fresh: 'gradient-wash-fresh',
     dark: 'gradient-wash-dark',
     paper: 'gradient-wash-paper',
+    lavender: 'bg-lavender-50', // Fallback or defined class
+    sky: 'bg-sky-50',
+    sunshine: 'bg-yellow-50',
+    mint: 'bg-emerald-50',
   }
 
   return (

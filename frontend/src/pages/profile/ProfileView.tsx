@@ -2,11 +2,7 @@ import { useState } from 'react'
 import { Avatar3D } from '../../config/avatars'
 import { SocialStats, Post, User, EmotionReport } from '../../services/api'
 
-interface AuthUser {
-  user_id: string
-  // username: string
-  // nickname: string
-}
+
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -209,7 +205,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
         day,
         isToday,
         isPast,
-        mood: null  // 未签到显示灰色，和未来日期一样
+        mood: null as typeof MOOD_DATA[0] | null // Explicit type cast to avoid 'never' inference
       })
     }
 

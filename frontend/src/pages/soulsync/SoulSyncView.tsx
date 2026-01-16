@@ -79,9 +79,9 @@ interface SoulSyncViewProps {
   onSessionChange?: (hasSession: boolean) => void // Notify parent when in/out of chat
 }
 
-const VIP_REQUIRED_LEVEL = 3
+// Removed unused VIP_REQUIRED_LEVEL
 
-export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar, userLevel = 0, showEmotionAnalysis: propShowAnalysis, onCloseEmotionAnalysis, onSessionChange }: SoulSyncViewProps) {
+export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar, showEmotionAnalysis: propShowAnalysis, onCloseEmotionAnalysis, onSessionChange }: SoulSyncViewProps) {
   const [isSearching, setIsSearching] = useState(false)
   const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean; matchScore?: number; matchReason?: string } | null>(null)
   const [sessions, setSessions] = useState<PeerSession[]>([])
@@ -144,66 +144,66 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   }
 
   useEffect(() => {
-  if (!isSearching) {
-    if (pollTimerRef.current) {
-      window.clearInterval(pollTimerRef.current)
-      pollTimerRef.current = null
-    }
-    return
-  }
-
-  ;(async () => {
-    try {
-      const status = await matchApi.getStatus()
-      if (status.matched && status.room_id) {
-        setMatchedPartner({
-          roomId: status.room_id,
-          partnerId: status.matched_user_id || 'unknown',
-          isAnonymous: status.is_anonymous ?? isAnonymousMatch,
-          matchScore: status.match_score,
-          matchReason: status.match_reason
-        })
-        setIsSearching(false)
-        return
+    if (!isSearching) {
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
       }
+      return
+    }
 
-      if (status.in_queue) {
-        setQueuePosition(status.queue_position || null)
-        setEstimatedWait(status.estimated_wait || null)
+    ; (async () => {
+      try {
+        const status = await matchApi.getStatus()
+        if (status.matched && status.room_id) {
+          setMatchedPartner({
+            roomId: status.room_id,
+            partnerId: status.matched_user_id || 'unknown',
+            isAnonymous: status.is_anonymous ?? isAnonymousMatch,
+            matchScore: status.match_score,
+            matchReason: status.match_reason
+          })
+          setIsSearching(false)
+          return
+        }
+
+        if (status.in_queue) {
+          setQueuePosition(status.queue_position || null)
+          setEstimatedWait(status.estimated_wait || null)
+        }
+      } catch (e) {
+        console.error('Initial status check failed:', e)
       }
-    } catch (e) {
-      console.error('Initial status check failed:', e)
-    }
-  })()
+    })()
 
-  pollTimerRef.current = window.setInterval(async () => {
-    try {
-      const status = await matchApi.getStatus()
-      if (status.matched && status.room_id) {
-        setMatchedPartner({
-          roomId: status.room_id,
-          partnerId: status.matched_user_id || 'unknown',
-          isAnonymous: status.is_anonymous ?? isAnonymousMatch,
-          matchScore: status.match_score,
-          matchReason: status.match_reason
-        })
-        setIsSearching(false) // 会触发 cleanup 停止轮询
-      } else if (status.in_queue) {
-        setQueuePosition(status.queue_position || null)
-        setEstimatedWait(status.estimated_wait || null)
+    pollTimerRef.current = window.setInterval(async () => {
+      try {
+        const status = await matchApi.getStatus()
+        if (status.matched && status.room_id) {
+          setMatchedPartner({
+            roomId: status.room_id,
+            partnerId: status.matched_user_id || 'unknown',
+            isAnonymous: status.is_anonymous ?? isAnonymousMatch,
+            matchScore: status.match_score,
+            matchReason: status.match_reason
+          })
+          setIsSearching(false) // 会触发 cleanup 停止轮询
+        } else if (status.in_queue) {
+          setQueuePosition(status.queue_position || null)
+          setEstimatedWait(status.estimated_wait || null)
+        }
+      } catch (e) {
+        console.error('Status polling failed:', e)
       }
-    } catch (e) {
-      console.error('Status polling failed:', e)
-    }
-  }, 1500)
+    }, 1500)
 
-  return () => {
-    if (pollTimerRef.current) {
-      window.clearInterval(pollTimerRef.current)
-      pollTimerRef.current = null
+    return () => {
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
     }
-  }
-}, [isSearching, isAnonymousMatch])
+  }, [isSearching, isAnonymousMatch])
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -413,7 +413,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
         if (response.safety_tips) {
           setSafetyTips(response.safety_tips)
         }
-        
+
       }
     } catch (err) {
       console.error('Match failed:', err)
@@ -439,7 +439,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     setSafetyTips([])
   }
 
-    const confirmMatch = async () => {
+  const confirmMatch = async () => {
     if (!matchedPartner || !userId) return
 
     const roomId = matchedPartner.roomId
@@ -1036,8 +1036,8 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
               <div className="text-center py-8 space-y-4">
                 <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-yellow-400 via-orange-500 to-pink-500 flex items-center justify-center shadow-xl">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 6v6l4 2"/>
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6l4 2" />
                   </svg>
                 </div>
                 <div>

@@ -34,7 +34,7 @@ const MOOD_DATA = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user: AuthUser, logout } = useAuth()
-  const [user, setUser] = useState< User | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const [points, setPoints] = useState(0)
   const [level, setLevel] = useState(1)
@@ -71,7 +71,7 @@ export default function Dashboard() {
 
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false)
-  const [settingsUsername, setSettingsUsername] = useState('')
+
   const [settingsNickname, setSettingsNickname] = useState('')
   const [settingsPassword, setSettingsPassword] = useState('')
   const [settingsEmail, setSettingsEmail] = useState('')
@@ -82,7 +82,7 @@ export default function Dashboard() {
   const [settingsMbti, setSettingsMbti] = useState<MBTIProfile>()
   const [settingsPreferences, setSettingsPreferences] = useState<UserPreferences>()
   const [settingsSaving, setSettingsSaving] = useState(false)
-  
+
   // User avatar state
   const [userAvatar, setUserAvatar] = useState('🦊')
 
@@ -201,7 +201,7 @@ export default function Dashboard() {
     } else {
       document.body.style.overflow = ''
     }
-      return () => {
+    return () => {
       document.body.style.overflow = ''
     }
   }, [showSettings])
@@ -229,7 +229,7 @@ export default function Dashboard() {
     }, 1000)
   }
 
-  const addDiaryEntry = async (entry: {mood: string, color: string, text: string}) => {
+  const addDiaryEntry = async (entry: { mood: string, color: string, text: string }) => {
     const newEntry = {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
       ...entry
@@ -330,7 +330,7 @@ export default function Dashboard() {
 
   const handleOpenSettings = () => {
     console.log('Opening settings for user:', user)
-    setSettingsUsername(user?.username || '')
+
     setSettingsNickname(user?.nickname || user?.username || '')
     setSettingsPassword('')
     setSettingsEmail(user?.email || '')
@@ -748,11 +748,10 @@ export default function Dashboard() {
                       key={emoji}
                       type="button"
                       onClick={() => setSettingsAvatar(emoji)}
-                      className={`w-12 h-12 rounded-xl text-2xl flex items-center justify-center transition-all ${
-                        settingsAvatar === emoji
-                          ? 'bg-accent scale-110 shadow-lg'
-                          : 'bg-gray-100 hover:bg-gray-200'
-                      }`}
+                      className={`w-12 h-12 rounded-xl text-2xl flex items-center justify-center transition-all ${settingsAvatar === emoji
+                        ? 'bg-accent scale-110 shadow-lg'
+                        : 'bg-gray-100 hover:bg-gray-200'
+                        }`}
                     >
                       {emoji}
                     </button>
@@ -803,19 +802,19 @@ export default function Dashboard() {
                   className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
                 >
                   <option value="">unknown</option>
-                    {[
-                      'INFP','INFJ','INTP','INTJ','ENFP','ENFJ','ENTP','ENTJ',
-                      'ISFP','ISFJ','ISTP','ISTJ','ESFP','ESFJ','ESTP','ESTJ'
-                    ].map(t => (
-                      <option key={t}>{t}</option>
-                    ))}
+                  {[
+                    'INFP', 'INFJ', 'INTP', 'INTJ', 'ENFP', 'ENFJ', 'ENTP', 'ENTJ',
+                    'ISFP', 'ISFJ', 'ISTP', 'ISTJ', 'ESFP', 'ESFJ', 'ESTP', 'ESTJ'
+                  ].map(t => (
+                    <option key={t}>{t}</option>
+                  ))}
                 </select>
-              <p className="hint">
-                last time tested:{' '}
-                {settingsMbti?.completed_at
-                  ? new Date(settingsMbti.completed_at).toLocaleDateString()
-                  : '-'}
-              </p>
+                <p className="hint">
+                  last time tested:{' '}
+                  {settingsMbti?.completed_at
+                    ? new Date(settingsMbti.completed_at).toLocaleDateString()
+                    : '-'}
+                </p>
 
               </div>
 
@@ -828,7 +827,7 @@ export default function Dashboard() {
                 <select
                   id="chat_duration_preference"
                   value={settingsPreferences?.chat_duration_preference || ''}
-                  onChange={(e) => setSettingsPreferences({ ...settingsPreferences, chat_duration_preference: e.target.value as 'short' | 'medium' | 'long'})}
+                  onChange={(e) => setSettingsPreferences({ ...settingsPreferences, chat_duration_preference: e.target.value as 'short' | 'medium' | 'long' })}
                   className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
                 >
                   <option value="short">short</option>
@@ -865,37 +864,37 @@ export default function Dashboard() {
                 </div>
 
                 <label className="flex items-center gap-3 cursor-pointer select-none">
-                <span className="text-[12px]">
-                  Notifications
-                </span>
+                  <span className="text-[12px]">
+                    Notifications
+                  </span>
 
-                <div className="relative">
-                  <input
-                    id="notification_enabled"
-                    type="checkbox"
-                    checked={settingsPreferences?.notification_enabled}
-                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, notification_enabled: e.target.checked })}
-                    className="sr-only"
-                  />
-                  <div
-                    className={`
+                  <div className="relative">
+                    <input
+                      id="notification_enabled"
+                      type="checkbox"
+                      checked={settingsPreferences?.notification_enabled}
+                      onChange={(e) => setSettingsPreferences({ ...settingsPreferences, notification_enabled: e.target.checked })}
+                      className="sr-only"
+                    />
+                    <div
+                      className={`
                       w-11 h-6 rounded-full transition-colors
                       ${settingsPreferences?.notification_enabled
-                        ? 'bg-vivid-500'
-                        : 'bg-gray-300'}
+                          ? 'bg-vivid-500'
+                          : 'bg-gray-300'}
                     `}
-                  />
-                  <div
-                    className={`
+                    />
+                    <div
+                      className={`
                       absolute top-0.5 left-0.5
                       w-5 h-5 bg-white rounded-full shadow
                       transition-transform
                       ${settingsPreferences?.notification_enabled
-                        ? 'translate-x-5'
-                        : ''}
+                          ? 'translate-x-5'
+                          : ''}
                     `}
-                  />
-                </div>
+                    />
+                  </div>
                 </label>
 
                 <label className="text-[12px]">theme</label>
@@ -968,25 +967,23 @@ function PlaceholderView({ title }: PlaceholderViewProps) {
 
 /* --- ICONS --- */
 function ProfileIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
 }
 
 function DiaryIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" /><path d="M8 7h6" /><path d="M8 11h8" /></svg>
 }
 
 function ChatIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
 }
 
-function SyncIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-4.4 3.6-8 8-8 3.3 0 6.2 2 7.4 4.9M22 12c0 4.4-3.6 8-8 8-3.3 0-6.2-2-7.4-4.9"/></svg>
-}
+
 
 function CommunityIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/><circle cx="12" cy="12" r="3"/><path d="M12 2L12 12"/></svg>
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z" /><circle cx="12" cy="12" r="3" /><path d="M12 2L12 12" /></svg>
 }
 
 function LogoutIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
 }
