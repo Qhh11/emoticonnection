@@ -3,9 +3,9 @@ import importlib.util
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from pathlib import Path
-import google.generativeai as genai
 from dotenv import load_dotenv
 from .utils import load_weaviate_manager
+from .gemini_config import get_chat_model
 
 load_dotenv()
 
@@ -45,20 +45,12 @@ class AIChatService:
     
     def _init_gemini(self):
         """初始化 Gemini 客户端"""
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
+        # 使用统一的 Gemini 配置
+        self.model = get_chat_model(self.system_instruction)
+        
+        if not self.model:
             print("⚠️  WARNING: GEMINI_API_KEY not found. AI chat功能将不可用.")
             print("   请创建 .env 文件并添加: GEMINI_API_KEY=your_key_here")
-            return
-
-        # 配置 Gemini
-        genai.configure(api_key=api_key)
-        
-        # 初始化 Gemini 模型
-        self.model = genai.GenerativeModel(
-            model_name="gemini-flash-latest", 
-            system_instruction=self.system_instruction
-        )
 
     async def chat_with_ai(self, message: str, history: list, user_id: str = None, session_id: str = None, 
                           image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None):

@@ -198,12 +198,16 @@ class EmotionAnalytics:
             else:
                 gen_cfg = types.GenerateContentConfig(temperature=0.7)
 
-            response = self.gemini_client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt,
-                config=gen_cfg
+            response_text = genai.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt
             )
-            return response.text
+            
+            if response_text and response_text.text:
+                return response_text.text.strip()
+            
+            logger.warning("Empty response from Gemini batch analysis")
+            raise
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
             raise

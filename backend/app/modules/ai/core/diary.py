@@ -1,8 +1,8 @@
 import os
 import json
 from datetime import datetime
-import google.generativeai as genai
 from .utils import load_weaviate_manager
+from .gemini_config import get_diary_model
 
 class DiaryService:
     """
@@ -23,13 +23,11 @@ class DiaryService:
 
     def _init_gemini(self):
         """初始化 Gemini 客户端"""
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
+        # 使用统一的 Gemini 配置
+        self.model = get_diary_model()
+        
+        if not self.model:
             print("⚠️  WARNING: GEMINI_API_KEY not found. Diary Generation feature will be unavailable.")
-            return
-
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name="gemini-flash-latest")
     
     async def _generate_with_gemini(self, prompt: str) -> str:
         """使用 Gemini 生成内容"""

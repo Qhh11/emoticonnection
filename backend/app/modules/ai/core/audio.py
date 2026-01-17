@@ -6,6 +6,9 @@ from openai import OpenAI
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# Import gemini_config for unified model management
+from .gemini_config import get_audio_model
+
 # Path to .env in project root: emoticonnection/.env
 # This file: emoticonnection/backend/app/modules/ai/core/audio.py
 root_env = Path(__file__).resolve().parents[5] / ".env"
@@ -26,19 +29,15 @@ class AudioService:
         else:
             self.client = OpenAI(api_key=self.openai_api_key)
 
-        # Gemini Setup (Fallback for STT)
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if self.gemini_api_key:
-            try:
-                genai.configure(api_key=self.gemini_api_key)
-                # Use the model name without 'models/' prefix for newer API
-                self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-            except Exception as e:
-                print(f"⚠️ Failed to initialize Gemini Model: {e}")
-                self.gemini_model = None
+        # Gemini Setup (Fallback for STT) - 使用统一配置
+        print("🔍 [AudioService] Attempting to get Gemini audio model...")
+        self.gemini_model = get_audio_model()
+        
+        if self.gemini_model:
+            print(f"✅ [AudioService] Gemini model initialized: {self.gemini_model.model_name}")
         else:
-            print("⚠️ GEMINI_API_KEY not found. Gemini STT fallback will not work.")
-            self.gemini_model = None
+            print("❌ [AudioService] Gemini model is None - STT fallback will not work")
+            print(f"   GEMINI_API_KEY present: {os.getenv('GEMINI_API_KEY') is not None}")
 
         # Directory handling
         # Go up from: backend/app/modules/ai/core/audio.py
@@ -94,20 +93,36 @@ class AudioService:
         
         raise Exception("No available STT provider (OpenAI or Gemini)")
 
-    async def generate_speech(self, text: str) -> str:
+    async def generate_speech(self, text: str, voice: str = "nova") -> str:
         """
         Generate speech from text using OpenAI TTS or gTTS Fallback
+        
+        Args:
+            text: Text to convert to speech
+            voice: Voice style for OpenAI TTS. Options:
+                - alloy: Neutral and balanced
+                - echo: Calm and steady
+                - fable: Warm and expressive  
+                - onyx: Deep and authoritative
+                - nova: Cheerful and energetic (American accent)
+                - shimmer: Soft and gentle
+        
         Returns: Path (URL path) to the generated audio file
         """
         filename = f"tts_{uuid.uuid4().hex}.mp3"
         save_path = self.upload_dir / filename
+        
+        # Validate voice option
+        valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+        if voice not in valid_voices:
+            voice = "nova"  # Default to cheerful American
         
         # Try OpenAI first
         if self.client:
             try:
                 response = self.client.audio.speech.create(
                     model="tts-1",
-                    voice="alloy", 
+                    voice=voice, 
                     input=text
                 )
                 response.stream_to_file(save_path)

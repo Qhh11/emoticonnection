@@ -117,6 +117,28 @@ const ActionButton = styled.button`
   &:hover { background: rgba(255, 255, 255, 0.2); }
 `;
 
+const VoiceSelector = styled.select`
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.2s;
+  
+  &:hover { background: rgba(255, 255, 255, 0.2); }
+  
+  option {
+    background: #333;
+    color: white;
+  }
+`;
+
 interface VoiceChatOverlayProps {
     isOpen: boolean;
     onClose: () => void;
@@ -127,6 +149,7 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
     const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
     const [transcript, setTranscript] = useState<string>("");
     const [aiResponseText, setAiResponseText] = useState<string>("");
+    const [selectedVoice, setSelectedVoice] = useState<string>('nova');
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
@@ -164,7 +187,7 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
         wsRef.current = ws;
 
         ws.onopen = () => {
-            console.log("[VoiceChat] WS Connected ✅");
+            console.log("[VoiceChat] WS Connected");
         };
 
         ws.onmessage = (event) => {
@@ -194,12 +217,11 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
 
         ws.onerror = (err) => {
             console.error("[VoiceChat] WS Error:", err);
-            console.error("[VoiceChat] Connection failed to:", wsUrl);
             setStatus('idle');
         };
 
-        ws.onclose = (event) => {
-            console.log(`[VoiceChat] WS Closed - Code: ${event.code}, Reason: ${event.reason || 'none'}`);
+        ws.onclose = () => {
+            console.log("[VoiceChat] WS Closed");
             wsRef.current = null;
         };
     };
@@ -256,15 +278,8 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
     }
 
     const sendAudioToWS = async (audioBlob: Blob) => {
-        // Wait for WebSocket to be ready (max 5 seconds)
-        let attempts = 0;
-        while (attempts < 50 && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-            console.error("[VoiceChat] WebSocket not open after waiting. State:", wsRef.current?.readyState);
+            console.error("[VoiceChat] WebSocket not open");
             setStatus('idle');
             return;
         }
@@ -279,7 +294,8 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
             wsRef.current?.send(JSON.stringify({
                 type: 'audio_blob',
                 data: base64Data,
-                format: 'webm'
+                format: 'webm',
+                voice: selectedVoice
             }));
         };
     };
@@ -312,6 +328,15 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
     return (
         <Overlay>
             <CloseButton onClick={onClose}>&times;</CloseButton>
+
+            <VoiceSelector value={selectedVoice} onChange={(e) => setSelectedVoice(e.target.value)}>
+                <option value="nova">🌟 Nova - Cheerful (American)</option>
+                <option value="alloy">⚖️ Alloy - Balanced</option>
+                <option value="echo">🧘 Echo - Calm</option>
+                <option value="fable">🎭 Fable - Expressive</option>
+                <option value="onyx">🎯 Onyx - Authoritative</option>
+                <option value="shimmer">✨ Shimmer - Gentle</option>
+            </VoiceSelector>
 
             <StatusText>
                 {status === 'listening' && "Listening..."}

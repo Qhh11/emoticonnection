@@ -1,6 +1,6 @@
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
+from .gemini_config import get_emotion_model
 
 # 加载环境变量
 load_dotenv()
@@ -10,20 +10,11 @@ class EmotionService:
     情绪分析服务类
     """
     def __init__(self):
-        # 获取 API Key
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            print("⚠️  WARNING: GEMINI_API_KEY not found. Emotion分析功能将不可用.")
-            self.model = None
-            return
-
-        # 配置 Gemini
-        genai.configure(api_key=api_key)
+        # 使用统一的 Gemini 配置
+        self.model = get_emotion_model()
         
-        # 初始化 Gemini 模型
-        self.model = genai.GenerativeModel(
-            model_name="gemini-flash-latest"
-        )
+        if not self.model:
+            print("⚠️  WARNING: GEMINI_API_KEY not found. Emotion分析功能将不可用.")
 
     async def analyze_emotion(self, text: str):
         """

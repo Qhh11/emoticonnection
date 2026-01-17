@@ -10,7 +10,10 @@ from config.mongodb_config import get_database
 
 router = APIRouter()
 ai_service = AIChatService()
-audio_service = AudioService()
+
+def get_audio_service() -> AudioService:
+    """Helper to get audio service instance"""
+    return AudioService()
 
 def get_ai_repo() -> AIChatRepository:
     """Helper to get repo instance"""
@@ -44,6 +47,9 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
     
     print(f"[WS] AI Chat connected: User {user_id}, Session {session_id}")
     
+    # Store user's voice preference (default to cheerful American)
+    voice_preference = "nova"
+    
     try:
         while True:
             # 1. Receive message
@@ -53,6 +59,11 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                 message = json.loads(data)
                 msg_type = message.get("type")
                 user_text = ""
+                
+                # Check if user sent a voice preference
+                if "voice" in message:
+                    voice_preference = message.get("voice", "nova")
+                    print(f"[WS] Voice preference set to: {voice_preference}")
                 
                 # 2. Process Input (Text or Audio)
                 if msg_type == "audio_blob":
@@ -65,8 +76,9 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                         
                     # Save and Transcribe
                     try:
-                        file_path = audio_service.save_base64_audio(base64_data, audio_format)
-                        user_text = await audio_service.transcribe_audio(file_path)
+                        audio_svc = get_audio_service()
+                        file_path = audio_svc.save_base64_audio(base64_data, audio_format)
+                        user_text = await audio_svc.transcribe_audio(file_path)
                         
                         # Send transcript back to client
                         await websocket.send_json({
@@ -119,7 +131,8 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                     
                     # 5. Generate Audio (TTS)
                     try:
-                        audio_url = await audio_service.generate_speech(response_text)
+                        audio_svc = get_audio_service()
+                        audio_url = await audio_svc.generate_speech(response_text, voice=voice_preference)
                         
                         # Convert to absolute URL for frontend access
                         backend_host = os.getenv("BACKEND_HOST", "http://localhost:8000")
