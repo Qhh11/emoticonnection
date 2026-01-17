@@ -40,6 +40,11 @@ class GenerateDiaryRequest(BaseModel):
     user_id: str
     session_id: str
 
+class AIProcessRequest(BaseModel):
+    """AI 处理手动输入请求模型"""
+    user_id: str
+    content: str
+
 @router.get("/diaries")
 async def get_user_diaries(user_id: str, repo: DiaryRepository = Depends(get_diary_repo)):
     """获取用户的所有日记"""
@@ -117,6 +122,30 @@ async def generate_diary(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate diary: {str(e)}")
+
+
+@router.post("/diaries/ai-save")
+async def ai_save_diary(
+    request: AIProcessRequest,
+    repo: DiaryRepository = Depends(get_diary_repo)
+):
+    """AI 处理手动输入并保存日记"""
+    try:
+        # 1. 调用 AI 处理文本
+        diary_data = await diary_service.generate_from_text(request.content)
+
+        # 2. 保存到数据库
+        diary = await repo.create_diary(
+            user_id=request.user_id,
+            session_id="", # 手动输入没有 session_id
+            title=diary_data.get("title", "Reflections"),
+            content=diary_data.get("content", request.content),
+            mood=diary_data.get("mood", "Neutral")
+        )
+
+        return diary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process and save diary: {str(e)}")
 
 
 @router.get("/summary/{session_id}")

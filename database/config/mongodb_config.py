@@ -6,10 +6,15 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# Prefer `database/.env` when starting from repo root.
-_database_env = Path(__file__).resolve().parents[1] / ".env"
-if _database_env.exists():
-    load_dotenv(dotenv_path=_database_env)
+# Prefer project root `.env` when starting from repo root.
+_project_root_env = Path(__file__).resolve().parents[2] / ".env"
+if _project_root_env.exists():
+    load_dotenv(dotenv_path=_project_root_env)
+else:
+    # Fallback to local .env if root not found (though we aim to use root only)
+    _local_env = Path(__file__).resolve().parents[1] / ".env"
+    if _local_env.exists():
+        load_dotenv(dotenv_path=_local_env)
 load_dotenv()
 
 # MongoDB 连接配置

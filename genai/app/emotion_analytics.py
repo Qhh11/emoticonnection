@@ -46,7 +46,6 @@ except ImportError:
 
 from google.genai import types
 from google import genai
-from openai import OpenAI
 
 from langchain_core.prompts import PromptTemplate
 import weaviate.classes.query as wq
@@ -61,6 +60,8 @@ class EmotionAnalytics:
     """
     Analytics engine for emotion data processing and report generation.
     """
+    
+    # ... (keeping EMOTION_CONFIG and other constants as they are)
     
     # 9 Core Emotion Categories with metadata
     # 情绪 (Emotion) | 颜色 (Hex Code) | 中文昵称 | 英文昵称
@@ -158,35 +159,29 @@ class EmotionAnalytics:
             'boring': 'bored'
         }
         return variations.get(emotion_lower, emotion_lower)
+    
+    # TRIGGER_CATEGORIES and other methods above remain unchanged
 
-    def __init__(self, weaviate_manager: WeaviateManager, gemini_client=None, deepseek_client=None, llm_provider: str = 'deepseek'):
+    def __init__(self, weaviate_manager: WeaviateManager, gemini_client=None, llm_provider: str = 'gemini'):
         """
-        Initialize with database and AI client(s).
+        Initialize with database and Gemini client.
         
         Args:
             weaviate_manager: Weaviate database manager
-            gemini_client: Google Gemini client (optional)
-            deepseek_client: DeepSeek/OpenAI client (optional)
-            llm_provider: Which LLM to use - 'gemini' or 'deepseek' (default: 'deepseek')
+            gemini_client: Google Gemini client (required)
+            llm_provider: Which LLM to use (currently only 'gemini' supported)
         """
         self.weaviate_manager = weaviate_manager
         self.gemini_client = gemini_client
-        self.deepseek_client = deepseek_client
-        self.llm_provider = llm_provider.lower()
+        self.llm_provider = 'gemini'
         
-        # Validate that at least one client is provided
-        if self.llm_provider == 'gemini' and not self.gemini_client:
-            raise ValueError("Gemini client is required when llm_provider is 'gemini'")
-        if self.llm_provider == 'deepseek' and not self.deepseek_client:
-            raise ValueError("DeepSeek client is required when llm_provider is 'deepseek'")
+        # Validate that Gemini client is provided
+        if not self.gemini_client:
+            raise ValueError("Gemini client is required for EmotionAnalytics")
 
     def _call_llm(self, prompt: str) -> str:
         """Call the configured LLM provider for text generation."""
-        if self.llm_provider == 'gemini':
-            return self._call_gemini(prompt)
-
-        else:
-            return self._call_deepseek(prompt)
+        return self._call_gemini(prompt)
         
     def _call_gemini(self, prompt: str) -> str:
         """Call Gemini API for text generation."""
@@ -204,32 +199,13 @@ class EmotionAnalytics:
                 gen_cfg = types.GenerateContentConfig(temperature=0.7)
 
             response = self.gemini_client.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model="gemini-2.0-flash", # Updated to a more stable version
                 contents=prompt,
                 config=gen_cfg
             )
             return response.text
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
-            raise
-
-    def _call_deepseek(self, prompt: str) -> str:
-        """Call DeepSeek API for text generation."""
-        try:
-            # DeepSeek uses OpenAI-compatible API
-            response = self.deepseek_client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": "你是一位专业的情绪分析助手，擅长分析文本中的情绪状态并提供专业建议。请始终返回JSON格式的结果。"},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=4096,
-                stream=False
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"DeepSeek API error: {e}")
             raise
 
     def fetch_user_conversations(
@@ -843,24 +819,12 @@ def emotion_summary_to_json(summary: EmotionSummary) -> str:
 
 
 # Convenience functions for direct use
-def _create_deepseek_client() -> OpenAI:
-    """Create a DeepSeek client using OpenAI-compatible API."""
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        raise ValueError("DEEPSEEK_API_KEY environment variable is not set")
-    return OpenAI(
-        api_key=api_key,
-        base_url="https://api.deepseek.com"
-    )
-
-
 def generate_daily_emotion_report(
     user_id: str,
     end_date: Optional[str] = None,
     weaviate_manager: Optional[WeaviateManager] = None,
     gemini_client = None,
-    deepseek_client = None,
-    llm_provider: str = 'deepseek'
+    llm_provider: str = 'gemini'
 ) -> EmotionSummary:
     """
     Generate daily emotion report for a user.
@@ -870,22 +834,16 @@ def generate_daily_emotion_report(
         end_date: End date (ISO format), defaults to now
         weaviate_manager: Optional WeaviateManager instance
         gemini_client: Optional Gemini client
-        deepseek_client: Optional DeepSeek client
-        llm_provider: LLM provider to use - 'gemini' or 'deepseek' (default: 'deepseek')
+        llm_provider: LLM provider (currently only 'gemini' supported)
     """
     if weaviate_manager is None:
         weaviate_manager = WeaviateManager()
     
-    if llm_provider == 'deepseek':
-        if deepseek_client is None:
-            deepseek_client = _create_deepseek_client()
-        analytics = EmotionAnalytics(weaviate_manager, deepseek_client=deepseek_client, llm_provider='deepseek')
-    else:
-        if gemini_client is None:
-            api_key = os.getenv("GEMINI_API_KEY")
-            gemini_client = genai.Client(api_key=api_key)
-        analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
-        
+    if gemini_client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_client = genai.Client(api_key=api_key)
+    
+    analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
     return analytics.generate_report(user_id, 'daily', end_date)
 
 
@@ -894,8 +852,7 @@ def generate_weekly_emotion_report(
     end_date: Optional[str] = None,
     weaviate_manager: Optional[WeaviateManager] = None,
     gemini_client = None,
-    deepseek_client = None,
-    llm_provider: str = 'deepseek'
+    llm_provider: str = 'gemini'
 ) -> EmotionSummary:
     """
     Generate weekly emotion report for a user.
@@ -905,22 +862,16 @@ def generate_weekly_emotion_report(
         end_date: End date (ISO format), defaults to now
         weaviate_manager: Optional WeaviateManager instance
         gemini_client: Optional Gemini client
-        deepseek_client: Optional DeepSeek client
-        llm_provider: LLM provider to use - 'gemini' or 'deepseek' (default: 'deepseek')
+        llm_provider: LLM provider (currently only 'gemini' supported)
     """
     if weaviate_manager is None:
         weaviate_manager = WeaviateManager()
     
-    if llm_provider == 'deepseek':
-        if deepseek_client is None:
-            deepseek_client = _create_deepseek_client()
-        analytics = EmotionAnalytics(weaviate_manager, deepseek_client=deepseek_client, llm_provider='deepseek')
-    else:
-        if gemini_client is None:
-            api_key = os.getenv("GEMINI_API_KEY")
-            gemini_client = genai.Client(api_key=api_key)
-        analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
-        
+    if gemini_client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_client = genai.Client(api_key=api_key)
+    
+    analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
     return analytics.generate_report(user_id, 'weekly', end_date)
 
 
@@ -929,8 +880,7 @@ def generate_monthly_emotion_report(
     end_date: Optional[str] = None,
     weaviate_manager: Optional[WeaviateManager] = None,
     gemini_client = None,
-    deepseek_client = None,
-    llm_provider: str = 'deepseek'
+    llm_provider: str = 'gemini'
 ) -> EmotionSummary:
     """
     Generate monthly emotion report for a user.
@@ -940,22 +890,16 @@ def generate_monthly_emotion_report(
         end_date: End date (ISO format), defaults to now
         weaviate_manager: Optional WeaviateManager instance
         gemini_client: Optional Gemini client
-        deepseek_client: Optional DeepSeek client
-        llm_provider: LLM provider to use - 'gemini' or 'deepseek' (default: 'deepseek')
+        llm_provider: LLM provider (currently only 'gemini' supported)
     """
     if weaviate_manager is None:
         weaviate_manager = WeaviateManager()
     
-    if llm_provider == 'deepseek':
-        if deepseek_client is None:
-            deepseek_client = _create_deepseek_client()
-        analytics = EmotionAnalytics(weaviate_manager, deepseek_client=deepseek_client, llm_provider='deepseek')
-    else:
-        if gemini_client is None:
-            api_key = os.getenv("GEMINI_API_KEY")
-            gemini_client = genai.Client(api_key=api_key)
-        analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
-        
+    if gemini_client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_client = genai.Client(api_key=api_key)
+    
+    analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
     return analytics.generate_report(user_id, 'monthly', end_date)
 
 
@@ -966,23 +910,14 @@ if __name__ == "__main__":
     
     load_dotenv()
     
-    # Set which LLM provider to use: 'gemini' or 'deepseek'
-    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
-    
     try:
         manager = WeaviateManager()
         
-        if LLM_PROVIDER == 'deepseek':
-            # Use DeepSeek
-            print("Using DeepSeek API...")
-            deepseek_client = _create_deepseek_client()
-            analytics = EmotionAnalytics(manager, deepseek_client=deepseek_client, llm_provider='deepseek')
-        else:
-            # Use Gemini (default)
-            print("Using Gemini API...")
-            api_key = os.getenv("GEMINI_API_KEY")
-            gemini_client = genai.Client(api_key=api_key)
-            analytics = EmotionAnalytics(manager, gemini_client=gemini_client, llm_provider='gemini')
+        # Use Gemini (solely supported)
+        print("Using Gemini API...")
+        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_client = genai.Client(api_key=api_key)
+        analytics = EmotionAnalytics(manager, gemini_client=gemini_client, llm_provider='gemini')
         
         # Generate a weekly report
         report = analytics.generate_report("test_user_123", "weekly")

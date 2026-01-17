@@ -1,7 +1,6 @@
 import os
 import json
 from datetime import datetime
-from openai import OpenAI
 import google.generativeai as genai
 from .utils import load_weaviate_manager
 
@@ -9,22 +8,18 @@ class DiaryService:
     """
     负责日记生成和会话总结的服务类
     """
-    def __init__(self, llm_provider: str = 'deepseek'):
+    def __init__(self, llm_provider: str = 'gemini'):
         """
         初始化 Diary 服务
         
         Args:
-            llm_provider: 使用的 LLM 提供商 - 'gemini' 或 'deepseek' (默认: 'deepseek')
+            llm_provider: 使用的 LLM 提供商 (当前仅支持 'gemini')
         """
-        self.llm_provider = llm_provider.lower()
+        self.llm_provider = 'gemini' # 强制使用 gemini
         self.model = None
-        self.deepseek_client = None
         self.weaviate_manager = load_weaviate_manager()
         
-        if self.llm_provider == 'deepseek':
-            self._init_deepseek()
-        else:
-            self._init_gemini()
+        self._init_gemini()
 
     def _init_gemini(self):
         """初始化 Gemini 客户端"""
@@ -36,18 +31,6 @@ class DiaryService:
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name="gemini-flash-latest")
     
-    def _init_deepseek(self):
-        """初始化 DeepSeek 客户端"""
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            print("⚠️  WARNING: DEEPSEEK_API_KEY not found. Diary Generation feature will be unavailable.")
-            return
-        
-        self.deepseek_client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
-
     async def _generate_with_gemini(self, prompt: str) -> str:
         """使用 Gemini 生成内容"""
         if not self.model:
@@ -55,22 +38,6 @@ class DiaryService:
         response = await self.model.generate_content_async(prompt)
         return response.text
     
-    async def _generate_with_deepseek(self, prompt: str) -> str:
-        """使用 DeepSeek 生成内容"""
-        if not self.deepseek_client:
-            raise Exception("DeepSeek client not initialized")
-        response = self.deepseek_client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant. Always respond in the requested format."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2048,
-            stream=False
-        )
-        return response.choices[0].message.content
-
     async def generate_diary_summary(self, history: list) -> dict:
         """
         Generate a diary entry based on chat history.
@@ -110,11 +77,7 @@ class DiaryService:
         """
         
         try:
-            # Use appropriate method based on provider
-            if self.llm_provider == 'deepseek':
-                text = await self._generate_with_deepseek(prompt)
-            else:
-                text = await self._generate_with_gemini(prompt)
+            text = await self._generate_with_gemini(prompt)
             
             # Clean response text to ensure it's valid JSON (remove markdown ticks)
             text = text.strip()
@@ -133,6 +96,57 @@ class DiaryService:
                 "title": "A Day to Remember", 
                 "content": "I had a conversation today, but I'm having trouble putting it into words right now.",
                 "mood": "Reflective"
+            }
+
+    async def generate_from_text(self, text: str) -> dict:
+        """
+        Summarize raw manual text into a diary entry.
+        """
+        if not text.strip():
+            return {"title": "Empty Thought", "content": "I didn't write much today.", "mood": "Neutral"}
+
+        prompt = f"""
+        Please refine and summarize the following personal thoughts into a beautiful diary entry.
+        
+        The diary entry should:
+        1. Capture the core essence of what I wrote.
+        2. Use a reflective, personal, and poetic tone.
+        3. Be concise (around 50-150 words).
+        
+        Also provide:
+        1. A short, creative title for this entry.
+        2. A single word mood describing my state (e.g., Anxious, Relieved, Happy, Sad, Bored, Fear, Disgust, Awkward, Envy).
+
+        Output strictly in JSON format:
+        {{
+            "title": "...",
+            "content": "...",
+            "mood": "..."
+        }}
+
+        Raw thoughts:
+        {text}
+        """
+        
+        try:
+            res_text = await self._generate_with_gemini(prompt)
+            
+            res_text = res_text.strip()
+            if res_text.startswith("```json"):
+                res_text = res_text[7:]
+            if res_text.startswith("```"):
+                res_text = res_text[3:]
+            if res_text.endswith("```"):
+                res_text = res_text[:-3]
+            res_text = res_text.strip()
+            
+            return json.loads(res_text)
+        except Exception as e:
+            print(f"Error processing manual diary: {e}")
+            return {
+                "title": "Reflections", 
+                "content": text[:500], # Fallback to original text if AI fails
+                "mood": "Neutral"
             }
 
     async def fetch_session_conversations(self, session_id: str) -> list:
@@ -233,10 +247,7 @@ class DiaryService:
 
         # 4. 调用 LLM 生成总结
         try:
-            if self.llm_provider == 'deepseek':
-                text = await self._generate_with_deepseek(prompt)
-            else:
-                text = await self._generate_with_gemini(prompt)
+            text = await self._generate_with_gemini(prompt)
             
             # 清理 JSON 格式
             text = text.strip()

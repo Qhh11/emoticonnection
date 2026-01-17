@@ -150,12 +150,12 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                         analytics_spec.loader.exec_module(analytics_module)
                         EmotionAnalytics = analytics_module.EmotionAnalytics
                         
-                        # 初始化 DeepSeek 客户端和 WeaviateManager
-                        from openai import OpenAI
-                        deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
-                        deepseek_client = OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
+                        # 初始化 Gemini 客户端和 WeaviateManager
+                        gemini_api_key = os.getenv("GEMINI_API_KEY")
+                        gemini_client = genai.Client(api_key=gemini_api_key)
+                        
                         weaviate_manager = WeaviateManager()
-                        analytics = EmotionAnalytics(weaviate_manager, deepseek_client=deepseek_client, llm_provider='deepseek')
+                        analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
                         # 构造单条对话格式
                         conversations = [{"timestamp": "", "userQuery": message_create.content}]
                         data_points = analytics.analyze_emotions_from_text(conversations)

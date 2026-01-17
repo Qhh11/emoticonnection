@@ -19,6 +19,7 @@ const MOOD_DATA = [
 export interface DiaryEntry {
   id?: string
   date: string
+  title: string
   mood: string
   color: string
   text: string
@@ -26,18 +27,18 @@ export interface DiaryEntry {
 
 type DiaryMode = 'manual' | 'ai'
 
-interface DiaryViewProps {
+export interface DiaryViewProps {
   onInteract: (e: React.MouseEvent) => void
   entries: DiaryEntry[]
-  onAddEntry: (entry: {mood: string, color: string, text: string}) => void
+  onAddEntry: (entry: { title: string, mood: string, color: string, text: string }) => void
   userId?: string
   onRefreshDiaries?: () => void
   onOpenEntryDetail: (entry: DiaryEntry) => void
+  onAISaveEntry?: (content: string) => void
   avatar?: Avatar3D | null
 }
 
 interface ChatAIViewProps {
-  onSaveToDiary: (entry: {mood: string, color: string, text: string}) => void
   embedded?: boolean
   userId?: string
   onRefreshDiaries?: () => void
@@ -49,11 +50,12 @@ interface ChatMessage {
   content: string
 }
 
-function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
+function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'ai', content: avatar
-      ? `Hey there! I'm ${avatar.name}, your ${avatar.emotion.toLowerCase()} companion. How are you feeling today?`
-      : "Hey there! I'm here to help you reflect on your emotions. How are you feeling today?"
+    {
+      role: 'ai', content: avatar
+        ? `Hey there! I'm ${avatar.name}, your ${avatar.emotion.toLowerCase()} companion. How are you feeling today?`
+        : "Hey there! I'm here to help you reflect on your emotions. How are you feeling today?"
     }
   ])
   const [input, setInput] = useState('')
@@ -145,19 +147,9 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
           return
         } catch (err) {
           console.error('Failed to generate diary:', err)
+          alert('Failed to save your reflection. Please try again.')
         }
       }
-
-      // Fallback: 如果没有 session，使用本地消息保存
-      const conversationText = messages.map(m => `${m.role === 'user' ? 'Me' : 'AI'}: ${m.content}`).join('\n\n')
-      const randomMood = MOOD_DATA[Math.floor(Math.random() * MOOD_DATA.length)]
-      onSaveToDiary({
-        mood: randomMood.label,
-        color: randomMood.color,
-        text: conversationText
-      })
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
     } finally {
       setIsSaving(false)
     }
@@ -188,11 +180,10 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
           <button
             onClick={handleSaveReflection}
             disabled={isSaving || messages.length < 2}
-            className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${
-              saveSuccess
-                ? 'bg-green-500 text-white'
-                : 'bg-white/10 text-white/80 hover:bg-white/20'
-            } disabled:opacity-30 disabled:cursor-not-allowed`}
+            className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${saveSuccess
+              ? 'bg-green-500 text-white'
+              : 'bg-white/10 text-white/80 hover:bg-white/20'
+              } disabled:opacity-30 disabled:cursor-not-allowed`}
           >
             {isSaving ? '...' : saveSuccess ? 'Saved!' : 'Save'}
           </button>
@@ -311,11 +302,10 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
         <button
           onClick={handleSaveReflection}
           disabled={isSaving}
-          className={`px-6 py-2 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${
-            saveSuccess
-              ? 'bg-green-500 text-white'
-              : 'bg-accent text-accent-inverse'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`px-6 py-2 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${saveSuccess
+            ? 'bg-green-500 text-white'
+            : 'bg-accent text-accent-inverse'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save to Journal'}
         </button>
@@ -326,11 +316,10 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`max-w-[75%] p-5 rounded-2xl ${
-                msg.role === 'user'
-                  ? 'bg-black text-white rounded-br-sm'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
+              className={`max-w-[75%] p-5 rounded-2xl ${msg.role === 'user'
+                ? 'bg-black text-white rounded-br-sm'
+                : 'bg-gray-100 text-gray-800'
+                }`}
             >
               <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
             </div>
@@ -373,19 +362,30 @@ function ChatAIView({ onSaveToDiary, userId, onRefreshDiaries, avatar }: ChatAIV
   )
 }
 
-export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar }: DiaryViewProps) {
+export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar }: DiaryViewProps) {
   const [mode, setMode] = useState<DiaryMode>('manual')
   const [content, setContent] = useState('')
+  const [title, setTitle] = useState('')
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0] | null>(null)
 
   const handleSave = (e: React.MouseEvent) => {
     if (!content.trim()) return
-    onAddEntry({
-      mood: selectedMood?.label || 'Neutral',
-      color: selectedMood?.color || '#121212',
-      text: content
-    })
+
+    if (onAISaveEntry) {
+      // Use AI to process and save
+      onAISaveEntry(content)
+    } else {
+      // Manual save fallback
+      onAddEntry({
+        title: title.trim() || `Journal - ${new Date().toLocaleDateString()}`,
+        mood: selectedMood?.label || 'Neutral',
+        color: selectedMood?.color || '#121212',
+        text: content
+      })
+    }
+
     setContent('')
+    setTitle('')
     setSelectedMood(null)
     onInteract(e)
   }
@@ -415,69 +415,77 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
 
       {mode === 'manual' ? (
         <div className="grid lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-8 space-y-10">
-          <div className="bg-white p-12 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-10">
-            <div className="flex flex-col space-y-6">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-black/5 flex items-center justify-center overflow-hidden">
-                  <span className="text-2xl">{selectedMood ? '🎭' : '✨'}</span>
+          <div className="lg:col-span-8 space-y-10">
+            <div className="bg-white p-12 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-10">
+              <div className="flex flex-col space-y-6">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Give your entry a title..."
+                  className="w-full text-3xl font-black tracking-tight bg-transparent border-none focus:ring-0 placeholder:text-gray-100 p-0"
+                />
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-black/5 flex items-center justify-center overflow-hidden">
+                    <span className="text-2xl">{selectedMood ? '🎭' : '✨'}</span>
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm uppercase">Private entry</h3>
+                    <p className="text-[12px] font-black uppercase text-gray-300 tracking-widest">{new Date().toLocaleDateString()}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-black text-sm uppercase">Private entry</h3>
-                  <p className="text-[12px] font-black uppercase text-gray-300 tracking-widest">{new Date().toLocaleDateString()}</p>
+
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {MOOD_DATA.map(m => (
+                    <button
+                      key={m.label}
+                      onClick={() => setSelectedMood(m)}
+                      className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${selectedMood?.label === m.label ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                    >
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }}></div>
+                      <span className="text-[13px] font-black uppercase tracking-widest">{m.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-2 pt-2">
-                {MOOD_DATA.map(m => (
-                  <button
-                    key={m.label}
-                    onClick={() => setSelectedMood(m)}
-                    className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${selectedMood?.label === m.label ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What's your current frequency? Write anything, and I'll help you capture the essence..."
+                className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 text-xl font-bold leading-relaxed placeholder:text-gray-200 resize-none"
+              />
+              <div className="flex justify-end">
+                <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Process with AI & Log</button>
+              </div>
+            </div>
+          </div>
+          <div className="lg:col-span-4">
+            <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-8">
+              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Previous Logs</h4>
+              <div className="diary-stack">
+                {entries.map((item, i) => (
+                  <div
+                    key={i}
+                    onClick={() => onOpenEntryDetail(item)}
+                    className="diary-item-pullable p-8 rounded-[2rem] border border-black/[0.04] shadow-md flex flex-col justify-between cursor-pointer group hover:scale-[1.02] transition-transform mb-[-80px] last:mb-0"
+                    style={{ backgroundColor: item.color }}
                   >
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }}></div>
-                    <span className="text-[13px] font-black uppercase tracking-widest">{m.label}</span>
-                  </button>
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-[12px] font-black uppercase tracking-widest opacity-60" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.date}</span>
+                      <div className="text-[12px] font-black uppercase tracking-widest" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.mood}</div>
+                    </div>
+                    <h5 className="text-[15px] font-black uppercase tracking-tight mb-2 line-clamp-1" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.title}</h5>
+                    <p className="text-sm font-bold line-clamp-2" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.text}</p>
+                    <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>Click to view full</p>
+                  </div>
                 ))}
               </div>
             </div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="What's your current frequency?"
-              className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 text-xl font-bold leading-relaxed placeholder:text-gray-200 resize-none"
-            />
-            <div className="flex justify-end">
-              <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Secure Log</button>
-            </div>
           </div>
         </div>
-        <div className="lg:col-span-4">
-          <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-8">
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Previous Logs</h4>
-            <div className="diary-stack">
-              {entries.map((item, i) => (
-                <div
-                  key={i}
-                  onClick={() => onOpenEntryDetail(item)}
-                  className="diary-item-pullable p-8 rounded-[2rem] border border-black/[0.04] shadow-md flex flex-col justify-between cursor-pointer group hover:scale-[1.02] transition-transform mb-[-80px] last:mb-0"
-                  style={{ backgroundColor: item.color }}
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-[12px] font-black uppercase tracking-widest opacity-60" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.date}</span>
-                    <div className="text-[12px] font-black uppercase tracking-widest" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.mood}</div>
-                  </div>
-                  <p className="text-sm font-bold line-clamp-2" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>{item.text}</p>
-                  <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: item.mood === 'Joy' ? '#121212' : '#ffffff' }}>Click to view full</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
       ) : (
         <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
-          <ChatAIView onSaveToDiary={onAddEntry} userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} embedded />
+          <ChatAIView userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} embedded />
         </div>
       )}
 

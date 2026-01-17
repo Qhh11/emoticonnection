@@ -157,6 +157,7 @@ export default function Dashboard() {
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
+            title: d.title || `Journal - ${new Date(d.created_at).toLocaleDateString()}`,
             mood: d.mood || 'Neutral',
             color: getMoodColor(d.mood),
             text: d.content
@@ -229,7 +230,7 @@ export default function Dashboard() {
     }, 1000)
   }
 
-  const addDiaryEntry = async (entry: { mood: string, color: string, text: string }) => {
+  const addDiaryEntry = async (entry: { title: string, mood: string, color: string, text: string }) => {
     const newEntry = {
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
       ...entry
@@ -240,7 +241,7 @@ export default function Dashboard() {
       try {
         await aiChatApi.createDiary({
           user_id: user._id,
-          title: `Journal - ${newEntry.date}`,
+          title: entry.title,
           content: entry.text,
           mood: entry.mood
         })
@@ -249,11 +250,29 @@ export default function Dashboard() {
       } catch (err) {
         console.error('Failed to save diary:', err)
         // Fall back to local state if save fails
-        setDiaryEntries(prev => [newEntry, ...prev])
+        setDiaryEntries(prev => [newEntry as DiaryEntry, ...prev])
       }
     } else {
       // No user logged in, only store locally (will be lost on refresh)
-      setDiaryEntries(prev => [newEntry, ...prev])
+      setDiaryEntries(prev => [newEntry as DiaryEntry, ...prev])
+    }
+  }
+
+  const aiAddDiaryEntry = async (content: string) => {
+    if (user?._id) {
+      try {
+        await aiChatApi.aiSaveDiary(user._id, content)
+        refreshDiaries()
+      } catch (err) {
+        console.error('Failed to AI-save diary:', err)
+        // Fallback to manual save if AI fails
+        addDiaryEntry({
+          title: `Journal - ${new Date().toLocaleDateString()}`,
+          mood: 'Neutral',
+          color: '#121212',
+          text: content
+        })
+      }
     }
   }
 
@@ -263,6 +282,7 @@ export default function Dashboard() {
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
+            title: d.title || `Journal - ${new Date(d.created_at).toLocaleDateString()}`,
             mood: d.mood || 'Neutral',
             color: getMoodColor(d.mood),
             text: d.content
@@ -426,7 +446,18 @@ export default function Dashboard() {
           weeklyReport={weeklyReport}
         />
       case 'diary':
-        return <DiaryView onInteract={triggerCheckIn} entries={diaryEntries} onAddEntry={addDiaryEntry} userId={user?._id} onRefreshDiaries={refreshDiaries} onOpenEntryDetail={setSelectedJournalModal} avatar={selectedAvatar} />
+        return (
+          <DiaryView
+            onInteract={triggerCheckIn}
+            entries={diaryEntries}
+            onAddEntry={addDiaryEntry}
+            onAISaveEntry={aiAddDiaryEntry}
+            userId={user?._id}
+            onRefreshDiaries={refreshDiaries}
+            onOpenEntryDetail={setSelectedJournalModal}
+            avatar={selectedAvatar}
+          />
+        )
       case 'community':
         return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
       case 'soulsync':
@@ -522,6 +553,9 @@ export default function Dashboard() {
                   <span className="text-[12px] font-black uppercase tracking-widest opacity-70" style={{ color: txtColor }}>
                     {selectedJournalModal.date}
                   </span>
+                  <h3 className="text-3xl font-black tracking-tight" style={{ color: txtColor }}>
+                    {selectedJournalModal.title}
+                  </h3>
                   <div className="inline-block px-5 py-2 rounded-full border border-white/30 text-[13px] font-black uppercase tracking-widest backdrop-blur-sm" style={{ color: txtColor, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                     {selectedJournalModal.mood}
                   </div>

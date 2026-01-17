@@ -22,8 +22,8 @@ def load_weaviate_manager():
             print(f"⚠️  genai/app path not found: {genai_app_path}")
             return None
         
-        # 加载 .env 文件
-        env_path = genai_app_path / ".env"
+        # 加载项目根目录的 .env 文件
+        env_path = project_root / ".env"
         if env_path.exists():
             from dotenv import load_dotenv
             load_dotenv(env_path)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Avatar3D } from '../../config/avatars'
 import { SocialStats, Post, User, EmotionReport } from '../../services/api'
+import { DiaryEntry } from '../diary/DiaryView'
 
 
 
@@ -116,12 +117,6 @@ function DiaryStackItem({ title, date, color, mood, accent, onClick }: DiaryStac
   )
 }
 
-export interface DiaryEntry {
-  date: string
-  mood: string
-  color: string
-  text: string
-}
 
 interface ProfileViewProps {
   points: number
@@ -512,7 +507,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
             {diaryEntries.slice(0, 4).map((entry, i) => (
               <DiaryStackItem
                 key={i}
-                title={entry.text.substring(0, 40) + (entry.text.length > 40 ? '...' : '')}
+                title={entry.title}
                 date={entry.date}
                 color={entry.color}
                 mood={entry.mood}

@@ -596,6 +596,12 @@ export const aiChatApi = {
       body: JSON.stringify(data),
     }),
 
+  aiSaveDiary: (userId: string, content: string) =>
+    request<Diary>('/api/diary/diaries/ai-save', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, content }),
+    }),
+
   // VIP Feature: Context-aware emotion analysis (placeholder for backend implementation)
   analyzeContextEmotion: (messages: { role: string; content: string; emotion?: string }[], userId: string) =>
     request<ContextEmotionAnalysis>('/api/ai-chat/analyze-context', {
