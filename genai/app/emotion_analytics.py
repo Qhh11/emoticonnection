@@ -199,7 +199,7 @@ class EmotionAnalytics:
                 gen_cfg = types.GenerateContentConfig(temperature=0.7)
 
             response = self.gemini_client.models.generate_content(
-                model="gemini-2.0-flash", # Updated to a more stable version
+                model="gemini-1.5-flash",
                 contents=prompt,
                 config=gen_cfg
             )

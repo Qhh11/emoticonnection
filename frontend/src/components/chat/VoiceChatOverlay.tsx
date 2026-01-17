@@ -121,32 +121,99 @@ interface VoiceChatOverlayProps {
     isOpen: boolean;
     onClose: () => void;
     userId: string;
-    sessionId?: string;
 }
 
-const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, userId, sessionId }) => {
+const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, userId }) => {
     const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
     const [transcript, setTranscript] = useState<string>("");
+    const [aiResponseText, setAiResponseText] = useState<string>("");
+
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
+    const isAutoListeningRef = useRef<boolean>(false);
 
     useEffect(() => {
         if (isOpen) {
+            connectWebSocket();
             startListening();
         } else {
+            disconnectWebSocket();
             stopListening();
             if (audioPlayerRef.current) {
                 audioPlayerRef.current.pause();
                 audioPlayerRef.current = null;
             }
+            setTranscript("");
+            setAiResponseText("");
         }
         return () => {
+            disconnectWebSocket();
             stopListening();
         };
     }, [isOpen]);
 
+    const connectWebSocket = () => {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host === 'localhost:3000' ? 'localhost:8000' : window.location.host;
+        const wsUrl = `${protocol}//${host}/ws/ai-chat/${userId}`;
+
+        console.log(`[VoiceChat] Connecting to ${wsUrl}`);
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+            console.log("[VoiceChat] WS Connected ✅");
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                console.log("[VoiceChat] Received:", message.type);
+
+                switch (message.type) {
+                    case 'transcript':
+                        setTranscript(message.content);
+                        break;
+                    case 'pushed_text':
+                        setAiResponseText(message.content);
+                        break;
+                    case 'audio':
+                        playResponse(message.url, message.text);
+                        break;
+                    case 'error':
+                        console.error("[VoiceChat] Server Error:", message.content);
+                        setStatus('idle');
+                        break;
+                }
+            } catch (err) {
+                console.error("[VoiceChat] Failed to parse message:", err);
+            }
+        };
+
+        ws.onerror = (err) => {
+            console.error("[VoiceChat] WS Error:", err);
+            console.error("[VoiceChat] Connection failed to:", wsUrl);
+            setStatus('idle');
+        };
+
+        ws.onclose = (event) => {
+            console.log(`[VoiceChat] WS Closed - Code: ${event.code}, Reason: ${event.reason || 'none'}`);
+            wsRef.current = null;
+        };
+    };
+
+    const disconnectWebSocket = () => {
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+    };
+
     const startListening = async () => {
+        if (status === 'listening') return;
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
@@ -161,11 +228,13 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
 
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                await handleAudioUpload(audioBlob);
+                await sendAudioToWS(audioBlob);
             };
 
             mediaRecorder.start();
             setStatus('listening');
+            setTranscript("");
+            setAiResponseText("");
         } catch (err) {
             console.error("Error accessing microphone:", err);
             setStatus('idle');
@@ -174,63 +243,68 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
 
     const stopListening = () => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop(); // Triggers onstop -> handleAudioUpload
+            mediaRecorderRef.current.stop();
         }
-        // Also stop tracks
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
         }
     };
 
     const handleManualStop = () => {
+        isAutoListeningRef.current = false;
         stopListening();
     }
 
-    const handleAudioUpload = async (audioBlob: Blob) => {
-        setStatus('processing');
-        try {
-            const formData = new FormData();
-            formData.append('user_id', userId);
-            if (sessionId) formData.append('session_id', sessionId);
-            formData.append('voice_output', 'true');
-            formData.append('file', audioBlob, 'recording.webm');
-
-            // Use raw fetch or api client supporting formData
-            const response = await fetch('/api/ai-chat/', {
-                method: 'POST',
-                body: formData,
-                // Do not set Content-Type header when sending FormData, browser does it with boundary
-            });
-
-            if (!response.ok) throw new Error('Network response was not ok');
-
-            const data = await response.json();
-            setTranscript(data.response);
-
-            if (data.audio_url) {
-                playResponse(data.audio_url);
-            } else {
-                setStatus('idle'); // Should restart listening?
-            }
-
-        } catch (error) {
-            console.error("Error uploading audio:", error);
-            setStatus('idle');
+    const sendAudioToWS = async (audioBlob: Blob) => {
+        // Wait for WebSocket to be ready (max 5 seconds)
+        let attempts = 0;
+        while (attempts < 50 && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
         }
+
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            console.error("[VoiceChat] WebSocket not open after waiting. State:", wsRef.current?.readyState);
+            setStatus('idle');
+            return;
+        }
+
+        setStatus('processing');
+
+        // Convert Blob to Base64
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+            const base64Data = reader.result as string;
+            wsRef.current?.send(JSON.stringify({
+                type: 'audio_blob',
+                data: base64Data,
+                format: 'webm'
+            }));
+        };
     };
 
-    const playResponse = (audioUrl: string) => {
+    const playResponse = (audioUrl: string, text: string) => {
         setStatus('speaking');
+        setAiResponseText(text);
+
         const audio = new Audio(audioUrl);
         audioPlayerRef.current = audio;
+
         audio.onended = () => {
             setStatus('idle');
-            // Auto start listening again for continuous conversation? 
-            // For now, let's wait for user to click content or just manual start
-            // To mimic ChatGPT, we should auto-listen.
-            // startListening(); // Uncomment for continuous mode
+            // Auto restart listening after AI finishes speaking to mimic ChatGPT
+            setTimeout(() => {
+                if (isOpen) {
+                    startListening();
+                }
+            }, 500);
         };
-        audio.play().catch(e => console.error("Playback error", e));
+
+        audio.play().catch(e => {
+            console.error("Playback error", e);
+            setStatus('idle');
+        });
     };
 
     if (!isOpen) return null;
@@ -243,36 +317,54 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
                 {status === 'listening' && "Listening..."}
                 {status === 'processing' && "Thinking..."}
                 {status === 'speaking' && "Speaking..."}
-                {status === 'idle' && "Tap to Speak"}
+                {status === 'idle' && "Ready"}
             </StatusText>
 
             <MicrophoneCircle
                 $status={status}
-                onClick={status === 'idle' ? startListening : handleManualStop}
+                onClick={status === 'listening' ? handleManualStop : (status === 'idle' ? startListening : undefined)}
             >
-                {status === 'speaking' ? (
+                {status !== 'idle' ? (
                     <VisualizerContainer>
                         {[0, 0.2, 0.4, 0.2, 0].map((delay, i) => (
-                            <Bar key={i} $delay={delay} $active={true} />
+                            <Bar
+                                key={i}
+                                $delay={delay}
+                                $active={true}
+                            />
                         ))}
                     </VisualizerContainer>
                 ) : (
-                    // Simple Icon or just Circle
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 14C14.2091 14 16 12.2091 16 10V4C16 1.79086 14.2091 0 12 0C9.79086 0 8 1.79086 8 4V10C8 12.2091 9.79086 14 12 14Z" fill={status === 'listening' ? "white" : "#333"} />
-                        <path d="M19 10V10.5C19 14.09 16.09 17 12.5 17C8.91 17 6 14.09 6 10.5V10" stroke={status === 'listening' ? "white" : "#333"} strokeWidth="2" strokeLinecap="round" />
-                        <path d="M12 17V21" stroke={status === 'listening' ? "white" : "#333"} strokeWidth="2" strokeLinecap="round" />
+                        <path d="M12 14C14.2091 14 16 12.2091 16 10V4C16 1.79086 14.2091 0 12 0C9.79086 0 8 1.79086 8 4V10C8 12.2091 9.79086 14 12 14Z" fill="#333" />
+                        <path d="M19 10V10.5C19 14.09 16.09 17 12.5 17C8.91 17 6 14.09 6 10.5V10" stroke="#333" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M12 17V21" stroke="#333" strokeWidth="2" strokeLinecap="round" />
                     </svg>
                 )}
             </MicrophoneCircle>
 
             <ControlsContainer>
-                {status === 'idle' && <ActionButton onClick={startListening}>Start Speaking</ActionButton>}
+                {status === 'idle' && <ActionButton onClick={startListening}>Tap to Speak</ActionButton>}
                 {status === 'listening' && <ActionButton onClick={handleManualStop}>Stop & Send</ActionButton>}
+                {status === 'speaking' && <ActionButton onClick={() => {
+                    if (audioPlayerRef.current) audioPlayerRef.current.pause();
+                    setStatus('idle');
+                }}>Stop AI</ActionButton>}
             </ControlsContainer>
 
-            {/* Debug/Subtitle */}
-            {transcript && <div style={{ marginTop: 20, maxWidth: '80%', textAlign: 'center', opacity: 0.7 }}>{transcript}</div>}
+            {/* Transcription display */}
+            <div style={{ marginTop: 40, width: '80%', textAlign: 'center' }}>
+                {transcript && (
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', marginBottom: 15 }}>
+                        "{transcript}"
+                    </div>
+                )}
+                {aiResponseText && (
+                    <div style={{ color: 'white', fontSize: '1.2rem', fontWeight: 500, lineHeight: 1.4 }}>
+                        {aiResponseText}
+                    </div>
+                )}
+            </div>
 
         </Overlay>
     );

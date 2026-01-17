@@ -3,11 +3,13 @@ import uuid
 import base64
 from pathlib import Path
 from openai import OpenAI
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from dotenv import load_dotenv
 
-load_dotenv()
+# Path to .env in project root: emoticonnection/.env
+# This file: emoticonnection/backend/app/modules/ai/core/audio.py
+root_env = Path(__file__).resolve().parents[5] / ".env"
+load_dotenv(root_env)
 
 class AudioService:
     """
@@ -28,14 +30,15 @@ class AudioService:
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         if self.gemini_api_key:
             try:
-                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
-                self.gemini_types = types
+                genai.configure(api_key=self.gemini_api_key)
+                # Use the model name without 'models/' prefix for newer API
+                self.gemini_model = genai.GenerativeModel("gemini-2.5-flash")
             except Exception as e:
-                print(f"⚠️ Failed to initialize Gemini Client: {e}")
-                self.gemini_client = None
+                print(f"⚠️ Failed to initialize Gemini Model: {e}")
+                self.gemini_model = None
         else:
             print("⚠️ GEMINI_API_KEY not found. Gemini STT fallback will not work.")
-            self.gemini_client = None
+            self.gemini_model = None
 
         # Directory handling
         # Go up from: backend/app/modules/ai/core/audio.py
@@ -60,20 +63,30 @@ class AudioService:
                 print(f"⚠️ OpenAI STT failed: {e}. Trying Gemini...")
         
         # Fallback to Gemini STT
-        if self.gemini_client:
+        if self.gemini_model:
             try:
-                import base64
-                with open(file_path, "rb") as audio_file:
-                    audio_data = audio_file.read()
-                    
+                # Infer mime_type from extension
+                ext = Path(file_path).suffix.lower().replace(".", "")
+                mime_type = f"audio/{ext}" if ext else "audio/wav"
+                if ext == "webm": mime_type = "audio/webm"
+                if ext == "mp3": mime_type = "audio/mp3"
+
+                # Upload the audio file using Gemini's File API
+                print(f"📤 Uploading audio file to Gemini: {file_path}")
+                uploaded_file = genai.upload_file(path=file_path, mime_type=mime_type)
+                
                 # Using Gemini 1.5 Flash for audio transcription
-                response = self.gemini_client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=[
-                        self.gemini_types.Part.from_bytes(data=audio_data, mime_type="audio/mp3"),
-                        "Transcribe this audio to text exactly."
-                    ]
-                )
+                response = self.gemini_model.generate_content([
+                    uploaded_file,
+                    "Transcribe this audio to text exactly. Only return the transcribed text, nothing else."
+                ])
+                
+                # Clean up the uploaded file from Gemini servers
+                try:
+                    uploaded_file.delete()
+                except:
+                    pass  # Ignore cleanup errors
+                
                 return response.text
             except Exception as e:
                 print(f"❌ Gemini STT Error: {e}")
