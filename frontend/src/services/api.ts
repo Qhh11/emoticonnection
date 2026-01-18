@@ -517,6 +517,7 @@ export interface AIChatRequest {
   session_id?: string
   message: string
   history?: Array<{ role: string; parts: string[] }>
+  avatar_id?: string
 }
 
 export interface AIChatResponse {
@@ -567,6 +568,9 @@ export const aiChatApi = {
     }
     if (data.history) {
       formData.append('history', JSON.stringify(data.history))
+    }
+    if (data.avatar_id) {
+      formData.append('avatar_id', data.avatar_id)
     }
 
     const token = getToken()

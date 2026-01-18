@@ -53,6 +53,7 @@ async def chat(
     message: Optional[str] = Form(None), 
     history: Optional[str] = Form("[]"), # JSON string of history
     voice_output: bool = Form(False),
+    avatar_id: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     repo: AIChatRepository = Depends(get_ai_repo)
 ):
@@ -143,7 +144,8 @@ async def chat(
             user_id=user_id,
             session_id=session_id,
             image_data=image_data,
-            image_mime_type=image_mime_type
+            image_mime_type=image_mime_type,
+            avatar_id=avatar_id
         )
         
         # 5. Handle Voice Output (TTS)

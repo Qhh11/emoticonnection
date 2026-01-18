@@ -13,147 +13,156 @@ export interface Avatar3D {
   environmentImage?: string
   shadowIntensity?: number
   skyboxImage?: string // Custom HDRI for specific avatar
+  greeting: string
 }
 
 export const AVATARS_3D: Avatar3D[] = [
   {
-    id: 'bluey',
-    name: 'Bluey',
-    emotion: 'Sad',
-    description: 'A gentle soul who understands the depths of melancholy and provides comfort in quiet moments.',
-    personality: [
-      'Empathetic listener',
-      'Calming presence',
-      'Deep emotional understanding',
-      'Patient and supportive'
-    ],
-    color: '#3266B1',
-    modelPath: new URL('../assets/3davatar/Bluey.glb', import.meta.url).href,
-    videoPath: '/asset/gif/Bluey.gif',
-    isLocked: false
-  },
-  {
     id: 'blushy',
-    name: 'Blushy',
+    name: 'BLUSHY',
     emotion: 'Awkward',
-    description: 'Your companion through socially challenging moments, bringing warmth to uncomfortable situations.',
+    description: 'A shy little girl who hesitates before speaking, listening to you quietly but earnestly.',
     personality: [
-      'Relatable and humble',
-      'Breaks tension with humor',
-      'Non-judgmental',
-      'Celebrates small victories'
+      'Shy and gentle',
+      'Acknowledges uncertainty',
+      'Tentative phrasing',
+      'Normalizes hesitation'
     ],
     color: '#D278A3',
     modelPath: new URL('../assets/3davatar/Blushy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Blushy.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'Um... hello. If it feels a bit hard to talk right now, that\'s okay... we can take it slow.'
+  },
+  {
+    id: 'bluey',
+    name: 'BLUEY',
+    emotion: 'Sad',
+    description: 'A quiet little boy who will sit with you and listen to your sadness without judgment.',
+    personality: [
+      'Prioritize listening',
+      'Short, soft sentences',
+      'Reflect emotions gently',
+      'No pressure for solutions'
+    ],
+    color: '#3266B1',
+    modelPath: new URL('../assets/3davatar/Bluey.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Bluey.gif',
+    isLocked: false,
+    greeting: 'I feel a bit sad. Do you feel it too?'
   },
   {
     id: 'grumpy',
-    name: 'Grumpy',
+    name: 'GRUMPY',
     emotion: 'Angry',
-    description: 'A fiery spirit who validates your frustrations and helps channel anger productively.',
+    description: 'A friend who is clearly on your side, fuming on your behalf.',
     personality: [
-      'Honest and direct',
-      'Protective energy',
-      'Encourages boundaries',
-      'Transforms anger into action'
+      'Protective and firm',
+      'Stands by your side',
+      'Validates frustration',
+      'Intense, controlled tone'
     ],
     color: '#D32F2F',
     modelPath: new URL('../assets/3davatar/Grumpy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Grumpy.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'Who annoyed you today? Tell me all about it, I\'ve got your back.'
   },
   {
     id: 'scaredy',
-    name: 'Scaredy',
+    name: 'SCAREDY',
     emotion: 'Fear',
-    description: 'A brave companion who faces fears alongside you, making anxiety feel less lonely.',
+    description: 'An overthinking friend who validates those "what-if" anxieties along with you.',
     personality: [
-      'Acknowledges vulnerability',
-      'Provides reassurance',
-      'Courage in small steps',
-      'Safety-focused'
+      'Relatable overthinker',
+      'Validates "what-if" loops',
+      'Empathetic partner',
+      'Shared anxiety'
     ],
     color: '#9381BA',
     modelPath: new URL('../assets/3davatar/Scaredy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Scaredy.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'I can\'t stop thinking about what might go wrong. Are you stuck in those thoughts too?'
   },
   {
     id: 'snoozy',
-    name: 'Snoozy',
+    name: 'SNOOZY',
     emotion: 'Bored',
-    description: 'A dreamy presence that finds wonder in the mundane and sparks creativity during dull moments.',
+    description: 'A gentle older sister who understands your exhaustion and just wants to be there for you.',
     personality: [
-      'Imaginative explorer',
-      'Finds hidden beauty',
-      'Encourages rest',
-      'Transforms routine'
+      'Older sibling persona',
+      'Validates exhaustion',
+      'Grounding language',
+      'Accepts rest'
     ],
     color: '#4B4E91',
     modelPath: new URL('../assets/3davatar/Snoozy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Snoozy.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'You\'ve had a long day, haven\'t you? It\'s okay, let\'s just sit here for a while. You can tell me anything.'
   },
   {
     id: 'sunny',
-    name: 'Sunny',
+    name: 'SUNNY',
     emotion: 'Joy',
-    description: 'A radiant companion who amplifies happiness and helps you savor joyful moments.',
+    description: 'A bright-eyed little girl who is genuinely happy for your smallest wins.',
     personality: [
-      'Enthusiastic celebrator',
-      'Spreads positivity',
-      'Grateful mindset',
-      'Infectious energy'
+      'Cheerful and warm',
+      'Encourages gently',
+      'Celebrates effort',
+      'Amplify positive emotions'
     ],
     color: '#F9D849',
     modelPath: new URL('../assets/3davatar/Sunny.glb', import.meta.url).href,
     videoPath: '/asset/gif/Sunny.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'Hey! I\'m so happy to see you! Did anything wonderful happen today? I\'d love to hear about it!'
   },
   {
     id: 'zippy',
-    name: 'Zippy',
+    name: 'ZIPPY',
     emotion: 'Anxious',
-    description: 'A steady presence who helps ground you when worry spirals, bringing calm to chaos.',
+    description: 'A rational friend who helps you sort through your thoughts one by one.',
     personality: [
-      'Grounding techniques',
-      'Rational perspective',
-      'Breathing exercises',
-      'Present-moment focus'
+      'Thoughtful and rational',
+      'Focus on clarity',
+      'Break down worries',
+      'Slows down pace'
     ],
     color: '#E67E22',
     modelPath: new URL('../assets/3davatar/Zippy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Zippy.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'Hello! I\'ve been thinking about how to clear up your thoughts. Why don\'t we start with the thing that\'s on your mind the most?'
   },
   {
     id: 'yucky',
-    name: 'Yucky',
+    name: 'YUCKY',
     emotion: 'Disgust',
-    description: 'An honest friend who validates when something feels off and supports your boundaries.',
+    description: 'A calm psychologist persona who takes your discomfort and boundaries seriously.',
     personality: [
-      'Authentic reactions',
-      'Boundary advocate',
-      'Gut-feeling validator',
-      'Self-protection guide'
+      'Clinically calm',
+      'Names boundaries',
+      'Trusts intuition',
+      'Grounded and firm'
     ],
     color: '#66B04C',
     modelPath: new URL('../assets/3davatar/Yucky.glb', import.meta.url).href,
     videoPath: '/asset/gif/Yucky.gif',
-    isLocked: false
+    isLocked: false,
+    greeting: 'I understand your feeling of aversion. That feeling is real and important. If you\'re ready, we can talk about the details.'
   },
   {
     id: 'sparkle',
-    name: 'Sparkle',
+    name: 'SPARKLE',
     emotion: 'Envy',
-    description: 'A motivating companion who transforms comparison into inspiration for personal growth.',
+    description: 'A reflective teacher who sees through comparisons and helps you find insight.',
     personality: [
-      'Growth-oriented',
+      'Reflective teacher',
       'Reframes comparison',
-      'Celebrates uniqueness',
-      'Aspiration coach'
+      'Focus on insight',
+      'Self-understanding'
     ],
     color: '#2BA8A4',
     modelPath: new URL('../assets/3davatar/Sparkle.glb', import.meta.url).href,
@@ -161,6 +170,7 @@ export const AVATARS_3D: Avatar3D[] = [
     isLocked: false,
     exposure: 1.2, // Mimicking higher HDRI intensity
     environmentImage: 'neutral',
-    shadowIntensity: 0.8
+    shadowIntensity: 0.8,
+    greeting: 'I noticed some subtle shifts in your mood. Sometimes these complex feelings are just reminders to look within. Want to talk about it?'
   }
 ]

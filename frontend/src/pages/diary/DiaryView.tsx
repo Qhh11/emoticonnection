@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { aiChatApi } from '../../services/api'
-import { Avatar3D } from '../../config/avatars'
+import { AVATARS_3D, Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 import VoiceChatOverlay from '../../components/chat/VoiceChatOverlay'
 
@@ -51,21 +51,41 @@ interface ChatMessage {
   content: string
 }
 
-function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
+function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIViewProps) {
+  // Determine avatar and its greeting once at the start of component lifecycle
+  // Default to AVATARS_3D[0] (Blushy) if no avatar is provided by parent
+  const [activeAvatar, setActiveAvatar] = useState<Avatar3D>(() => initialAvatar || AVATARS_3D[0])
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
-      role: 'ai', content: avatar
-        ? `Hey there! I'm ${avatar.name}, your ${avatar.emotion.toLowerCase()} companion. How are you feeling today?`
-        : "Hey there! I'm here to help you reflect on your emotions. How are you feeling today?"
+      role: 'ai',
+      content: (initialAvatar || AVATARS_3D[0]).greeting
     }
   ])
+
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Sync with initialAvatar if it changes from parent (e.g. user selects in Gallery)
+  useEffect(() => {
+    if (initialAvatar && initialAvatar.id !== activeAvatar?.id) {
+      setActiveAvatar(initialAvatar)
+      // If conversation hasn't started, also update the greeting
+      if (messages.length <= 1) {
+        setMessages([{ role: 'ai', content: initialAvatar.greeting }])
+      }
+    }
+  }, [initialAvatar])
+
+  // Update greeting when picking a different avatar via the inline switcher
+  useEffect(() => {
+    if (messages.length <= 1 && activeAvatar) {
+      setMessages([{ role: 'ai', content: activeAvatar.greeting }])
+    }
+  }, [activeAvatar?.id])
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -109,7 +129,8 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
         user_id: userId || 'anonymous',
         session_id: sessionId || undefined,
         message: userMessage,
-        history
+        history,
+        avatar_id: activeAvatar?.id
       })
 
       setMessages(prev => [...prev, { role: 'ai', content: response.response }])
@@ -158,26 +179,57 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
   }
 
   // VIP Immersive View - Dark background with centered 3D Avatar
-  if (avatar) {
+  if (activeAvatar) {
     return (
       <div className="h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
         {/* Ambient glow effect */}
         <div
           className="absolute inset-0 opacity-30"
           style={{
-            background: `radial-gradient(ellipse at center, ${avatar.color}40 0%, transparent 70%)`
+            background: `radial-gradient(ellipse at center, ${activeAvatar.color}40 0%, transparent 70%)`
           }}
         />
 
-        {/* Top bar with save button */}
+        {/* Top bar with save button and Avatar Switcher */}
         <div className="relative z-10 flex items-center justify-between p-6">
-          <div className="flex items-center space-x-3">
-            <span className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
-              VIP
-            </span>
-            <span className="text-white/60 text-[11px] font-black uppercase tracking-widest">
-              {avatar.name}
-            </span>
+          <div className="flex items-center space-x-4 overflow-hidden">
+            {messages.length <= 1 ? (
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide py-1">
+                  {AVATARS_3D.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => setActiveAvatar(a)}
+                      className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'border-white/10 opacity-40'}`}
+                    >
+                      <img src={a.videoPath || ''} alt={a.name} className="w-full h-full object-contain" />
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-white text-[12px] font-black uppercase tracking-widest">
+                    {activeAvatar.name}
+                  </span>
+                  <span className="text-white/60 text-[11px] font-medium leading-relaxed">
+                    {activeAvatar.description}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                <div className="flex items-center space-x-3">
+                  <span className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
+                    VIP
+                  </span>
+                  <span className="text-white text-[12px] font-black uppercase tracking-widest">
+                    {activeAvatar.name}
+                  </span>
+                </div>
+                <span className="text-white/50 text-[11px] font-medium mt-1 leading-relaxed">
+                  {activeAvatar.description}
+                </span>
+              </div>
+            )}
           </div>
           <button
             onClick={handleSaveReflection}
@@ -199,27 +251,27 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
             <div
               className="absolute inset-0 rounded-full animate-pulse"
               style={{
-                background: `radial-gradient(circle, ${avatar.color}30 0%, transparent 70%)`,
+                background: `radial-gradient(circle, ${activeAvatar.color}30 0%, transparent 70%)`,
                 transform: 'scale(1.5)'
               }}
             />
-            {avatar.videoPath ? (
+            {activeAvatar.videoPath ? (
               <img
-                src={avatar.videoPath}
-                alt={avatar.name}
+                src={activeAvatar.videoPath}
+                alt={activeAvatar.name}
                 className="w-full h-full object-contain"
                 style={{
-                  filter: `drop-shadow(0 0 30px ${avatar.color}60)`
+                  filter: `drop-shadow(0 0 30px ${activeAvatar.color}60)`
                 }}
               />
             ) : (
               <ModelViewer3D
-                modelPath={avatar.modelPath}
-                avatarName={avatar.name}
-                avatarColor={avatar.color}
+                modelPath={activeAvatar.modelPath}
+                avatarName={activeAvatar.name}
+                avatarColor={activeAvatar.color}
                 size="large"
-                exposure={avatar.exposure}
-                environmentImage={avatar.environmentImage}
+                exposure={activeAvatar.exposure}
+                environmentImage={activeAvatar.environmentImage}
                 shadowIntensity={0}
               />
             )}
@@ -231,14 +283,19 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
             <div className="min-h-[80px]">
               {isLoading ? (
                 <div className="flex justify-center space-x-2">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: avatar.color, animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: avatar.color, animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: avatar.color, animationDelay: '300ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '300ms' }}></div>
                 </div>
               ) : (
-                <p className="text-white text-lg font-bold leading-relaxed animate-in fade-in duration-500">
-                  {latestAiMessage}
-                </p>
+                <div className="space-y-2 animate-in fade-in duration-500">
+                  <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
+                    {activeAvatar.name}
+                  </p>
+                  <p className="text-white text-lg font-bold leading-relaxed">
+                    {latestAiMessage}
+                  </p>
+                </div>
               )}
             </div>
 
@@ -254,31 +311,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
         {/* Bottom input area */}
         <div className="relative z-10 p-6 pb-8">
           <div className="flex items-center justify-center space-x-4 max-w-md mx-auto">
-            {/* Redo button */}
-            <button
-              onClick={() => setMessages([messages[0]])}
-              className="w-12 h-12 rounded-full bg-white/10 text-white/60 flex items-center justify-center hover:bg-white/20 transition-all"
-              title="Start over"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
 
-            {/* Voice input button */}
-            <button
-              onClick={() => setIsVoiceModalOpen(true)}
-              className="w-12 h-12 rounded-full bg-white/10 text-white/60 flex items-center justify-center hover:bg-white/20 transition-all"
-              title="Voice mode"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            </button>
 
             {/* Text input button - opens input */}
             <div className="flex-1 relative">
@@ -298,8 +331,8 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
               disabled={!input.trim() || isLoading}
               className="w-14 h-14 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
               style={{
-                background: `linear-gradient(135deg, ${avatar.color} 0%, ${avatar.color}80 100%)`,
-                boxShadow: `0 0 30px ${avatar.color}40`
+                background: `linear-gradient(135deg, ${activeAvatar.color} 0%, ${activeAvatar.color}80 100%)`,
+                boxShadow: `0 0 30px ${activeAvatar.color}40`
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
@@ -308,16 +341,6 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
             </button>
           </div>
         </div>
-
-        {/* Voice Chat Overlay */}
-        <VoiceChatOverlay
-          isOpen={isVoiceModalOpen}
-          onClose={() => {
-            setIsVoiceModalOpen(false)
-            if (onRefreshDiaries) onRefreshDiaries()
-          }}
-          userId={userId || 'anonymous'}
-        />
       </div>
     )
   }
@@ -350,15 +373,22 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[75%] p-5 rounded-2xl ${msg.role === 'user'
-                ? 'bg-black text-white rounded-br-sm'
-                : 'bg-gray-100 text-gray-800'
-                }`}
-            >
-              <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[75%]`}>
+              {msg.role === 'ai' && (
+                <span className="text-[10px] font-black uppercase text-gray-400 mb-1 ml-2 tracking-widest">
+                  AI Companion
+                </span>
+              )}
+              <div
+                className={`w-full p-5 rounded-2xl ${msg.role === 'user'
+                  ? 'bg-black text-white rounded-br-sm'
+                  : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+                  }`}
+              >
+                <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              </div>
             </div>
           </div>
         ))}
@@ -379,18 +409,6 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
       {/* Input - Fixed at bottom, never shrinks */}
       <div className="flex-shrink-0 p-6 border-t border-black/5 bg-white">
         <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setIsVoiceModalOpen(true)}
-            className="w-12 h-12 rounded-full bg-gray-50 border border-black/5 flex items-center justify-center hover:scale-105 active:scale-95 transition-all text-gray-400"
-            title="Voice mode"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          </button>
           <input
             type="text"
             value={input}
@@ -406,16 +424,6 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
             </svg>
           </button>
         </div>
-
-        {/* Voice Chat Overlay */}
-        <VoiceChatOverlay
-          isOpen={isVoiceModalOpen}
-          onClose={() => {
-            setIsVoiceModalOpen(false)
-            if (onRefreshDiaries) onRefreshDiaries()
-          }}
-          userId={userId || 'anonymous'}
-        />
       </div>
     </div>
   )

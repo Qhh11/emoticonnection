@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from .utils import load_weaviate_manager
 from .gemini_config import get_chat_model
+from .personas import get_persona_instruction
 
 load_dotenv()
 
@@ -53,7 +54,8 @@ class AIChatService:
             print("   请创建 .env 文件并添加: GEMINI_API_KEY=your_key_here")
 
     async def chat_with_ai(self, message: str, history: list, user_id: str = None, session_id: str = None, 
-                          image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None):
+                          image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None,
+                          avatar_id: Optional[str] = None):
         """
         发送消息给 AI 并获取回复，同时保存到 Weaviate。
         
@@ -64,11 +66,12 @@ class AIChatService:
             session_id: 会话ID，用于关联同一会话的消息
             image_data: 图片二进制数据 (Optional, 仅支持 Gemini)
             image_mime_type: 图片 MIME 类型 (e.g. 'image/jpeg')
+            avatar_id: 机器人 ID，用于加载不同的人设
             
         Returns:
             str: AI 的回复文本
         """
-        response_text = await self._chat_with_gemini(message, history, image_data, image_mime_type)
+        response_text = await self._chat_with_gemini(message, history, image_data, image_mime_type, avatar_id)
         
         # 保存对话到 Weaviate
         if self.save_to_weaviate and user_id:
@@ -123,13 +126,21 @@ class AIChatService:
         except Exception as e:
             print(f"⚠️  Error saving conversation to Weaviate: {e}")
     
-    async def _chat_with_gemini(self, message: str, history: list, image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None):
+    async def _chat_with_gemini(self, message: str, history: list, 
+                               image_data: Optional[bytes] = None, image_mime_type: Optional[str] = None,
+                               avatar_id: Optional[str] = None):
         """使用 Gemini 进行聊天"""
-        if not self.model:
+        # 动态获取当前机器人的系统指令
+        system_instruction = get_persona_instruction(avatar_id) if avatar_id else self.system_instruction
+        
+        # 每次聊天重新初始化模型以应用正确的系统指令
+        model = get_chat_model(system_instruction)
+        
+        if not model:
             return "AI 服务暂时不可用，请稍后再试。"
         
         # 开启聊天会话，传入历史记录
-        chat = self.model.start_chat(history=history)
+        chat = model.start_chat(history=history)
         
         try:
             content = []

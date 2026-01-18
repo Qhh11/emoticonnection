@@ -6,7 +6,7 @@ import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
 import EmotionReportModal from '../components/EmotionReportModal'
 import ConfirmModal from '../components/ConfirmModal'
-import { Avatar3D } from '../config/avatars'
+import { Avatar3D, AVATARS_3D } from '../config/avatars'
 import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatars'
 import CommunityView from './community/CommunityView'
 import PostDetailModal from './community/components/PostDetailModal'
@@ -59,7 +59,17 @@ export default function Dashboard() {
   const [showAvatarGallery, setShowAvatarGallery] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<Avatar3D | null>(() => {
     const saved = localStorage.getItem('selectedAvatar')
-    return saved ? JSON.parse(saved) : null
+    if (saved) {
+      try {
+        const savedAvatar = JSON.parse(saved)
+        // Find the latest version of this avatar from config to get updated properties (like videoPath)
+        const latestAvatar = AVATARS_3D.find(a => a.id === savedAvatar.id)
+        return latestAvatar || AVATARS_3D[0]
+      } catch (e) {
+        return AVATARS_3D[0]
+      }
+    }
+    return AVATARS_3D[0]
   })
 
   // Modal states for journal/post detail
