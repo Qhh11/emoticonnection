@@ -97,15 +97,17 @@ function GalleryCard({ title, mood, date, color, textColor, imageUrl, onClick }:
           </div>
         </>
       ) : (
-        // 无图片：渐变色块
-        <div className="p-8 flex flex-col justify-between h-full">
-          <span className="text-[12px] font-black uppercase tracking-widest opacity-40" style={{ color: textColor }}>{date}</span>
-          <div className="space-y-1.5">
-            <p className="text-[14px] font-black uppercase tracking-[0.25em] opacity-80" style={{ color: textColor }}>{mood}</p>
-            <h5 className="text-xl font-black leading-tight tracking-tight" style={{ color: textColor }}>{title}</h5>
-            <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: textColor }}>Click to view</p>
+        // 无图片：使用与图片版相同的布局
+        <>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-6">
+            <span className="text-[12px] font-black uppercase tracking-widest opacity-70" style={{ color: textColor }}>{date}</span>
+            <div className="mt-2 space-y-1">
+              <p className="text-[14px] font-black uppercase tracking-[0.25em] opacity-90" style={{ color: textColor }}>{mood}</p>
+              <h5 className="text-lg font-black leading-tight tracking-tight" style={{ color: textColor }}>{title}</h5>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

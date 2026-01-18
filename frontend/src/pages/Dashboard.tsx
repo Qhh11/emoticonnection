@@ -182,8 +182,8 @@ export default function Dashboard() {
         })
         .catch(err => console.error('Failed to fetch diaries:', err))
 
-      // 加载用户帖子
-      postApi.getUserPosts(user._id)
+      // 加载用户帖子（包括匿名帖子，因为是自己查看自己）
+      postApi.getUserPosts(user._id, { include_anonymous: true })
         .then(response => {
           setUserPosts(response.posts)
         })
@@ -312,7 +312,7 @@ export default function Dashboard() {
 
   const refreshUserPosts = () => {
     if (user?._id) {
-      postApi.getUserPosts(user._id)
+      postApi.getUserPosts(user._id, { include_anonymous: true })
         .then(response => {
           setUserPosts(response.posts)
         })
