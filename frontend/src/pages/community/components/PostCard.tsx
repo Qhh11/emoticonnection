@@ -87,8 +87,8 @@ export default function PostCard({ post, onClick, onLike, userId }: PostCardProp
       {/* 有图模式 */}
       {hasImage ? (
         <>
-          {/* 图片区域 - 70% */}
-          <div className="relative h-[70%] overflow-hidden">
+          {/* 图片区域 - 85% */}
+          <div className="relative h-[85%] overflow-hidden">
             <img
               src={getMediaUrl(post.media_urls![0])}
               alt=""
@@ -112,8 +112,8 @@ export default function PostCard({ post, onClick, onLike, userId }: PostCardProp
             )}
           </div>
 
-          {/* 底部信息区 - 30% */}
-          <div className="h-[30%] bg-white p-4 flex flex-col justify-between">
+          {/* 底部信息区 - 15% */}
+          <div className="h-[15%] bg-white px-4 flex items-center justify-between">
             {/* 用户头像 + 用户名 */}
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
@@ -143,15 +143,21 @@ export default function PostCard({ post, onClick, onLike, userId }: PostCardProp
                 onClick={handleLike}
                 className="flex items-center gap-1.5 text-gray-500 hover:text-pink-500 transition-colors"
               >
-                <span
-                  className={`text-lg transition-all duration-300 ${isLiking ? 'animate-bounce' : ''}`}
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill={isLiked ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className={`transition-all duration-300 ${isLiked ? 'text-accent' : 'text-gray-400'} ${isLiking ? 'animate-bounce' : ''}`}
                   style={{
                     transform: isLiked ? 'scale(1.1)' : 'scale(1)',
                     transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   }}
                 >
-                  {isLiked ? '❤️' : '🤍'}
-                </span>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
                 <span className="text-xs font-bold">{likeCount}</span>
               </button>
               {/* 评论数 */}
@@ -164,100 +170,97 @@ export default function PostCard({ post, onClick, onLike, userId }: PostCardProp
         </>
       ) : (
         /* 纯文字模式 - 大字报风格 */
-        <div
-          className="w-full h-full p-5 flex flex-col"
-          style={{
-            background: emotion
-              ? `linear-gradient(135deg, ${colors.bg} 0%, ${colors.bg}99 100%)`
-              : DEFAULT_GRADIENT,
-          }}
-        >
-          {/* 情绪标签 - 磨砂质感 */}
-          {emotion && (
-            <div
-              className="self-start px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-sm mb-4"
-              style={{
-                backgroundColor: 'rgba(255,255,255,0.25)',
-                color: colors.text,
-                boxShadow: '0 0 16px rgba(255,255,255,0.4)',
-              }}
-            >
-              {emotion}
-            </div>
-          )}
+        <>
+          {/* 内容区域 - 85% */}
+          <div
+            className="relative h-[85%] p-5 flex flex-col"
+            style={{
+              background: emotion
+                ? `linear-gradient(135deg, ${colors.bg} 0%, ${colors.bg}99 100%)`
+                : DEFAULT_GRADIENT,
+            }}
+          >
+            {/* 情绪标签 - 磨砂质感 */}
+            {emotion && (
+              <div
+                className="self-start px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-sm"
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.25)',
+                  color: colors.text,
+                  boxShadow: '0 0 16px rgba(255,255,255,0.4)',
+                }}
+              >
+                {emotion}
+              </div>
+            )}
 
-          {/* 大字报内容 - 居中放大 */}
-          <div className="flex-1 flex items-center justify-center px-2">
-            <p
-              className="text-xl md:text-2xl font-black leading-snug text-center line-clamp-4"
-              style={{ color: emotion ? colors.text : '#ffffff' }}
-            >
-              "{post.content.slice(0, 100)}{post.content.length > 100 ? '...' : ''}"
-            </p>
+            {/* 大字报内容 - 居中放大 */}
+            <div className="flex-1 flex items-center justify-center px-2">
+              <p
+                className="text-xl md:text-2xl font-black leading-snug text-center line-clamp-4"
+                style={{ color: emotion ? colors.text : '#ffffff' }}
+              >
+                "{post.content.slice(0, 100)}{post.content.length > 100 ? '...' : ''}"
+              </p>
+            </div>
           </div>
 
-          {/* 底部信息 */}
-          <div
-            className="pt-4 mt-auto border-t flex items-center justify-between"
-            style={{ borderColor: 'rgba(255,255,255,0.2)' }}
-          >
+          {/* 底部信息区 - 15% 白色背景 */}
+          <div className="h-[15%] bg-white px-4 flex items-center justify-between">
             {/* 用户头像 + 用户名 */}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md overflow-hidden flex-shrink-0">
+              <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
                 {post.author_avatar ? (
                   <img src={getAvatarUrl(post.author_avatar)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div
-                    className="w-full h-full flex items-center justify-center text-[10px] font-black uppercase"
+                    className="w-full h-full flex items-center justify-center text-xs font-black uppercase"
                     style={{
-                      backgroundColor: 'rgba(255,255,255,0.25)',
-                      color: emotion ? colors.text : '#ffffff',
+                      backgroundColor: colors.bg + '30',
+                      color: colors.bg === '#F9D849' ? '#121212' : colors.bg,
                     }}
                   >
                     {authorInitial}
                   </div>
                 )}
               </div>
-              <span
-                className="text-xs font-bold truncate max-w-[80px]"
-                style={{ color: emotion ? colors.text : '#ffffff', opacity: 0.9 }}
-              >
+              <span className="text-sm font-bold text-gray-700 truncate">
                 {authorName}
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* 点赞和评论 */}
+            <div className="flex items-center gap-4">
               {/* 点赞按钮 */}
               <button
                 onClick={handleLike}
-                className="flex items-center gap-1 transition-transform"
-                style={{
-                  color: emotion ? colors.text : '#ffffff',
-                  transform: isLiking ? 'scale(0.9)' : 'scale(1)',
-                }}
+                className="flex items-center gap-1.5 text-gray-500 hover:text-pink-500 transition-colors"
               >
-                <span
-                  className="text-base"
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill={isLiked ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className={`transition-all duration-300 ${isLiked ? 'text-accent' : 'text-gray-400'} ${isLiking ? 'animate-bounce' : ''}`}
                   style={{
+                    transform: isLiked ? 'scale(1.1)' : 'scale(1)',
                     transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                    transform: isLiked ? 'scale(1.2)' : 'scale(1)',
                   }}
                 >
-                  {isLiked ? '❤️' : '🤍'}
-                </span>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
                 <span className="text-xs font-bold">{likeCount}</span>
               </button>
               {/* 评论数 */}
-              <div
-                className="flex items-center gap-1"
-                style={{ color: emotion ? colors.text : '#ffffff' }}
-              >
-                <span className="text-base">💬</span>
+              <div className="flex items-center gap-1.5 text-gray-500">
+                <span className="text-lg">💬</span>
                 <span className="text-xs font-bold">{post.comment_count}</span>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Hover 效果 - 光晕增强 */}

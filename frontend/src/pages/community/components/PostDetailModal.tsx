@@ -278,15 +278,21 @@ export default function PostDetailModal({
                 onClick={handleLike}
                 className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
               >
-                <span
-                  className="text-xl transition-transform"
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill={isLiked ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className={`transition-all duration-300 ${isLiked ? 'text-accent' : 'text-gray-400'}`}
                   style={{
                     transform: isLiked ? 'scale(1.1)' : 'scale(1)',
                     transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   }}
                 >
-                  {isLiked ? '❤️' : '🤍'}
-                </span>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
                 <span className="text-sm font-bold">{likeCount}</span>
               </button>
             </div>
