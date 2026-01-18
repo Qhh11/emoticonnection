@@ -61,13 +61,13 @@ class ConnectionManager:
         }
         """
         self.rooms: Dict[str, List[WebSocket]] = {}
-        self.socket_to_user: Dict[WebSocket, int] = {}
-        self.user_sockets: Dict[int, List[WebSocket]] = {}
-        self.user_rooms: Dict[int, Set[str]] = {}
-        self.user_status: Dict[int, UserStatusType] = {}
+        self.socket_to_user: Dict[WebSocket, str] = {}
+        self.user_sockets: Dict[str, List[WebSocket]] = {}
+        self.user_rooms: Dict[str, Set[str]] = {}
+        self.user_status: Dict[str, UserStatusType] = {}
         self.typing_status: Dict[tuple, bool] = {}
 
-    async def connect(self, room_id: str, websocket: WebSocket, user_id: Optional[int] = None) -> None:
+    async def connect(self, room_id: str, websocket: WebSocket, user_id: Optional[str] = None) -> None:
         """
         Connect a client to a chat room
 
@@ -204,7 +204,7 @@ class ConnectionManager:
                 await self.disconnect(room_id, websocket)
 
 
-    async def broadcast_to_room_except(self, room_id: str, message: dict, exclude_user_id: int) -> None:
+    async def broadcast_to_room_except(self, room_id: str, message: dict, exclude_user_id: str) -> None:
         if room_id not in self.rooms:
             return
         for websocket in self.rooms[room_id][:]:
@@ -215,7 +215,7 @@ class ConnectionManager:
                 except:
                     await self.disconnect(room_id, websocket)
 
-    async def set_typing(self, room_id: str, user_id: int, is_typing: bool) -> None:
+    async def set_typing(self, room_id: str, user_id: str, is_typing: bool) -> None:
         typing_key = (room_id, user_id)
         if self.typing_status.get(typing_key) != is_typing:
             self.typing_status[typing_key] = is_typing
@@ -241,5 +241,32 @@ class ConnectionManager:
             Number of active WebSocket connections in the room
         """
         return len(self.rooms.get(room_id, []))
+
+    def is_user_online(self, user_id: str) -> bool:
+        """Check if a user is currently online (has active WebSocket connections)"""
+        return user_id in self.user_sockets and len(self.user_sockets[user_id]) > 0
+
+    def get_online_users(self) -> List[str]:
+        """Get list of all online user IDs"""
+        return list(self.user_sockets.keys())
+
+    async def broadcast_user_status_to_room(self, room_id: str, user_id: str, status: str) -> None:
+        """Broadcast user status change to all users in a room"""
+        if room_id not in self.rooms:
+            return
+
+        for websocket in self.rooms[room_id][:]:
+            socket_user = self.socket_to_user.get(websocket)
+            if socket_user != user_id:  # Don't send to the user themselves
+                try:
+                    await websocket.send_json({
+                        "event_type": WSEventType.USER_STATUS.value,
+                        "data": {
+                            "user_id": user_id,
+                            "status": status
+                        }
+                    })
+                except:
+                    pass
 
 

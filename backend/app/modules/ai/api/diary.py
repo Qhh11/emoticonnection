@@ -82,6 +82,28 @@ async def create_diary(request: DiaryRequest, repo: DiaryRepository = Depends(ge
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create diary: {str(e)}")
 
+@router.delete("/diaries/{diary_id}")
+async def delete_diary(diary_id: str, user_id: str = Query(...), repo: DiaryRepository = Depends(get_diary_repo)):
+    """删除日记"""
+    try:
+        # 验证日记存在且属于该用户
+        diary = await repo.get_diary(diary_id)
+        if not diary:
+            raise HTTPException(status_code=404, detail="Diary not found")
+        if diary.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this diary")
+
+        # 执行删除
+        success = await repo.delete_diary(diary_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete diary")
+
+        return {"success": True, "message": "Diary deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete diary: {str(e)}")
+
 @router.post("/diaries/generate")
 async def generate_diary(
     request: GenerateDiaryRequest,

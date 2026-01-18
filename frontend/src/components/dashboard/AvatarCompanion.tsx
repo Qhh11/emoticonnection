@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Avatar3D } from '../../config/avatars'
 import ModelViewer3D from './ModelViewer3D'
+import AssistantBubble from './AssistantBubble'
 
 interface AvatarCompanionProps {
   avatar: Avatar3D
@@ -8,82 +9,95 @@ interface AvatarCompanionProps {
   onClick?: () => void           // Click callback for VIP features
   activeTab?: string             // Current page tab
   showVipHint?: boolean          // Show VIP feature hint
+  showProactiveHint?: boolean    // Show proactive hint tooltip
+  showAssistantBubble?: boolean  // Show assistant bubble popup
+  onCloseBubble?: () => void     // Close bubble callback
+  onSelectText?: (text: string) => void  // Text selection callback
+  partnerLastMessage?: string    // Partner's last message for response suggestions
 }
 
-export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from localStorage or use default
     const saved = localStorage.getItem('avatarCompanionPosition')
     return saved ? JSON.parse(saved) : { x: window.innerWidth - 200, y: 100 }
   })
   const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
   const companionRef = useRef<HTMLDivElement>(null)
 
-  // Track click start for differentiating click vs drag
-  const [clickStart, setClickStart] = useState({ x: 0, y: 0, time: 0 })
+  // Use refs to avoid stale closures in event handlers
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+  const clickStartRef = useRef({ x: 0, y: 0, time: 0 })
+  const onClickRef = useRef(onClick)
+  onClickRef.current = onClick
 
   // Save position to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('avatarCompanionPosition', JSON.stringify(position))
   }, [position])
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button')) return // Don't drag when clicking buttons
 
+    e.preventDefault() // Prevent browser drag behavior on images
+
     // Record click start position and time
-    setClickStart({ x: e.clientX, y: e.clientY, time: Date.now() })
+    clickStartRef.current = { x: e.clientX, y: e.clientY, time: Date.now() }
+
+    // Calculate offset from current position
+    const rect = companionRef.current?.getBoundingClientRect()
+    if (rect) {
+      dragOffsetRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      }
+    }
 
     setIsDragging(true)
-    setDragOffset({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    })
-  }
+  }, [])
 
   useEffect(() => {
+    if (!isDragging) return
+
     const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
-        const newX = e.clientX - dragOffset.x
-        const newY = e.clientY - dragOffset.y
+      e.preventDefault()
+      const newX = e.clientX - dragOffsetRef.current.x
+      const newY = e.clientY - dragOffsetRef.current.y
 
-        // Keep within viewport bounds
-        const maxX = window.innerWidth - 120
-        const maxY = window.innerHeight - 120
+      // Keep within viewport bounds
+      const maxX = window.innerWidth - 120
+      const maxY = window.innerHeight - 120
 
-        setPosition({
-          x: Math.max(0, Math.min(newX, maxX)),
-          y: Math.max(0, Math.min(newY, maxY))
-        })
-      }
+      setPosition({
+        x: Math.max(0, Math.min(newX, maxX)),
+        y: Math.max(0, Math.min(newY, maxY))
+      })
     }
 
     const handleMouseUp = (e: MouseEvent) => {
-      if (isDragging) {
-        // Check if this was a click (small movement, short duration)
-        const dx = Math.abs(e.clientX - clickStart.x)
-        const dy = Math.abs(e.clientY - clickStart.y)
-        const dt = Date.now() - clickStart.time
+      // Check if this was a click (small movement, short duration)
+      const dx = Math.abs(e.clientX - clickStartRef.current.x)
+      const dy = Math.abs(e.clientY - clickStartRef.current.y)
+      const dt = Date.now() - clickStartRef.current.time
 
-        // If movement < 5px and time < 300ms, treat as click
-        if (dx < 5 && dy < 5 && dt < 300 && onClick) {
-          onClick()
-        }
+      // If movement < 5px and time < 300ms, treat as click
+      if (dx < 5 && dy < 5 && dt < 300 && onClickRef.current) {
+        onClickRef.current()
       }
+
       setIsDragging(false)
     }
 
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-    }
+    // Add listeners immediately
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDragging, dragOffset, clickStart, onClick])
+  }, [isDragging])
 
   // Get tooltip text based on activeTab
   const getTooltipText = () => {
@@ -108,26 +122,55 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
     >
       {/* Main Avatar Container */}
       <div className="relative group">
-        {/* 3D Model - Direct Display */}
+        {/* Assistant Bubble - positioned above Avatar */}
+        <AssistantBubble
+          isOpen={showAssistantBubble || false}
+          onClose={onCloseBubble || (() => {})}
+          onSelectText={onSelectText || (() => {})}
+          partnerLastMessage={partnerLastMessage}
+        />
+
+        {/* Avatar Display - Video or 3D Model fallback */}
         <div className="relative w-48 h-48">
-          <ModelViewer3D
-            modelPath={avatar.modelPath}
-            avatarName={avatar.name}
-            avatarColor={avatar.color}
-            size="medium"
-            exposure={avatar.exposure}
-            environmentImage={avatar.environmentImage}
-            shadowIntensity={avatar.shadowIntensity}
-            disableAutoRotate={true}
-            showResetButton={false}
-          />
+          {avatar.videoPath ? (
+            <img
+              src={avatar.videoPath}
+              alt={avatar.name}
+              draggable={false}
+              className="w-full h-full object-contain pointer-events-none"
+              style={{
+                filter: `drop-shadow(0 0 20px ${avatar.color}40)`
+              }}
+            />
+          ) : (
+            <ModelViewer3D
+              modelPath={avatar.modelPath}
+              avatarName={avatar.name}
+              avatarColor={avatar.color}
+              size="medium"
+              exposure={avatar.exposure}
+              environmentImage={avatar.environmentImage}
+              shadowIntensity={avatar.shadowIntensity}
+              disableAutoRotate={true}
+              showResetButton={false}
+            />
+          )}
         </div>
 
-        {/* Hover tooltip */}
-        {isHovered && !isDragging && (
+        {/* Hover tooltip - hide when bubble is open */}
+        {isHovered && !isDragging && !showProactiveHint && !showAssistantBubble && (
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-2 bg-black/90 backdrop-blur-sm text-white rounded-2xl text-xs font-black uppercase tracking-widest whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 duration-300">
             {getTooltipText()}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/90"></div>
+          </div>
+        )}
+
+        {/* Proactive hint tooltip - persistent bubble when user pauses typing */}
+        {showProactiveHint && !isDragging && !showAssistantBubble && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-5 py-3 bg-white rounded-2xl shadow-xl border border-purple-100 whitespace-nowrap animate-in fade-in zoom-in-95 duration-300">
+            <p className="text-sm font-bold text-gray-700">Need help polishing? ✨</p>
+            <p className="text-[10px] text-gray-400 font-bold mt-0.5">Click me to get suggestions</p>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-6 border-r-6 border-t-6 border-transparent border-t-white"></div>
           </div>
         )}
 
@@ -150,7 +193,7 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
         )}
 
         {/* VIP Feature Hint Badge - Show when showVipHint is true */}
-        {showVipHint && !isDragging && (
+        {showVipHint && !isDragging && !showAssistantBubble && (
           <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
             <div className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg whitespace-nowrap flex items-center space-x-1">
               <span>✨</span>

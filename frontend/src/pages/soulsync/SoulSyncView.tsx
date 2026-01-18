@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { matchApi, chatApi, socialApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
+
+// Extended FollowUser with online status
+interface FriendWithOnlineStatus extends FollowUser {
+  isOnline: boolean
+}
 import { Avatar3D } from '../../config/avatars'
-import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
+import EmotionGradientBar from '../../components/chat/EmotionGradientBar'
+import { getAvatarUrl } from '../../config/userAvatars'
+import OnlineIndicator from './components/OnlineIndicator'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA: { label: string; color: string; text: string; value: EmotionType }[] = [
@@ -46,6 +53,15 @@ const TOPIC_DATA: { value: TopicTag; label: string; emoji: string }[] = [
 ]
 
 
+interface EmotionAnalysis {
+  primary_emotion: string
+  primary_percentage: number
+  primary_color: string
+  secondary_emotion: string
+  secondary_percentage: number
+  secondary_color: string
+}
+
 interface ChatMessage {
   id: string
   role: 'user' | 'peer'
@@ -53,6 +69,7 @@ interface ChatMessage {
   timestamp: number
   emotion: string
   emotion_color: string
+  emotionAnalysis?: EmotionAnalysis
 }
 
 export interface PeerSession {
@@ -66,22 +83,28 @@ export interface PeerSession {
   lastMessage: string
   moodColor: string
   messages: ChatMessage[]
+  isOnline?: boolean
 }
 
 interface SoulSyncViewProps {
   onInteract: (e: React.MouseEvent) => void
   userId?: string
+  userAvatar?: string
   onViewProfile?: (userId: string) => void
   avatar?: Avatar3D | null
   userLevel?: number
-  showEmotionAnalysis?: boolean       // Controlled from parent (via Avatar click)
-  onCloseEmotionAnalysis?: () => void // Close callback
-  onSessionChange?: (hasSession: boolean) => void // Notify parent when in/out of chat
+  onSessionChange?: (hasSession: boolean) => void
+  onProactiveHintChange?: (show: boolean) => void
+  onPartnerMessageChange?: (message: string) => void  // For AssistantBubble
+  externalChatInput?: string | null  // Text from AssistantBubble
+  onExternalChatInputConsumed?: () => void  // Clear external input after consuming
 }
 
-// Removed unused VIP_REQUIRED_LEVEL
+export default function SoulSyncView({ onInteract, userId, userAvatar, onViewProfile, avatar: _avatar, onSessionChange, onProactiveHintChange, onPartnerMessageChange, externalChatInput, onExternalChatInputConsumed }: SoulSyncViewProps) {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'matching' | 'social'>('matching')
 
-export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar, showEmotionAnalysis: propShowAnalysis, onCloseEmotionAnalysis, onSessionChange }: SoulSyncViewProps) {
+  // Matching states
   const [isSearching, setIsSearching] = useState(false)
   const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean; matchScore?: number; matchReason?: string } | null>(null)
   const [sessions, setSessions] = useState<PeerSession[]>([])
@@ -103,21 +126,54 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   const [estimatedWait, setEstimatedWait] = useState<string | null>(null)
   const [safetyTips, setSafetyTips] = useState<string[]>([])
 
-  // VIP Emotion Analysis state - controlled by prop or internal state
-  const [internalShowAnalysis, setInternalShowAnalysis] = useState(false)
-  const showEmotionAnalysis = propShowAnalysis ?? internalShowAnalysis
-  const closeEmotionAnalysis = () => {
-    setInternalShowAnalysis(false)
-    onCloseEmotionAnalysis?.()
-  }
+  // Get partner's last message - exposed for AssistantBubble
+  const getPartnerLastMessage = useCallback((): string => {
+    const session = sessions.find(s => s.id === currentSessionId)
+    if (!session) return ''
+    const partnerMessages = session.messages.filter(m => m.role === 'peer')
+    return partnerMessages.length > 0 ? partnerMessages[partnerMessages.length - 1].text : ''
+  }, [sessions, currentSessionId])
 
-  // Mutual friends (互相关注的好友)
-  const [mutualFriends, setMutualFriends] = useState<FollowUser[]>([])
+  // Notify Dashboard when partner's last message changes
+  useEffect(() => {
+    const lastMessage = getPartnerLastMessage()
+    onPartnerMessageChange?.(lastMessage)
+  }, [getPartnerLastMessage, onPartnerMessageChange])
+
+  // Consume external chat input from AssistantBubble
+  useEffect(() => {
+    if (externalChatInput) {
+      setChatInput(externalChatInput)
+      onExternalChatInputConsumed?.()
+    }
+  }, [externalChatInput, onExternalChatInputConsumed])
+
+  // Mutual friends with online status
+  const [mutualFriends, setMutualFriends] = useState<FriendWithOnlineStatus[]>([])
   const [isLoadingFriends, setIsLoadingFriends] = useState(false)
+
+  // Social view category
+  const [socialCategory, setSocialCategory] = useState<'chats' | 'friends'>('chats')
 
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Proactive hint - show tooltip after 8s of typing pause
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    if (chatInput.length > 5 && currentSessionId) {
+      timer = setTimeout(() => {
+        onProactiveHintChange?.(true)
+      }, 8000)
+    } else {
+      onProactiveHintChange?.(false)
+    }
+    return () => {
+      clearTimeout(timer)
+      onProactiveHintChange?.(false)
+    }
+  }, [chatInput, currentSessionId, onProactiveHintChange])
 
   // Load existing chat rooms and mutual friends on mount
   useEffect(() => {
@@ -127,15 +183,33 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     }
   }, [userId])
 
-  // Load mutual friends (互相关注的好友)
+  // Load mutual friends with online status
   const loadMutualFriends = async () => {
     if (!userId) return
     setIsLoadingFriends(true)
     try {
-      const following = await socialApi.getFollowing(userId)
-      // Filter to only mutual friends
+      // Get mutual friends and online users in parallel
+      const [following, onlineUsers] = await Promise.all([
+        socialApi.getFollowing(userId),
+        chatApi.getOnlineUsers()
+      ])
+
       const mutuals = following.filter(user => user.is_mutual)
-      setMutualFriends(mutuals)
+
+      // Add online status and sort (online users first)
+      const mutualsWithStatus: FriendWithOnlineStatus[] = mutuals
+        .map(user => ({
+          ...user,
+          isOnline: onlineUsers.includes(user.id)
+        }))
+        .sort((a, b) => {
+          // Online users first
+          if (a.isOnline && !b.isOnline) return -1
+          if (!a.isOnline && b.isOnline) return 1
+          return 0
+        })
+
+      setMutualFriends(mutualsWithStatus)
     } catch (err) {
       console.error('Failed to load mutual friends:', err)
     } finally {
@@ -187,7 +261,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
             matchScore: status.match_score,
             matchReason: status.match_reason
           })
-          setIsSearching(false) // 会触发 cleanup 停止轮询
+          setIsSearching(false)
         } else if (status.in_queue) {
           setQueuePosition(status.queue_position || null)
           setEstimatedWait(status.estimated_wait || null)
@@ -211,20 +285,34 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   }, [sessions])
 
   // Connect WebSocket when session changes
+  // Use ref to track current room to avoid reconnecting on sessions update
+  const currentRoomIdRef = useRef<string | null>(null)
+
   useEffect(() => {
-    const currentSession = sessions.find(s => s.id === currentSessionId)
-    if (currentSession && userId) {
-      connectWebSocket(currentSession.roomId)
+    const targetSession = sessions.find(s => s.id === currentSessionId)
+    const newRoomId = targetSession?.roomId || null
+
+    // Only connect if room actually changed
+    if (newRoomId && newRoomId !== currentRoomIdRef.current && userId) {
+      currentRoomIdRef.current = newRoomId
+      connectWebSocket(newRoomId)
+    } else if (!newRoomId && wsRef.current) {
+      // Disconnect if no session selected
+      currentRoomIdRef.current = null
+      wsRef.current.close()
+      wsRef.current = null
     }
+
     return () => {
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId, userId])
 
-  // Notify parent when session state changes (for VIP hint display)
+  // Notify parent when session state changes
   useEffect(() => {
     onSessionChange?.(!!currentSessionId)
   }, [currentSessionId, onSessionChange])
@@ -232,20 +320,27 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   const loadUserRooms = async () => {
     if (!userId) return
     try {
-      const rooms = await chatApi.getUserRooms(userId)
-      const sessionsFromRooms: PeerSession[] = rooms.map((room: UserRoom) => ({
+      // Get rooms and online users in parallel
+      const [rooms, onlineUsers] = await Promise.all([
+        chatApi.getUserRooms(userId),
+        chatApi.getOnlineUsers()
+      ])
+
+      // Only show anonymous (matched) sessions in Synchronized Echoes
+      const anonymousRooms = rooms.filter((room: UserRoom) => room.is_anonymous)
+
+      const sessionsFromRooms: PeerSession[] = anonymousRooms.map((room: UserRoom) => ({
         id: room.room_id,
         roomId: room.room_id,
-        // For non-anonymous chats, show actual username; for anonymous, show "Anonymous"
-        partnerName: room.is_anonymous ? 'Anonymous' : (room.other_user_name || 'User'),
+        partnerName: 'Anonymous',
         partnerId: room.other_user_id,
-        // Use actual avatar for friends, mask for anonymous
-        partnerAvatar: room.is_anonymous ? '🎭' : (room.other_user_avatar || '👤'),
-        isAnonymous: room.is_anonymous,
-        isRevealed: !room.is_anonymous,
+        partnerAvatar: '🎭',
+        isAnonymous: true,
+        isRevealed: false,
         lastMessage: room.last_message || 'Start chatting...',
-        moodColor: room.is_anonymous ? '#9381BA' : '#4B4E91', // Purple for anonymous, blue for friend
-        messages: []
+        moodColor: '#9381BA',
+        messages: [],
+        isOnline: onlineUsers.includes(room.other_user_id)
       }))
       setSessions(sessionsFromRooms)
     } catch (err) {
@@ -254,37 +349,40 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   }
 
   // Start or open chat with a friend
-  const startChatWithFriend = async (friend: FollowUser) => {
+  const startChatWithFriend = async (friend: FriendWithOnlineStatus) => {
     if (!userId) return
 
-    // Check if we already have a chat room with this friend
-    const existingSession = sessions.find(s => s.partnerId === friend.id)
-    if (existingSession) {
-      // Open existing chat
-      setCurrentSessionId(existingSession.id)
-      return
-    }
-
-    // Create new chat room (non-anonymous since it's a friend)
     try {
       const room = await chatApi.createRoom(userId, friend.id, false)
 
-      // Add new session with friend's actual avatar
+      // Check if session already exists
+      const existingSession = sessions.find(s => s.roomId === room.id)
+      if (existingSession) {
+        setCurrentSessionId(existingSession.id)
+        setSocialCategory('friends')
+        setActiveTab('social')
+        return
+      }
+
       const newSession: PeerSession = {
         id: room.id,
         roomId: room.id,
         partnerName: friend.nickname || friend.username,
         partnerId: friend.id,
-        partnerAvatar: friend.avatar || '👤',  // Use friend's avatar
+        partnerAvatar: friend.avatar || '👤',
         isAnonymous: false,
         isRevealed: true,
         lastMessage: 'Start chatting...',
         moodColor: '#4B4E91',
-        messages: []
+        messages: [],
+        isOnline: friend.isOnline
       }
 
+      // Add to sessions array (not separate state)
       setSessions(prev => [newSession, ...prev])
       setCurrentSessionId(newSession.id)
+      setSocialCategory('friends')
+      setActiveTab('social')
     } catch (err) {
       console.error('Failed to create chat room:', err)
     }
@@ -299,7 +397,8 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
         text: m.content,
         timestamp: new Date(m.created_at).getTime(),
         emotion: m.emotion || 'Neutral',
-        emotion_color: m.emotion_color || '#4B4E91'
+        emotion_color: m.emotion_color || '#4B4E91',
+        emotionAnalysis: m.emotion_analysis || undefined
       }))
 
       setSessions(prev => prev.map(s =>
@@ -315,17 +414,29 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
       wsRef.current.close()
     }
 
-    const ws = createChatWebSocket(roomId)
+    const ws = createChatWebSocket(roomId, userId)
 
     ws.onopen = () => {
       console.log('WebSocket connected to room:', roomId)
-      // Load existing messages
       loadRoomMessages(roomId)
     }
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
+        console.log('[WS] Received message:', data)
+
+        // Handle user status updates
+        if (data.event_type === 'user_status') {
+          const { user_id: statusUserId, status } = data.data
+          console.log('[WS] User status update:', statusUserId, status)
+          setSessions(prev => prev.map(s =>
+            s.partnerId === statusUserId
+              ? { ...s, isOnline: status === 'online' }
+              : s
+          ))
+          return
+        }
 
         if (data.type === 'peer_disconnected') {
           const sysMsg: ChatMessage = {
@@ -337,18 +448,23 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
             emotion_color: '#808080'
           }
           setSessions(prev => prev.map(s =>
-            s.roomId === roomId ? { ...s, messages: [...s.messages, sysMsg] } : s
+            s.roomId === roomId ? { ...s, messages: [...s.messages, sysMsg], isOnline: false } : s
           ))
+          return
+        }
+
+        if (data.sender_id === userId) {
           return
         }
 
         const newMessage: ChatMessage = {
           id: data.id || Date.now().toString(),
-          role: data.sender_id === userId ? 'user' : 'peer',
+          role: 'peer',
           text: data.content,
           timestamp: new Date(data.created_at || Date.now()).getTime(),
           emotion: data.emotion || 'Neutral',
-          emotion_color: data.emotion_color || '#4B4E91'
+          emotion_color: data.emotion_color || '#4B4E91',
+          emotionAnalysis: data.emotion_analysis || undefined
         }
 
         setSessions(prev => prev.map(s =>
@@ -373,9 +489,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
   }, [userId])
 
   const startMatching = async (e: React.MouseEvent) => {
-    console.log('[debug] userId prop =', userId)
-    console.log('[debug] token prefix =', (localStorage.getItem('access_token') || '').slice(0, 16))
-
     onInteract(e)
     setIsSearching(true)
     setIsLoading(true)
@@ -403,7 +516,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
           matchReason: response.match_reason
         })
       } else {
-        // Not matched yet, show queue status
         if (response.queue_position) {
           setQueuePosition(response.queue_position)
         }
@@ -413,11 +525,9 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
         if (response.safety_tips) {
           setSafetyTips(response.safety_tips)
         }
-
       }
     } catch (err) {
       console.error('Match failed:', err)
-      // Show error state, keep user in queue view
       setQueuePosition(1)
       setEstimatedWait('Waiting for other users...')
     } finally {
@@ -449,6 +559,7 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
       setCurrentSessionId(existing.id)
       setMatchedPartner(null)
       setIsSearching(false)
+      setActiveTab('social')
       return
     }
 
@@ -462,78 +573,69 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
       isRevealed: !matchedPartner.isAnonymous,
       lastMessage: 'Connection established',
       moodColor: selectedMood.color,
-      messages: []
+      messages: [],
+      isOnline: true
     }
 
     setSessions(prev => [newSession, ...prev])
     setCurrentSessionId(newSession.id)
     setMatchedPartner(null)
     setIsSearching(false)
+    setActiveTab('social')
   }
 
 
   const sendPeerMessage = () => {
     if (!chatInput.trim() || !currentSessionId || !userId) return
 
-    const currentSession = sessions.find(s => s.id === currentSessionId)
-    if (!currentSession) return
+    const targetSession = sessions.find(s => s.id === currentSessionId)
+    if (!targetSession) return
 
-    // Send via WebSocket if connected
+    const messageContent = chatInput
+    const tempId = `temp-${Date.now()}`
+
+    const newMsg: ChatMessage = {
+      id: tempId,
+      role: 'user',
+      text: messageContent,
+      timestamp: Date.now(),
+      emotion: 'Neutral',
+      emotion_color: '#808080'
+    }
+
+    setSessions(prev => prev.map(s =>
+      s.id === currentSessionId
+        ? { ...s, messages: [...s.messages, newMsg], lastMessage: messageContent }
+        : s
+    ))
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         sender_id: userId,
         message_type: 'text',
-        content: chatInput
+        content: messageContent
       }))
     } else {
-      // Fallback: send via HTTP and add locally
-      chatApi.sendMessage(currentSession.roomId, {
+      chatApi.sendMessage(targetSession.roomId, {
         sender_id: userId,
         message_type: 'text',
-        content: chatInput
+        content: messageContent
       }).catch(err => console.error('Failed to send message:', err))
-
-      // Add message locally (only for HTTP fallback)
-      const emotion = detectEmotion(chatInput)
-      const newMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        text: chatInput,
-        timestamp: Date.now(),
-        emotion: emotion,
-        emotion_color: getEmotionColor(emotion)
-      }
-      setSessions(prev => prev.map(s =>
-        s.id === currentSessionId
-          ? { ...s, messages: [...s.messages, newMsg], lastMessage: chatInput }
-          : s
-      ))
     }
 
     setChatInput('')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       sendPeerMessage()
     }
   }
 
-  const detectEmotion = (text: string): string => {
-    const t = text.toLowerCase()
-    if (t.includes('happy') || t.includes('yay') || t.includes('best') || t.includes('great')) return 'Joy'
-    if (t.includes('sad') || t.includes('void') || t.includes('lonely')) return 'Sad'
-    if (t.includes('angry') || t.includes('rage') || t.includes('mad')) return 'Angry'
-    if (t.includes('anxious') || t.includes('stress') || t.includes('worried')) return 'Anxious'
-    if (t.includes('bored') || t.includes('nothing')) return 'Bored'
-    return 'Neutral'
-  }
-
   const getEmotionColor = (emotion: string): string => {
     if (!emotion) return '#808080'
     const e = emotion.toLowerCase()
-    // 情绪名称映射到 MOOD_DATA 的 label
     const emotionToLabel: Record<string, string> = {
       'joy': 'Joy', 'happy': 'Joy',
       'sad': 'Sad', 'sadness': 'Sad',
@@ -544,15 +646,17 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
       'disgust': 'Disgust',
       'awkward': 'Awkward', 'embarrassment': 'Awkward',
       'envy': 'Envy',
-      'neutral': 'Bored' // 默认用 Bored 的颜色
+      'neutral': 'Bored'
     }
     const label = emotionToLabel[e]
     const mood = MOOD_DATA.find(m => m.label === label)
     return mood?.color || '#808080'
   }
 
+  // Find current session
   const currentSession = sessions.find(s => s.id === currentSessionId)
 
+  // Searching Portal
   if (isSearching) {
     return createPortal(
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -573,7 +677,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
                 <p className="text-white/80 font-black uppercase text-[13px] tracking-[0.3em]">
                   {selectedRole === 'seeker' ? '🙋 Seeking Support' : selectedRole === 'supporter' ? '🤗 Ready to Help' : '💬 Open to Both'} • {selectedMood.label}
                 </p>
-                {/* Queue Status Info */}
                 {(queuePosition || estimatedWait) && (
                   <div className="mt-4 space-y-2">
                     {queuePosition && (
@@ -588,7 +691,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
                     )}
                   </div>
                 )}
-                {/* Safety Tips */}
                 {safetyTips.length > 0 && (
                   <div className="mt-6 p-4 bg-white/10 rounded-2xl text-left max-w-md">
                     <p className="text-white/80 text-xs font-black uppercase tracking-widest mb-2">Safety Tips</p>
@@ -616,7 +718,6 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
                   <span className="text-[12px] font-black uppercase tracking-widest">Match Found!</span>
                 </div>
               </div>
-              {/* Match Score & Reason */}
               {(matchedPartner.matchScore || matchedPartner.matchReason) && (
                 <div className="flex justify-center gap-4">
                   {matchedPartner.matchScore && (
@@ -647,439 +748,423 @@ export default function SoulSyncView({ onInteract, userId, onViewProfile, avatar
     )
   }
 
-  return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-        <div className="space-y-4">
-          <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">SoulSync</h2>
-          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Direct emotional synchronization</p>
+  // MatchingContent - 匹配偏好设置
+  const MatchingContent = () => (
+    <div className="bg-white p-10 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-10">
+      <div className="space-y-3">
+        <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Sync Mode</h4>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsAnonymousMatch(true)}
+            className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${isAnonymousMatch ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+          >
+            <span className="text-xl">🎭</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">Anonymous</span>
+          </button>
+          <button
+            onClick={() => setIsAnonymousMatch(false)}
+            className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${!isAnonymousMatch ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+          >
+            <span className="text-xl">👤</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">Public</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Role Selector */}
+      <div className="space-y-4">
+        <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Your Role</h4>
+        <div className="grid grid-cols-3 gap-3">
+          {ROLE_DATA.map(r => (
+            <button
+              key={r.value}
+              onClick={() => setSelectedRole(r.value)}
+              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 ${selectedRole === r.value ? 'border-accent bg-accent/5 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+            >
+              <span className="text-2xl">{r.emoji}</span>
+              <span className="text-[11px] font-black uppercase tracking-widest">{r.label}</span>
+              <span className="text-[9px] text-gray-400 font-bold">{r.description}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Support Need Selector */}
+      <div className="space-y-4">
+        <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">What Do You Need?</h4>
+        <div className="flex flex-wrap gap-2">
+          {NEED_DATA.map(n => (
+            <button
+              key={n.value}
+              onClick={() => setSelectedNeed(n.value)}
+              className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedNeed === n.value ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-500 hover:border-black/10'}`}
+            >
+              <span>{n.emoji}</span>
+              <span className="text-[12px] font-black uppercase tracking-widest">{n.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Emotion/Resonance Selector */}
+      <div className="space-y-4">
+        <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Set Your Resonance</h4>
+        <div className="flex flex-wrap gap-2">
+          {MOOD_DATA.map(m => (
+            <button
+              key={m.label}
+              onClick={() => setSelectedMood(m)}
+              className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedMood.label === m.label ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+            >
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: selectedMood.label === m.label ? '#ffffff' : m.color }}></div>
+              <span className="text-[12px] font-black uppercase tracking-widest">{m.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Intensity Slider */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Intensity</h4>
+          <span className="text-[11px] font-black uppercase tracking-widest text-gray-400">
+            {selectedIntensity === 1 ? 'Very Low' : selectedIntensity === 2 ? 'Low' : selectedIntensity === 3 ? 'Moderate' : selectedIntensity === 4 ? 'High' : 'Very High'}
+          </span>
+        </div>
+        <div className="flex items-center space-x-2">
+          {[1, 2, 3, 4, 5].map(level => (
+            <button
+              key={level}
+              onClick={() => setSelectedIntensity(level)}
+              className={`flex-1 h-10 rounded-xl transition-all ${selectedIntensity >= level ? 'bg-accent shadow-inner' : 'bg-gray-100 hover:bg-gray-200'}`}
+              style={{ opacity: selectedIntensity >= level ? 0.4 + (level * 0.15) : 1 }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Topic Selector */}
+      <div className="space-y-4">
+        <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Topic (Optional)</h4>
+        <div className="flex flex-wrap gap-2">
+          {TOPIC_DATA.map(t => (
+            <button
+              key={t.value}
+              onClick={() => setSelectedTopic(t.value)}
+              className={`inline-flex items-center space-x-1.5 px-3 py-2 rounded-full border transition-all active:scale-95 text-[11px] ${selectedTopic === t.value ? 'border-accent bg-accent/10 text-accent shadow-sm' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+            >
+              <span>{t.emoji}</span>
+              <span className="font-black uppercase tracking-wider">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="pt-4">
+        <button
+          onClick={startMatching}
+          disabled={!userId}
+          className="w-full py-5 bg-accent text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:opacity-90 transition-all flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span>Find Echoes</span>
+          <span className="text-xl">⚡</span>
+        </button>
+      </div>
+    </div>
+  )
+
+
+  // 渲染聊天详情内联（避免组件重新创建导致 input 失焦）
+  const renderChatDetail = (session: PeerSession) => (
+    <div className="flex-1 flex flex-col h-full">
+      {/* Header */}
+      <header className="p-4 border-b border-black/5 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div
+            className={`w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center ${session.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'} ${!session.isAnonymous ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
+            onClick={() => !session.isAnonymous && onViewProfile?.(session.partnerId)}
+          >
+            {session.partnerAvatar && session.partnerAvatar.length > 2 ? (
+              <img src={getAvatarUrl(session.partnerAvatar)} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xl">{session.partnerAvatar || '👤'}</span>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h3
+                className={`font-black text-sm uppercase ${!session.isAnonymous ? 'cursor-pointer hover:underline' : ''}`}
+                onClick={() => !session.isAnonymous && onViewProfile?.(session.partnerId)}
+              >
+                {session.isAnonymous ? 'Anonymous' : `@${session.partnerName}`}
+              </h3>
+              {!session.isAnonymous && (
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-black uppercase rounded-full">
+                  Friend
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] font-bold text-gray-400">
+              {session.isAnonymous ? '🎭 Ghost Mode' : '👤 Friend Chat'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          {session.isAnonymous && !session.isRevealed && (
+            <button className="px-4 py-2 bg-accent text-white rounded-full text-[11px] font-black uppercase tracking-widest hover:scale-105 shadow-lg transition-all">
+              Reveal
+            </button>
+          )}
+          <button
+            onClick={() => setCurrentSessionId(null)}
+            className="text-gray-400 hover:text-black transition-colors font-black text-[11px] uppercase tracking-widest"
+          >
+            Close
+          </button>
         </div>
       </header>
 
-      {!currentSessionId ? (
-        <div className="grid lg:grid-cols-12 gap-12">
-          {/* Match Portal */}
-          <div className="lg:col-span-7 bg-white p-12 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-12">
-            <div className="space-y-3">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Sync Mode</h4>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setIsAnonymousMatch(true)}
-                  className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${isAnonymousMatch ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
-                >
-                  <span className="text-xl">🎭</span>
-                  <span className="text-[11px] font-black uppercase tracking-widest">Anonymous</span>
-                </button>
-                <button
-                  onClick={() => setIsAnonymousMatch(false)}
-                  className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${!isAnonymousMatch ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
-                >
-                  <span className="text-xl">👤</span>
-                  <span className="text-[11px] font-black uppercase tracking-widest">Public</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Role Selector */}
-            <div className="space-y-4">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Your Role</h4>
-              <div className="grid grid-cols-3 gap-3">
-                {ROLE_DATA.map(r => (
-                  <button
-                    key={r.value}
-                    onClick={() => setSelectedRole(r.value)}
-                    className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 ${selectedRole === r.value ? 'border-accent bg-accent/5 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
-                  >
-                    <span className="text-2xl">{r.emoji}</span>
-                    <span className="text-[11px] font-black uppercase tracking-widest">{r.label}</span>
-                    <span className="text-[9px] text-gray-400 font-bold">{r.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Support Need Selector */}
-            <div className="space-y-4">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">What Do You Need?</h4>
-              <div className="flex flex-wrap gap-2">
-                {NEED_DATA.map(n => (
-                  <button
-                    key={n.value}
-                    onClick={() => setSelectedNeed(n.value)}
-                    className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedNeed === n.value ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-500 hover:border-black/10'}`}
-                  >
-                    <span>{n.emoji}</span>
-                    <span className="text-[12px] font-black uppercase tracking-widest">{n.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Emotion/Resonance Selector */}
-            <div className="space-y-4">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Set Your Resonance</h4>
-              <div className="flex flex-wrap gap-2">
-                {MOOD_DATA.map(m => (
-                  <button
-                    key={m.label}
-                    onClick={() => setSelectedMood(m)}
-                    className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedMood.label === m.label ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
-                  >
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: selectedMood.label === m.label ? '#ffffff' : m.color }}></div>
-                    <span className="text-[12px] font-black uppercase tracking-widest">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Intensity Slider */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Intensity</h4>
-                <span className="text-[11px] font-black uppercase tracking-widest text-gray-400">
-                  {selectedIntensity === 1 ? 'Very Low' : selectedIntensity === 2 ? 'Low' : selectedIntensity === 3 ? 'Moderate' : selectedIntensity === 4 ? 'High' : 'Very High'}
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                {[1, 2, 3, 4, 5].map(level => (
-                  <button
-                    key={level}
-                    onClick={() => setSelectedIntensity(level)}
-                    className={`flex-1 h-10 rounded-xl transition-all ${selectedIntensity >= level ? 'bg-accent shadow-inner' : 'bg-gray-100 hover:bg-gray-200'}`}
-                    style={{ opacity: selectedIntensity >= level ? 0.4 + (level * 0.15) : 1 }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Topic Selector */}
-            <div className="space-y-4">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Topic (Optional)</h4>
-              <div className="flex flex-wrap gap-2">
-                {TOPIC_DATA.map(t => (
-                  <button
-                    key={t.value}
-                    onClick={() => setSelectedTopic(t.value)}
-                    className={`inline-flex items-center space-x-1.5 px-3 py-2 rounded-full border transition-all active:scale-95 text-[11px] ${selectedTopic === t.value ? 'border-accent bg-accent/10 text-accent shadow-sm' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
-                  >
-                    <span>{t.emoji}</span>
-                    <span className="font-black uppercase tracking-wider">{t.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-4">
-              <button
-                onClick={startMatching}
-                disabled={!userId}
-                className="w-full py-5 bg-accent text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:opacity-90 transition-all flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span>Find Echoes</span>
-                <span className="text-xl">⚡</span>
-              </button>
-            </div>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+        {session.messages.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-gray-400 font-bold">Start the conversation!</p>
           </div>
-
-          {/* Right Column: Friends + Connections */}
-          <div className="lg:col-span-5 space-y-8">
-            {/* Mutual Friends Section */}
-            <div className="bg-white p-6 rounded-[2rem] border border-black/[0.03] shadow-sm">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300 mb-4">Friends Online</h4>
-              {isLoadingFriends ? (
-                <div className="flex justify-center py-4">
-                  <div className="w-6 h-6 border-2 border-gray-200 border-t-accent rounded-full animate-spin"></div>
+        ) : (
+          session.messages.map(m => (
+            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className="space-y-2 max-w-[70%]">
+                <div className={`p-4 rounded-[1.5rem] font-bold text-sm leading-relaxed shadow-lg ${m.role === 'user' ? 'bg-black text-white rounded-br-none' : 'bg-gray-50 text-gray-800 rounded-bl-none border border-black/5'}`}>
+                  {m.text}
                 </div>
-              ) : mutualFriends.length === 0 ? (
-                <p className="text-gray-400 text-sm font-bold text-center py-4">
-                  No mutual friends yet. Follow someone who follows you back!
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {mutualFriends.map(friend => (
-                    <button
-                      key={friend.id}
-                      onClick={() => startChatWithFriend(friend)}
-                      className="group flex flex-col items-center space-y-2 p-3 rounded-2xl hover:bg-gray-50 transition-all"
-                      title={`Chat with @${friend.username}`}
-                    >
-                      <div className="relative">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center text-2xl shadow-sm border-2 border-white group-hover:scale-110 transition-transform">
-                          {friend.avatar || '👤'}
-                        </div>
-                        {/* Online indicator */}
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 truncate max-w-[60px]">
-                        {friend.nickname || friend.username}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+                {m.role === 'peer' && m.emotionAnalysis && (
+                  <div className="float-left">
+                    <EmotionGradientBar
+                      primaryEmotion={m.emotionAnalysis.primary_emotion}
+                      primaryPercentage={m.emotionAnalysis.primary_percentage}
+                      primaryColor={m.emotionAnalysis.primary_color}
+                      secondaryEmotion={m.emotionAnalysis.secondary_emotion}
+                      secondaryPercentage={m.emotionAnalysis.secondary_percentage}
+                      secondaryColor={m.emotionAnalysis.secondary_color}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
 
-            {/* Sync Connections List */}
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300 px-4">Synchronized Echoes</h4>
-            <div className="space-y-4">
-              {sessions.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-400 font-bold">No connections yet. Start matching!</p>
-                </div>
-              ) : (
-                sessions.map(session => (
-                  <button
-                    key={session.id}
-                    onClick={() => setCurrentSessionId(session.id)}
-                    className="w-full p-6 bg-white rounded-[2rem] border border-black/[0.03] shadow-sm hover:shadow-xl transition-all flex items-center space-x-6 text-left group"
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-inner border-2 border-white group-hover:rotate-6 transition-transform ${session.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'}`}
-                      style={{ borderColor: session.moodColor + '40' }}
-                    >
-                      {session.partnerAvatar}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-0.5">
-                        <div className="flex items-center space-x-2">
-                          <p className="text-sm font-black uppercase tracking-tight text-gray-800 truncate">
-                            {session.isAnonymous ? '🎭 Anonymous' : `@${session.partnerName}`}
-                          </p>
-                          {!session.isAnonymous && (
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-black uppercase rounded-full">
-                              Friend
-                            </span>
-                          )}
-                        </div>
-                        <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-green-500"></span>
-                      </div>
-                      <p className="text-[13px] font-black uppercase text-gray-300 tracking-[0.1em] truncate">{session.lastMessage}</p>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
+      {/* Input Area */}
+      <div className="p-4 border-t border-black/5 bg-white">
+        <div className="flex items-center space-x-3">
+          <input
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Transmit into the sync..."
+            className="flex-1 h-14 bg-gray-50 rounded-[1.2rem] px-6 border-none focus:ring-2 focus:ring-black text-sm font-bold transition-all placeholder:text-gray-300"
+          />
+          <button onClick={sendPeerMessage} disabled={!chatInput.trim()} className="w-14 h-14 bg-black text-white rounded-[1.2rem] flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+          </button>
         </div>
-      ) : (
-        <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5 flex">
-          {/* Session Sidebar */}
-          <div className="w-24 bg-gray-50 border-r border-black/5 flex flex-col items-center py-8 space-y-6">
-            {sessions.map(s => (
-              <button
-                key={s.id}
-                onClick={() => setCurrentSessionId(s.id)}
-                title={s.isAnonymous ? 'Anonymous Chat' : `@${s.partnerName}`}
-                className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-md relative ${currentSessionId === s.id ? 'bg-black text-white scale-110' : s.isAnonymous ? 'bg-purple-100 hover:bg-purple-200' : 'bg-blue-100 hover:bg-blue-200'}`}
-              >
-                {s.partnerAvatar}
-                {/* Friend badge indicator */}
-                {!s.isAnonymous && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center">
-                    <span className="text-[8px] text-white">✓</span>
-                  </span>
-                )}
-              </button>
-            ))}
-            <button
-              onClick={() => setCurrentSessionId(null)}
-              className="w-14 h-14 rounded-2xl bg-accent text-white flex items-center justify-center text-xl shadow-lg hover:scale-110 transition-transform"
-            >
-              +
-            </button>
-          </div>
+      </div>
+    </div>
+  )
 
-          {/* Chat Window */}
-          {currentSession && (
-            <div className="flex-1 flex flex-col">
-              <header className="p-6 border-b border-black/5 flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center text-3xl shadow-inner border-2 border-white ${currentSession.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'} ${!currentSession.isAnonymous ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
-                    style={{ borderColor: currentSession.moodColor + '40' }}
-                    onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
-                  >
-                    {currentSession.partnerAvatar}
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h3
-                        className={`font-black text-sm uppercase ${!currentSession.isAnonymous ? 'cursor-pointer hover:underline' : ''}`}
-                        onClick={() => !currentSession.isAnonymous && onViewProfile?.(currentSession.partnerId)}
-                      >
-                        {currentSession.isAnonymous ? 'Anonymous' : `@${currentSession.partnerName}`}
-                      </h3>
-                      {!currentSession.isAnonymous && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-black uppercase rounded-full">
-                          Friend
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[13px] font-black uppercase text-gray-300 tracking-widest">
-                      {currentSession.isAnonymous ? '🎭 Ghost Mode' : '👤 Friend Chat'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  {/* VIP Emotion Analysis is now triggered by clicking the floating Avatar */}
-                  {currentSession.isAnonymous && !currentSession.isRevealed && (
-                    <button className="px-5 py-2.5 bg-accent text-white rounded-full text-[12px] font-black uppercase tracking-widest hover:scale-105 shadow-xl transition-all">
-                      Reveal Echo
-                    </button>
-                  )}
-                  <button onClick={() => setCurrentSessionId(null)} className="text-gray-300 hover:text-black transition-colors font-black text-xs uppercase tracking-widest">
-                    Disconnect
-                  </button>
-                </div>
-              </header>
-
-              <div className="flex-1 overflow-y-auto p-10 space-y-8 scrollbar-hide">
-                {currentSession.messages.length === 0 ? (
-                  <div className="text-center py-20">
-                    <p className="text-gray-400 font-bold">Start the conversation!</p>
-                  </div>
-                ) : (
-                  currentSession.messages.map(m => (
-                    <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className="space-y-2 max-w-[70%]">
-                        <div className={`p-5 rounded-[1.8rem] font-bold text-sm leading-relaxed shadow-lg ${m.role === 'user' ? 'bg-black text-white rounded-br-none' : 'bg-gray-50 text-gray-800 rounded-bl-none border border-black/5'}`}>
-                          {m.text}
-                        </div>
-                        <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-black/5 text-[12px] font-black uppercase tracking-widest text-gray-400 ${m.role === 'user' ? 'float-right' : 'float-left'}`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getEmotionColor(m.emotion) }}></span>
-                          <span>{m.emotion}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              <div className="p-6 border-t border-black/5 bg-white">
-                <div className="flex items-center space-x-4">
-                  <input
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Transmit into the sync..."
-                    className="flex-1 h-16 bg-gray-50 rounded-[1.5rem] px-8 border-none focus:ring-2 focus:ring-black text-sm font-bold transition-all placeholder:text-gray-300"
-                  />
-                  <button onClick={sendPeerMessage} disabled={!chatInput.trim()} className="w-16 h-16 bg-black text-white rounded-[1.5rem] flex items-center justify-center shadow-2xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
-                  </button>
-                </div>
-              </div>
+  // 渲染会话列表项内联
+  const renderConversationItem = (session: PeerSession, isActive: boolean) => (
+    <button
+      key={session.id}
+      onClick={() => setCurrentSessionId(session.id)}
+      className={`w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-all text-left border-b border-black/5
+        ${isActive ? 'bg-accent/5 border-l-4 border-l-accent' : ''}`}
+    >
+      <div className="relative flex-shrink-0">
+        <div className="w-12 h-12 rounded-xl overflow-hidden">
+          {session.partnerAvatar && session.partnerAvatar.length > 2 ? (
+            <img src={getAvatarUrl(session.partnerAvatar)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className={`w-full h-full flex items-center justify-center text-2xl ${session.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'}`}>
+              {session.partnerAvatar || '👤'}
             </div>
           )}
         </div>
-      )}
+        <OnlineIndicator isOnline={session.isOnline || false} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <p className="font-black text-sm truncate">
+            {session.isAnonymous ? '🎭 Anonymous' : `@${session.partnerName}`}
+          </p>
+          {!session.isAnonymous && (
+            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 text-[8px] font-black uppercase rounded">
+              Friend
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 truncate">{session.lastMessage}</p>
+      </div>
+    </button>
+  )
 
-      {/* VIP Emotion Analysis Modal */}
-      {showEmotionAnalysis && avatar && currentSession && createPortal(
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
-          onClick={() => closeEmotionAnalysis()}
-        >
-          <div
-            className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header with Avatar */}
-            <div
-              className="p-6 flex items-center justify-between"
-              style={{ background: `linear-gradient(135deg, ${avatar.color}20 0%, ${avatar.color}05 100%)` }}
-            >
-              <div className="flex items-center space-x-4">
-                <div
-                  className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
-                  style={{ background: `${avatar.color}30` }}
-                >
-                  <ModelViewer3D
-                    modelPath={avatar.modelPath}
-                    avatarName={avatar.name}
-                    avatarColor={avatar.color}
-                    size="small"
-                    exposure={avatar.exposure}
-                    environmentImage={avatar.environmentImage}
-                    shadowIntensity={0}
-                  />
-                </div>
-                <div>
-                  <h3 className="font-black text-lg uppercase" style={{ color: avatar.color }}>{avatar.name}'s Analysis</h3>
-                  <p className="text-[11px] font-black uppercase text-gray-400 tracking-widest">VIP Emotion Insights</p>
-                </div>
-              </div>
-              <button
-                onClick={() => closeEmotionAnalysis()}
-                className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
+  // 渲染好友列表项内联
+  const renderFriendItem = (friend: FriendWithOnlineStatus) => (
+    <button
+      key={friend.id}
+      onClick={() => startChatWithFriend(friend)}
+      className="w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-all text-left border-b border-black/5"
+    >
+      <div className="relative flex-shrink-0">
+        <div className="w-12 h-12 rounded-xl overflow-hidden">
+          {friend.avatar && friend.avatar.length > 2 ? (
+            <img src={getAvatarUrl(friend.avatar)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-blue-50 flex items-center justify-center text-2xl">
+              {friend.avatar || '👤'}
             </div>
+          )}
+        </div>
+        <OnlineIndicator isOnline={friend.isOnline} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="font-black text-sm truncate">@{friend.username}</p>
+          {friend.isOnline && (
+            <span className="text-[10px] font-bold text-green-500 uppercase">Online</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 truncate">{friend.nickname || 'Send a message'}</p>
+      </div>
+    </button>
+  )
 
-            {/* Analysis Content */}
-            <div className="p-6 space-y-6">
-              {/* Analyzed Messages Count */}
-              <div className="text-center p-4 bg-gray-50 rounded-2xl">
-                <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                  Based on recent messages
-                </p>
-                <p className="text-2xl font-black">
-                  {Math.min(currentSession.messages.length, 20)} / 20
-                </p>
-              </div>
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Header with Tabs */}
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-3">
+          <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">SoulSync</h2>
+          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Direct emotional synchronization</p>
+        </div>
 
-              {/* Coming Soon Notice */}
-              <div className="text-center py-8 space-y-4">
-                <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-yellow-400 via-orange-500 to-pink-500 flex items-center justify-center shadow-xl">
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 6v6l4 2" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-xl font-black uppercase tracking-tight">Coming Soon</h4>
-                  <p className="text-gray-400 font-bold text-sm mt-2">
-                    Advanced context-aware emotion analysis is being developed.
-                  </p>
-                </div>
+        {/* Tab Switcher */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl">
+          <button
+            onClick={() => setActiveTab('matching')}
+            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all
+              ${activeTab === 'matching' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-accent'}`}
+          >
+            Matching
+          </button>
+          <button
+            onClick={() => setActiveTab('social')}
+            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all relative
+              ${activeTab === 'social' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-accent'}`}
+          >
+            Social
+            {sessions.length > 0 && activeTab !== 'social' && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-white text-[10px] font-black rounded-full flex items-center justify-center">
+                {sessions.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </header>
 
-                {/* Preview of what's coming */}
-                <div className="mt-6 space-y-3 text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-300 text-center">
-                    What to expect
-                  </p>
-                  <div className="grid gap-2">
-                    {[
-                      { icon: '📊', text: 'Overall mood trajectory' },
-                      { icon: '🎯', text: 'Key emotions detected' },
-                      { icon: '💡', text: 'Suggested responses' },
-                      { icon: '🔍', text: 'Conversation insights' }
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
-                        <span className="text-lg">{item.icon}</span>
-                        <span className="text-sm font-bold text-gray-600">{item.text}</span>
-                      </div>
-                    ))}
+      {/* Content */}
+      {activeTab === 'matching' ? (
+        <MatchingContent />
+      ) : (
+        /* Social 三栏布局 - 直接内联渲染避免组件重建导致 input 失焦 */
+        <div className="h-[700px] bg-white rounded-[3rem] shadow-xl overflow-hidden border border-black/5 flex">
+          {/* 左侧栏 - 类别导航 */}
+          <div className="w-20 bg-gray-50 border-r border-black/5 flex flex-col items-center py-6 space-y-4">
+            {/* 当前用户头像 */}
+            <div className="w-14 h-14 rounded-2xl overflow-hidden bg-accent/10 flex items-center justify-center">
+              {userAvatar ? (
+                <img src={getAvatarUrl(userAvatar)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl">👤</span>
+              )}
+            </div>
+            <div className="w-8 h-[1px] bg-gray-200" />
+
+            {/* 类别按钮 */}
+            <button
+              onClick={() => setSocialCategory('chats')}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${socialCategory === 'chats' ? 'bg-accent text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+              title="Chats"
+            >
+              <span className="text-xl">💬</span>
+            </button>
+            <button
+              onClick={() => setSocialCategory('friends')}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${socialCategory === 'friends' ? 'bg-accent text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+              title="Friends"
+            >
+              <span className="text-xl">👥</span>
+            </button>
+          </div>
+
+          {/* 中间栏 - 会话/好友列表 */}
+          <div className="w-80 border-r border-black/5 flex flex-col">
+            <div className="p-4 border-b border-black/5">
+              <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
+                {socialCategory === 'chats' ? 'Synchronized Echoes' : 'Friends Online'}
+              </h3>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {socialCategory === 'chats' ? (
+                sessions.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <p className="text-gray-400 font-bold text-sm">No conversations yet</p>
+                    <p className="text-gray-300 text-xs mt-2">Start matching to connect!</p>
+                  </div>
+                ) : (
+                  sessions.map(session => renderConversationItem(session, currentSessionId === session.id))
+                )
+              ) : (
+                isLoadingFriends ? (
+                  <div className="flex justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-gray-200 border-t-accent rounded-full animate-spin" />
+                  </div>
+                ) : mutualFriends.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <p className="text-gray-400 font-bold text-sm">No friends yet</p>
+                    <p className="text-gray-300 text-xs mt-2">Follow someone who follows you back!</p>
+                  </div>
+                ) : (
+                  mutualFriends.map(friend => renderFriendItem(friend))
+                )
+              )}
+            </div>
+          </div>
+
+          {/* 右侧栏 - 聊天详情 */}
+          <div className="flex-1 flex flex-col">
+            {currentSession ? (
+              renderChatDetail(currentSession)
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center space-y-4">
+                  <div className="w-24 h-24 mx-auto rounded-3xl bg-gray-50 flex items-center justify-center">
+                    <span className="text-5xl">💬</span>
+                  </div>
+                  <div>
+                    <p className="font-black text-gray-800 uppercase tracking-tight">Select a Chat</p>
+                    <p className="text-gray-400 text-sm font-bold mt-1">Choose a conversation from the list</p>
                   </div>
                 </div>
               </div>
-
-              {/* Close Button */}
-              <button
-                onClick={() => closeEmotionAnalysis()}
-                className="w-full py-4 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors"
-              >
-                Got It
-              </button>
-            </div>
+            )}
           </div>
-        </div>,
-        document.body
+        </div>
       )}
+
+      {/* Avatar Assistant Modal - REMOVED, now using AssistantBubble in AvatarCompanion */}
     </div>
   )
 }

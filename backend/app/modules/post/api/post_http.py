@@ -131,7 +131,8 @@ async def create_post(
         visibility=post_data.visibility.value,
         tags=post_data.tags,
         emotion=post_data.emotion,
-        ai_emotion=ai_emotion
+        ai_emotion=ai_emotion,
+        title=post_data.title
     )
     
     print(f"[Post] Created post {post['id']} by user {post_data.author_id} (anonymous: {post_data.is_anonymous})")
@@ -144,6 +145,48 @@ async def create_post(
         print(f"[Points] Failed to award points: {e}")
 
     return PostOut(**post)
+
+
+@router.get("/following", response_model=PostListResponse)
+async def get_following_posts(
+    user_id: str = Query(..., description="Current user ID"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=50, description="Posts per page"),
+    repo: PostRepository = Depends(get_post_repo)
+):
+    """
+    Get posts from users that the current user follows
+
+    GET /api/posts/following?user_id=xxx&page=1&page_size=20
+
+    Query Parameters:
+    - user_id: Current user ID (required)
+    - page: Page number (default: 1)
+    - page_size: Posts per page (default: 20, max: 50)
+
+    Response:
+    {
+        "posts": [...],
+        "total": 50,
+        "page": 1,
+        "page_size": 20,
+        "has_more": true
+    }
+    """
+    result = await repo.get_following_posts(
+        user_id=user_id,
+        page=page,
+        page_size=page_size,
+        viewer_id=user_id
+    )
+
+    return PostListResponse(
+        posts=[PostOut(**p) for p in result["posts"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        has_more=result["has_more"]
+    )
 
 
 @router.get("", response_model=PostListResponse)

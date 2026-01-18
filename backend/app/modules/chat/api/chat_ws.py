@@ -40,11 +40,11 @@ manager = ConnectionManager()
 # ============================================================================
 
 @router.websocket("/ws/rooms/{room_id}")
-async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
+async def websocket_chat_endpoint(websocket: WebSocket, room_id: str, user_id: str = None):
     """
     WebSocket endpoint for real-time chat
 
-    ENDPOINT: WS /ws/rooms/123
+    ENDPOINT: WS /ws/rooms/123?user_id=xxx
 
     CONNECTION FLOW:
     1. Client connects → manager.connect()
@@ -92,11 +92,16 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
 
     # Convert room_id to string for ConnectionManager
     room_id_str = str(room_id)
+    user_id_str = str(user_id) if user_id else None
 
     # ========================================================================
     # STEP 1: Accept WebSocket connection
     # ========================================================================
-    await manager.connect(room_id_str, websocket)
+    await manager.connect(room_id_str, websocket, user_id_str)
+
+    # Broadcast user online status to the room
+    if user_id_str:
+        await manager.broadcast_user_status_to_room(room_id_str, user_id_str, "online")
 
     try:
         # ====================================================================
@@ -116,52 +121,72 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                 # ============================================================
                 # STEP 2.4: AI Emotion Analysis (BEFORE saving message)
                 # ============================================================
-                # Analyze emotion first so it can be saved with the message
+                # Analyze emotion using EmotionService which returns dual emotions with percentages
                 emotion_result = None
-                data_points = None
+                emotion_analysis = None  # 双情绪分析结果
                 if message_create.message_type.value == "text" and message_create.content:
                     try:
-                        import importlib.util
-                        from google import genai
-                        
-                        # 动态导入 genai/app 模块
-                        genai_app_path = Path(__file__).resolve().parents[5] / "genai" / "app"
-                        
-                        # 导入 model
-                        model_spec = importlib.util.spec_from_file_location(
-                            "model", genai_app_path / "model.py"
-                        )
-                        model_module = importlib.util.module_from_spec(model_spec)
-                        model_spec.loader.exec_module(model_module)
-                        
-                        # 导入 weaviate_client
-                        weaviate_spec = importlib.util.spec_from_file_location(
-                            "weaviate_client", genai_app_path / "weaviate_client.py"
-                        )
-                        weaviate_module = importlib.util.module_from_spec(weaviate_spec)
-                        weaviate_spec.loader.exec_module(weaviate_module)
-                        WeaviateManager = weaviate_module.WeaviateManager
-                        
-                        # 导入 emotion_analytics
-                        analytics_spec = importlib.util.spec_from_file_location(
-                            "emotion_analytics", genai_app_path / "emotion_analytics.py"
-                        )
-                        analytics_module = importlib.util.module_from_spec(analytics_spec)
-                        analytics_spec.loader.exec_module(analytics_module)
-                        EmotionAnalytics = analytics_module.EmotionAnalytics
-                        
-                        # 初始化 Gemini 客户端和 WeaviateManager
-                        gemini_api_key = os.getenv("GEMINI_API_KEY")
-                        gemini_client = genai.Client(api_key=gemini_api_key)
-                        
-                        weaviate_manager = WeaviateManager()
-                        analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
-                        # 构造单条对话格式
-                        conversations = [{"timestamp": "", "userQuery": message_create.content}]
-                        data_points = analytics.analyze_emotions_from_text(conversations)
-                        if data_points:
-                            emotion_result = data_points[0].emotion
-                            print(f"[AI] Emotion analyzed: {emotion_result}")
+                        from app.modules.ai.core.emotion import EmotionService
+                        import re
+
+                        # 情绪颜色映射
+                        EMOTION_COLORS = {
+                            'anxiety': '#E67E22',
+                            'sadness': '#3266B1',
+                            'fatigue': '#4B4E91',
+                            'happiness': '#F9D849',
+                            'calm': '#2BA8A4',
+                            'anger': '#D32F2F',
+                            'confusion': '#D278A3',
+                            # 兼容其他情绪名称
+                            'bored': '#4B4E91',
+                            'fear': '#9381BA',
+                            'joy': '#F9D849',
+                            'disgust': '#66B04C',
+                            'embarrassment': '#D278A3',
+                            'envy': '#2BA8A4',
+                        }
+
+                        emotion_service = EmotionService()
+                        # 返回格式: "Emotion1: X%, Emotion2: Y%"
+                        raw_result = await emotion_service.analyze_emotion(message_create.content)
+                        print(f"[AI] Raw emotion result: {raw_result}")
+
+                        # 解析双情绪格式: "Happiness: 80%, Calm: 20%"
+                        pattern = r'(\w+):\s*(\d+)%'
+                        matches = re.findall(pattern, raw_result)
+
+                        if len(matches) >= 2:
+                            primary_emotion = matches[0][0].lower()
+                            primary_percentage = int(matches[0][1]) / 100.0
+                            secondary_emotion = matches[1][0].lower()
+                            secondary_percentage = int(matches[1][1]) / 100.0
+
+                            emotion_analysis = {
+                                'primary_emotion': primary_emotion,
+                                'primary_percentage': primary_percentage,
+                                'primary_color': EMOTION_COLORS.get(primary_emotion, '#808080'),
+                                'secondary_emotion': secondary_emotion,
+                                'secondary_percentage': secondary_percentage,
+                                'secondary_color': EMOTION_COLORS.get(secondary_emotion, '#808080'),
+                            }
+                            # 向后兼容：保留主情绪作为 emotion_result
+                            emotion_result = primary_emotion
+                            print(f"[AI] Dual emotions: {primary_emotion} ({primary_percentage*100:.0f}%) + {secondary_emotion} ({secondary_percentage*100:.0f}%)")
+                        elif len(matches) == 1:
+                            # 只有一个情绪时，次要情绪设为 calm
+                            primary_emotion = matches[0][0].lower()
+                            primary_percentage = int(matches[0][1]) / 100.0
+                            emotion_analysis = {
+                                'primary_emotion': primary_emotion,
+                                'primary_percentage': primary_percentage,
+                                'primary_color': EMOTION_COLORS.get(primary_emotion, '#808080'),
+                                'secondary_emotion': 'calm',
+                                'secondary_percentage': 1.0 - primary_percentage,
+                                'secondary_color': EMOTION_COLORS.get('calm', '#808080'),
+                            }
+                            emotion_result = primary_emotion
+
                     except Exception as e:
                         print(f"[AI] Emotion analysis failed: {e}")
                         import traceback
@@ -181,46 +206,11 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                     content=message_create.content,
                     message_type=message_create.message_type.value,
                     media_url=message_create.media_url,
-                    emotion=emotion_result
+                    emotion=None,  # Deprecated: use emotion_analysis instead
+                    emotion_analysis=emotion_analysis  # Dual emotion analysis with percentages
                 )
 
-                # ============================================================
-                # STEP 2.6: Save emotion data to Weaviate (AFTER message is saved)
-                # ============================================================
-                if emotion_result and data_points and weaviate_manager:
-                    try:
-                        # 使用 EmotionConversationRecord 数据类型
-                        EmotionConversationRecord = model_module.EmotionConversationRecord
-                        
-                        # 获取时间戳
-                        created_at = saved_message.get("created_at", "")
-                        if hasattr(created_at, "isoformat"):
-                            timestamp_str = created_at.isoformat()
-                        else:
-                            timestamp_str = str(created_at)
-                        
-                        # 创建情绪记录对象
-                        emotion_record = EmotionConversationRecord(
-                            user_id1=str(message_create.sender_id),
-                            user_id2="",  # 对于单条消息，userId2 为空
-                            timestamp=timestamp_str,
-                            user_query=message_create.content,
-                            emotion=emotion_result,
-                            intensity=data_points[0].intensity,
-                            sentiment_score=data_points[0].sentiment_score,
-                            trigger_context=data_points[0].trigger_context,
-                            message_id=str(saved_message.get("id", "")),  # 使用 "id" 而不是 "_id"
-                            session_id=room_id
-                        )
-                        
-                        # 保存到 Weaviate Conversations collection
-                        success = weaviate_manager.write_data("Conversations", [emotion_record.to_weaviate_dict()])
-                        if success:
-                            print(f"[Weaviate] Emotion data saved for message {emotion_record.message_id}")
-                        else:
-                            print(f"[Weaviate] Failed to save emotion data for message {emotion_record.message_id}")
-                    except Exception as e:
-                        print(f"[Weaviate] Failed to save emotion data: {e}")
+                # Note: Weaviate storage removed - using simplified EmotionService
 
                 # Create MessageOut with real message ID (emotion already included)
                 message_out: MessageOut = MessageOut(**saved_message)
@@ -232,9 +222,13 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                 message_dict = message_out.model_dump()
                 message_dict['created_at'] = message_out.created_at.isoformat()
                 
-                # Add emotion color based on analyzed emotion
-                if emotion_result:
-                    # 情绪颜色映射
+                # Add dual emotion analysis to broadcast
+                if emotion_analysis:
+                    message_dict['emotion_analysis'] = emotion_analysis
+                    # 向后兼容：保留 emotion_color
+                    message_dict['emotion_color'] = emotion_analysis['primary_color']
+                elif emotion_result:
+                    # Fallback: 只有单情绪时
                     EMOTION_COLORS = {
                         'bored': '#4B4E91',
                         'fear': '#9381BA',
@@ -245,6 +239,10 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                         'anger': '#D32F2F',
                         'embarrassment': '#D278A3',
                         'envy': '#2BA8A4',
+                        'happiness': '#F9D849',
+                        'calm': '#2BA8A4',
+                        'fatigue': '#4B4E91',
+                        'confusion': '#D278A3',
                     }
                     message_dict['emotion_color'] = EMOTION_COLORS.get(emotion_result.lower(), '#808080')
                     print(f"[AI] Emotion: {emotion_result}, Color: {message_dict['emotion_color']}")
@@ -275,7 +273,13 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str):
                 })
 
     except WebSocketDisconnect:
+        # Disconnect first, then check if user has other connections
         await manager.disconnect(room_id_str, websocket)
+
+        # Broadcast user offline status after disconnecting
+        # Only broadcast offline if user has no other active connections
+        if user_id_str and not manager.is_user_online(user_id_str):
+            await manager.broadcast_user_status_to_room(room_id_str, user_id_str, "offline")
         print(f"[WebSocket] Client disconnected from room {room_id}")
 
         try:

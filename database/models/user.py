@@ -33,6 +33,7 @@ class User(BaseModel):
     nickname: str = Field(..., description="昵称（匿名展示）")
     age: Optional[int] = Field(None, ge=13, le=100)
     gender: Optional[str] = Field(None, description="male/female/other/prefer_not_to_say")
+    bio: Optional[str] = Field(default="", max_length=500, description="用户简介")
     
     # MBTI
     mbti: MBTIProfile = Field(default_factory=MBTIProfile)
@@ -45,7 +46,7 @@ class User(BaseModel):
     level: int = Field(default=1, description="用户等级")
     
     # 个性化
-    avatar: str = Field(default="🦊", description="用户头像 emoji")
+    avatar: str = Field(default="sunny_female", description="用户头像 ID")
     avatar_url: Optional[str] = None
     unlocked_avatars: List[str] = Field(default_factory=list)
     unlocked_ai_styles: List[str] = Field(default_factory=list)

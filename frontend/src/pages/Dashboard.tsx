@@ -5,18 +5,18 @@ import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
 import EmotionReportModal from '../components/EmotionReportModal'
+import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D } from '../config/avatars'
+import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatars'
 import CommunityView from './community/CommunityView'
+import PostDetailModal from './community/components/PostDetailModal'
 import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences, getMediaUrl } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
-
-// Avatar emoji options for user selection
-const AVATAR_OPTIONS = ['🦊', '🐱', '🐶', '🐼', '🦁', '🐯', '🐸', '🦄', '🐲', '🦋', '🌸', '⭐']
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -66,6 +66,12 @@ export default function Dashboard() {
   const [selectedJournalModal, setSelectedJournalModal] = useState<DiaryEntry | null>(null)
   const [selectedPostModal, setSelectedPostModal] = useState<Post | null>(null)
 
+  // Delete confirmation modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: 'post' | 'journal'
+    id: string
+  } | null>(null)
+
   // Today's check-in status
   const [todayCheckIn, setTodayCheckIn] = useState<{ mood: string; color: string; text: string } | null>(null)
 
@@ -76,7 +82,7 @@ export default function Dashboard() {
   const [settingsPassword, setSettingsPassword] = useState('')
   const [settingsEmail, setSettingsEmail] = useState('')
   const [settingsBio, setSettingsBio] = useState('')
-  const [settingsAvatar, setSettingsAvatar] = useState('🦊')
+  const [settingsAvatar, setSettingsAvatar] = useState(DEFAULT_AVATAR)
   const [settingsAge, setSettingsAge] = useState<number>()
   const [settingsGender, setSettingsGender] = useState('')
   const [settingsMbti, setSettingsMbti] = useState<MBTIProfile>()
@@ -84,7 +90,7 @@ export default function Dashboard() {
   const [settingsSaving, setSettingsSaving] = useState(false)
 
   // User avatar state
-  const [userAvatar, setUserAvatar] = useState('🦊')
+  const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR)
 
   // User profile modal state (for viewing other users)
   const [viewingUserId, setViewingUserId] = useState<string | null>(null)
@@ -92,11 +98,20 @@ export default function Dashboard() {
   // Follow list modal state
   const [followListType, setFollowListType] = useState<'following' | 'followers' | null>(null)
 
-  // SoulSync emotion analysis state (triggered by Avatar click)
-  const [showEmotionAnalysis, setShowEmotionAnalysis] = useState(false)
+  // Assistant Bubble state (triggered by Avatar click)
+  const [showAssistantBubble, setShowAssistantBubble] = useState(false)
 
   // Track if user is in a peer chat session (for VIP hint display)
   const [hasActiveSession, setHasActiveSession] = useState(false)
+
+  // Track proactive hint from SoulSync (user typing pause)
+  const [showProactiveHint, setShowProactiveHint] = useState(false)
+
+  // Partner's last message for AssistantBubble response suggestions
+  const [partnerLastMessage, setPartnerLastMessage] = useState('')
+
+  // Text to inject into SoulSync chat input (from AssistantBubble)
+  const [chatInputFromBubble, setChatInputFromBubble] = useState<string | null>(null)
 
   // Emotion Report Modal state
   const [showEmotionReport, setShowEmotionReport] = useState(false)
@@ -156,6 +171,7 @@ export default function Dashboard() {
       aiChatApi.getDiaries(user._id)
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
+            id: d.id,
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
             title: d.title || `Journal - ${new Date(d.created_at).toLocaleDateString()}`,
             mood: d.mood || 'Neutral',
@@ -281,6 +297,7 @@ export default function Dashboard() {
       aiChatApi.getDiaries(user._id)
         .then((diaries: Diary[]) => {
           const entries: DiaryEntry[] = diaries.map(d => ({
+            id: d.id,
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
             title: d.title || `Journal - ${new Date(d.created_at).toLocaleDateString()}`,
             mood: d.mood || 'Neutral',
@@ -341,10 +358,10 @@ export default function Dashboard() {
     localStorage.removeItem('selectedAvatar')
   }
 
-  // Handle Avatar click based on current tab
+  // Handle Avatar click based on current tab - toggle bubble
   const handleAvatarClick = () => {
-    if (activeTab === 'soulsync') {
-      setShowEmotionAnalysis(true)
+    if (activeTab === 'soulsync' && hasActiveSession) {
+      setShowAssistantBubble(prev => !prev)
     }
   }
 
@@ -377,7 +394,7 @@ export default function Dashboard() {
       if (settingsEmail.trim() && settingsEmail !== user.email) {
         updateData.email = settingsEmail.trim()
       }
-      if (settingsBio.trim() && settingsBio !== user.bio) {
+      if (settingsBio !== user.bio) {
         updateData.bio = settingsBio.trim()
       }
       if (settingsAvatar !== userAvatar) {
@@ -461,7 +478,7 @@ export default function Dashboard() {
       case 'community':
         return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
       case 'soulsync':
-        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} onViewProfile={setViewingUserId} avatar={selectedAvatar} userLevel={level} showEmotionAnalysis={showEmotionAnalysis} onCloseEmotionAnalysis={() => setShowEmotionAnalysis(false)} onSessionChange={setHasActiveSession} />
+        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} userAvatar={user?.avatar} onViewProfile={setViewingUserId} avatar={selectedAvatar} userLevel={level} onSessionChange={setHasActiveSession} onProactiveHintChange={setShowProactiveHint} onPartnerMessageChange={setPartnerLastMessage} externalChatInput={chatInputFromBubble} onExternalChatInputConsumed={() => setChatInputFromBubble(null)} />
       default:
         return <PlaceholderView title={activeTab} />
     }
@@ -470,13 +487,7 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-[#FAFAFA] text-[#121212] overflow-hidden">
       <aside className="fixed left-0 top-0 h-screen w-20 md:w-24 bg-white border-r border-black/[0.03] flex flex-col items-center py-12 z-50 shadow-sm">
-        <div className="mb-16 cursor-pointer group" onClick={handleLogout}>
-          <div className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-all duration-500 shadow-xl">
-            <div className="w-2 h-2 bg-accent-soft rounded-full animate-pulse"></div>
-          </div>
-        </div>
-
-        <nav className="flex-1 flex flex-col space-y-10">
+        <nav className="flex-1 flex flex-col space-y-10 mt-4">
           <NavItem active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} icon={<ProfileIcon />} label="profile" />
           <NavItem active={activeTab === 'diary'} onClick={() => setActiveTab('diary')} icon={<DiaryIcon />} label="diary" />
           <NavItem active={activeTab === 'soulsync'} onClick={() => setActiveTab('soulsync')} icon={<ChatIcon />} label="chat" />
@@ -517,7 +528,15 @@ export default function Dashboard() {
           onClose={handleCloseCompanion}
           activeTab={activeTab}
           onClick={handleAvatarClick}
-          showVipHint={activeTab === 'soulsync' && hasActiveSession}
+          showVipHint={activeTab === 'soulsync' && hasActiveSession && !showAssistantBubble}
+          showProactiveHint={activeTab === 'soulsync' && showProactiveHint && !showAssistantBubble}
+          showAssistantBubble={showAssistantBubble}
+          onCloseBubble={() => setShowAssistantBubble(false)}
+          onSelectText={(text) => {
+            setChatInputFromBubble(text)
+            setShowAssistantBubble(false)
+          }}
+          partnerLastMessage={partnerLastMessage}
         />
       )}
 
@@ -560,16 +579,27 @@ export default function Dashboard() {
                     {selectedJournalModal.mood}
                   </div>
                 </div>
-                <button
-                  onClick={() => setSelectedJournalModal(null)}
-                  className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 hover:scale-110 active:scale-95 transition-all"
-                  style={{ color: txtColor }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* Delete button */}
+                  {selectedJournalModal.id && (
+                    <button
+                      onClick={() => setDeleteConfirm({ type: 'journal', id: selectedJournalModal.id! })}
+                      className="px-4 py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-[11px] font-bold uppercase tracking-wider transition-all"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedJournalModal(null)}
+                    className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 hover:scale-110 active:scale-95 transition-all"
+                    style={{ color: txtColor }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="overflow-y-auto max-h-[55vh] pr-4 scrollbar-hide" style={{ color: txtColor }}>
                 <p className="text-lg font-bold leading-relaxed whitespace-pre-wrap">{selectedJournalModal.text}</p>
@@ -579,73 +609,21 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* Post Detail Modal */}
-      {selectedPostModal && (() => {
-        const postMood = selectedPostModal.emotion || selectedPostModal.ai_emotion || 'Neutral'
-        const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === postMood.toLowerCase())
-        const bgColor = moodData?.color || '#4B4E91'
-        const txtColor = postMood === 'Joy' ? '#121212' : '#ffffff'
-        return (
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300"
-            style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)'
-            }}
-            onClick={() => setSelectedPostModal(null)}
-          >
-            <div
-              className="w-full max-w-2xl max-h-[85vh] rounded-[3rem] p-10 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden animate-in zoom-in-95 duration-500 border border-white/20"
-              style={{ backgroundColor: bgColor }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-start mb-8">
-                <div className="space-y-3">
-                  <span className="text-[12px] font-black uppercase tracking-widest opacity-70" style={{ color: txtColor }}>
-                    {new Date(selectedPostModal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                  <div className="inline-block px-5 py-2 rounded-full border border-white/30 text-[13px] font-black uppercase tracking-widest backdrop-blur-sm" style={{ color: txtColor, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                    {postMood}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedPostModal(null)}
-                  className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 hover:scale-110 active:scale-95 transition-all"
-                  style={{ color: txtColor }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              </div>
-              <div className="overflow-y-auto max-h-[45vh] pr-4 scrollbar-hide mb-6" style={{ color: txtColor }}>
-                <p className="text-lg font-bold leading-relaxed whitespace-pre-wrap">{selectedPostModal.content}</p>
-              </div>
-              {selectedPostModal.tags && selectedPostModal.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {selectedPostModal.tags.map((tag: string, i: number) => (
-                    <span key={i} className="px-3 py-1.5 rounded-full border border-white/20 text-xs font-bold backdrop-blur-sm" style={{ color: txtColor, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-center space-x-6 pt-4 border-t border-white/20">
-                <div className="flex items-center space-x-2">
-                  <span className="text-lg">❤️</span>
-                  <span className="text-sm font-black" style={{ color: txtColor }}>{selectedPostModal.like_count}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-lg">💬</span>
-                  <span className="text-sm font-black" style={{ color: txtColor }}>{selectedPostModal.comment_count}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      {/* Post Detail Modal - 使用与 Community 相同的组件 */}
+      <PostDetailModal
+        post={selectedPostModal}
+        isOpen={!!selectedPostModal}
+        onClose={() => setSelectedPostModal(null)}
+        onLike={(postId) => {
+          setUserPosts(prev => prev.map(p =>
+            p.id === postId ? { ...p, is_liked: !p.is_liked, like_count: p.is_liked ? p.like_count - 1 : p.like_count + 1 } : p
+          ))
+        }}
+        userId={user?._id}
+        onViewProfile={(userId) => setViewingUserId(userId)}
+        onPointsChanged={refreshPoints}
+        onDelete={(postId) => setDeleteConfirm({ type: 'post', id: postId })}
+      />
 
       {/* User Profile Modal (for viewing other users) */}
       {viewingUserId && (
@@ -673,7 +651,7 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Settings Modal */}
+      {/* Settings Modal - 横向两栏布局 */}
       {showSettings && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300"
@@ -685,10 +663,11 @@ export default function Dashboard() {
           onClick={() => setShowSettings(false)}
         >
           <div
-            className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500 max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-4xl bg-white rounded-[2.5rem] p-8 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center mb-8">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-black tracking-tight">Settings</h3>
               <button
                 onClick={() => setShowSettings(false)}
@@ -701,268 +680,220 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <div className="space-y-6">
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-2 gap-8">
+              {/* Left Column - Account Info */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-gray-300 mb-4">Account</h4>
 
-              {/* Username (read-only) */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={user?.username || ''}
-                  readOnly
-                  className="w-full px-5 py-4 bg-gray-100 rounded-2xl border border-black/5 text-sm font-bold text-gray-500 cursor-not-allowed"
-                />
+                {/* Username (read-only) */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={user?.username || ''}
+                    readOnly
+                    className="w-full px-4 py-3 bg-gray-100 rounded-xl border border-black/5 text-sm font-bold text-gray-500 cursor-not-allowed"
+                  />
+                </div>
+
+                {/* Nickname */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsNickname}
+                    onChange={(e) => setSettingsNickname(e.target.value)}
+                    placeholder="Enter your display name"
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                  />
+                </div>
+
+                {/* Password */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={settingsPassword}
+                    onChange={(e) => setSettingsPassword(e.target.value)}
+                    placeholder="Leave empty to keep current"
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={settingsEmail}
+                    onChange={(e) => setSettingsEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                  />
+                </div>
+
+                {/* Avatar Selection - Grid layout */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    Avatar
+                  </label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {USER_AVATARS.map(avatarId => (
+                      <button
+                        key={avatarId}
+                        type="button"
+                        onClick={() => setSettingsAvatar(avatarId)}
+                        className={`w-10 h-10 rounded-xl overflow-hidden transition-all duration-200 ${settingsAvatar === avatarId
+                          ? 'ring-2 ring-accent scale-110 shadow-lg'
+                          : 'bg-gray-100 hover:scale-150 hover:z-10 hover:shadow-xl'
+                          }`}
+                      >
+                        <img src={getAvatarUrl(avatarId)} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {/* Nickname */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={settingsNickname}
-                  onChange={(e) => setSettingsNickname(e.target.value)}
-                  placeholder="Enter your display name"
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                />
-              </div>
+              {/* Right Column - Profile Info */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-gray-300 mb-4">Profile</h4>
 
-              {/* Password */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={settingsPassword}
-                  onChange={(e) => setSettingsPassword(e.target.value)}
-                  placeholder="Leave empty to keep current"
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                />
-              </div>
-
-              {/* Email */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={settingsEmail}
-                  onChange={(e) => setSettingsEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                />
-              </div>
-
-              {/* Bio */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Bio
-                </label>
-                <textarea
-                  value={settingsBio}
-                  onChange={(e) => setSettingsBio(e.target.value)}
-                  placeholder="Tell us about yourself"
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300 resize-none h-24"
-                />
-              </div>
-
-              {/* Avatar Selection */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Avatar
-                </label>
-                <div className="grid grid-cols-6 gap-2">
-                  {AVATAR_OPTIONS.map(emoji => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setSettingsAvatar(emoji)}
-                      className={`w-12 h-12 rounded-xl text-2xl flex items-center justify-center transition-all ${settingsAvatar === emoji
-                        ? 'bg-accent scale-110 shadow-lg'
-                        : 'bg-gray-100 hover:bg-gray-200'
-                        }`}
+                {/* Age & Gender Row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                      Age
+                    </label>
+                    <input
+                      type="number"
+                      value={settingsAge || ''}
+                      onChange={(e) => setSettingsAge(Number(e.target.value))}
+                      placeholder="Age"
+                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                      Gender
+                    </label>
+                    <select
+                      value={settingsGender || ''}
+                      onChange={(e) => setSettingsGender(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
                     >
-                      {emoji}
-                    </button>
-                  ))}
+                      <option value="">Select</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="non-binary">Non-Binary</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              {/* Age */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Age
-                </label>
-                <input
-                  type="number"
-                  value={settingsAge || ''}
-                  onChange={(e) => setSettingsAge(Number(e.target.value))}
-                  placeholder="Enter your age"
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                />
-              </div>
-
-              {/* Gender */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Gender
-                </label>
-                <select
-                  value={settingsGender || ''}
-                  onChange={(e) => setSettingsGender(e.target.value)}
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                >
-                  <option value="">Select your gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="non-binary">Non-Binary</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              {/* MBTI Input */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  MBTI Type
-                </label>
-                <select
-                  value={settingsMbti?.type || ''}
-                  onChange={(e) => setSettingsMbti({ type: e.target.value, completed_at: new Date().toISOString() })}
-                  className="w-full px-5 py-4 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                >
-                  <option value="">unknown</option>
-                  {[
-                    'INFP', 'INFJ', 'INTP', 'INTJ', 'ENFP', 'ENFJ', 'ENTP', 'ENTJ',
-                    'ISFP', 'ISFJ', 'ISTP', 'ISTJ', 'ESFP', 'ESFJ', 'ESTP', 'ESTJ'
-                  ].map(t => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-                <p className="hint">
-                  last time tested:{' '}
-                  {settingsMbti?.completed_at
-                    ? new Date(settingsMbti.completed_at).toLocaleDateString()
-                    : '-'}
-                </p>
-
-              </div>
-
-              {/* User Preferences */}
-              <div className="space-y-2">
-                <label className="text-[14px] font-black uppercase tracking-widest text-gray-400">
-                  Preferences
-                </label>
-                <label className="text-[12px]">chat duration preferred</label>
-                <select
-                  id="chat_duration_preference"
-                  value={settingsPreferences?.chat_duration_preference || ''}
-                  onChange={(e) => setSettingsPreferences({ ...settingsPreferences, chat_duration_preference: e.target.value as 'short' | 'medium' | 'long' })}
-                  className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                >
-                  <option value="short">short</option>
-                  <option value="medium">medium</option>
-                  <option value="long">long</option>
-                </select>
-
-                <label className="text-[12px]">Match age preference</label>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-500 w-10 text-right">
-                    from
-                  </span>
-                  <input
-                    id="age_range_min"
-                    type="number"
-                    min={13}
-                    max={100}
-                    value={settingsPreferences?.age_range_min || ''}
-                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, age_range_min: Number(e.target.value) })}
-                    className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                  />
-                  <span className="text-sm text-gray-500 w-6 text-center">
-                    to
-                  </span>
-                  <input
-                    id="age_range_max"
-                    type="number"
-                    min={13}
-                    max={100}
-                    value={settingsPreferences?.age_range_max || ''}
-                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, age_range_max: Number(e.target.value) })}
-                    className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                {/* Bio - Larger textarea */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    Bio
+                  </label>
+                  <textarea
+                    value={settingsBio}
+                    onChange={(e) => setSettingsBio(e.target.value)}
+                    placeholder="Tell us about yourself..."
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300 resize-none h-28"
                   />
                 </div>
 
-                <label className="flex items-center gap-3 cursor-pointer select-none">
-                  <span className="text-[12px]">
-                    Notifications
-                  </span>
+                {/* MBTI */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    MBTI Type
+                  </label>
+                  <select
+                    value={settingsMbti?.type || ''}
+                    onChange={(e) => setSettingsMbti({ type: e.target.value, completed_at: new Date().toISOString() })}
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                  >
+                    <option value="">Unknown</option>
+                    {[
+                      'INFP', 'INFJ', 'INTP', 'INTJ', 'ENFP', 'ENFJ', 'ENTP', 'ENTJ',
+                      'ISFP', 'ISFJ', 'ISTP', 'ISTJ', 'ESFP', 'ESFJ', 'ESTP', 'ESTJ'
+                    ].map(t => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
 
+                {/* Preferences Row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                      Chat Duration
+                    </label>
+                    <select
+                      value={settingsPreferences?.chat_duration_preference || 'medium'}
+                      onChange={(e) => setSettingsPreferences({ ...settingsPreferences, chat_duration_preference: e.target.value as 'short' | 'medium' | 'long' })}
+                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    >
+                      <option value="short">Short</option>
+                      <option value="medium">Medium</option>
+                      <option value="long">Long</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                      Theme
+                    </label>
+                    <select
+                      value={settingsPreferences?.theme || 'default'}
+                      onChange={(e) => setSettingsPreferences({ ...settingsPreferences, theme: e.target.value as 'light' | 'dark' | 'system' })}
+                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    >
+                      <option value="default">Default</option>
+                      <option value="dark">Dark</option>
+                      <option value="soft">Soft</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Notifications Toggle */}
+                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer select-none">
+                  <span className="text-sm font-bold text-gray-600">Notifications</span>
                   <div className="relative">
                     <input
-                      id="notification_enabled"
                       type="checkbox"
                       checked={settingsPreferences?.notification_enabled}
                       onChange={(e) => setSettingsPreferences({ ...settingsPreferences, notification_enabled: e.target.checked })}
                       className="sr-only"
                     />
-                    <div
-                      className={`
-                      w-11 h-6 rounded-full transition-colors
-                      ${settingsPreferences?.notification_enabled
-                          ? 'bg-vivid-500'
-                          : 'bg-gray-300'}
-                    `}
-                    />
-                    <div
-                      className={`
-                      absolute top-0.5 left-0.5
-                      w-5 h-5 bg-white rounded-full shadow
-                      transition-transform
-                      ${settingsPreferences?.notification_enabled
-                          ? 'translate-x-5'
-                          : ''}
-                    `}
-                    />
+                    <div className={`w-11 h-6 rounded-full transition-colors ${settingsPreferences?.notification_enabled ? 'bg-accent' : 'bg-gray-300'}`} />
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settingsPreferences?.notification_enabled ? 'translate-x-5' : ''}`} />
                   </div>
                 </label>
-
-                <label className="text-[12px]">theme</label>
-                <select
-                  value={settingsPreferences?.theme || ''}
-                  onChange={(e) => setSettingsPreferences({ ...settingsPreferences, theme: e.target.value as 'light' | 'dark' | 'system' })}
-                  className="w-full px-5 py-1 bg-gray-50 rounded-2xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-                >
-                  <option value="default">default</option>
-                  <option value="dark">dark</option>
-                  <option value="soft">soft</option>
-                </select>
-              </div>
-
-              {/* User Info Display */}
-              <div className="p-4 bg-gray-50 rounded-2xl space-y-2">
-                <p className="text-[11px] font-black uppercase tracking-widest text-gray-300">Account Info</p>
-                <p className="text-sm font-bold text-gray-600">Username: {user?.username}</p>
-                <p className="text-sm font-bold text-gray-600">Level: {level}</p>
-                <p className="text-sm font-bold text-gray-600">Energy: {points.toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="flex gap-3 mt-8">
+            {/* Buttons */}
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowSettings(false)}
-                className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-[13px] uppercase tracking-widest hover:bg-gray-200 transition-all"
+                className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-xl font-black text-[13px] uppercase tracking-widest hover:bg-gray-200 transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveSettings}
                 disabled={settingsSaving}
-                className="flex-1 py-4 bg-accent text-accent-inverse rounded-2xl font-black text-[13px] uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50"
+                className="flex-1 py-3.5 bg-accent text-accent-inverse rounded-xl font-black text-[13px] uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-50"
               >
                 {settingsSaving ? 'Saving...' : 'Save'}
               </button>
@@ -970,6 +901,36 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteConfirm}
+        title={deleteConfirm?.type === 'post' ? 'Delete Post' : 'Delete Journal'}
+        message={deleteConfirm?.type === 'post'
+          ? 'Are you sure you want to delete this post? This action cannot be undone.'
+          : 'Are you sure you want to delete this journal entry? This action cannot be undone.'}
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          if (!deleteConfirm || !user?._id) return
+          try {
+            if (deleteConfirm.type === 'post') {
+              await postApi.deletePost(deleteConfirm.id, user._id)
+              setUserPosts(prev => prev.filter(p => p.id !== deleteConfirm.id))
+              setSelectedPostModal(null)
+            } else {
+              await aiChatApi.deleteDiary(deleteConfirm.id, user._id)
+              setDiaryEntries(prev => prev.filter(d => d.id !== deleteConfirm.id))
+              setSelectedJournalModal(null)
+            }
+          } catch (err) {
+            console.error(`Failed to delete ${deleteConfirm.type}:`, err)
+          }
+          setDeleteConfirm(null)
+        }}
+      />
     </div>
   )
 }

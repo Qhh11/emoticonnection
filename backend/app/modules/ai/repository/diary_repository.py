@@ -71,3 +71,13 @@ class DiaryRepository:
 
         diary = await self.collection.find_one({"_id": oid})
         return self._diary_to_dict(diary)
+
+    async def delete_diary(self, diary_id: str) -> bool:
+        """Delete a diary entry"""
+        try:
+            oid = ObjectId(diary_id)
+        except:
+            return False
+
+        result = await self.collection.delete_one({"_id": oid})
+        return result.deleted_count > 0

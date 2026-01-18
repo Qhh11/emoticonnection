@@ -19,7 +19,7 @@ from dataclasses import dataclass, asdict
 
 # Dynamic import handling for model and weaviate_client
 try:
-    from model import (EmotionDataPoint, EmotionWordCloud, EmotionTrend,
+    from model import (EmotionDataPoint, EmotionPair, EmotionWordCloud, EmotionTrend,
                         TriggerAnalysis, EmotionSummary, ConversationRecord)
     from weaviate_client import WeaviateManager
 except ImportError:
@@ -27,16 +27,16 @@ except ImportError:
     import sys
     import os
     from pathlib import Path
-    
+
     # Get the directory containing this file
     current_dir = Path(__file__).parent
-    
+
     # Add current directory to sys.path temporarily
     if str(current_dir) not in sys.path:
         sys.path.insert(0, str(current_dir))
-    
+
     try:
-        from model import (EmotionDataPoint, EmotionWordCloud, EmotionTrend,
+        from model import (EmotionDataPoint, EmotionPair, EmotionWordCloud, EmotionTrend,
                             TriggerAnalysis, EmotionSummary, ConversationRecord)
         from weaviate_client import WeaviateManager
     finally:

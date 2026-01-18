@@ -184,40 +184,6 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 </div>
               </div>
 
-              {/* Emotion Trend Chart */}
-              <div className="bg-gray-50 rounded-2xl p-5">
-                <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Mood Trend</h3>
-                <div className="h-32 flex items-end justify-between gap-1">
-                  {report.emotion_trend?.data_points && report.emotion_trend.data_points.length > 0 ? (
-                    report.emotion_trend.data_points.map((point, i) => {
-                      // Normalize score from [-1, 1] to [0, 100] for bar height
-                      const height = Math.max(10, ((point.avg_score + 1) / 2) * 100)
-                      const color = getEmotionColor(point.dominant_emotion)
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <div
-                            className="w-full rounded-t-lg transition-all hover:opacity-80"
-                            style={{
-                              height: `${height}%`,
-                              backgroundColor: color,
-                              minHeight: '10px'
-                            }}
-                            title={`${point.dominant_emotion}: ${point.avg_score.toFixed(2)}`}
-                          />
-                          <span className="text-[9px] font-bold text-gray-400">
-                            {new Date(point.date).toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)}
-                          </span>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-gray-400 text-[11px]">
-                      No trend data yet
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {/* Emotion Distribution & Triggers */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Emotion Distribution */}
@@ -302,49 +268,20 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 </div>
               )}
 
-              {/* AI Insights */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 text-white">
-                <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-2">
-                  <span>✨</span> AI Analysis
-                </h3>
-                <p className="text-sm font-bold leading-relaxed mb-4">{report.summary_text}</p>
-
-                {report.key_insights.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Key Insights</h4>
-                    <ul className="space-y-1">
-                      {report.key_insights.map((insight, i) => (
-                        <li key={i} className="text-[12px] font-bold text-gray-300 flex items-start gap-2">
-                          <span className="text-yellow-400">•</span>
-                          {insight}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {report.suggestions.length > 0 && (
-                  <div>
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Suggestions</h4>
-                    <ul className="space-y-1">
-                      {report.suggestions.map((suggestion, i) => (
-                        <li key={i} className="text-[12px] font-bold text-gray-300 flex items-start gap-2">
-                          <span className="text-green-400">💡</span>
-                          {suggestion}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Prediction */}
-              {report.trend_prediction && (
-                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                  <p className="text-[11px] font-black uppercase tracking-widest text-blue-400 mb-1">
-                    🔮 Trend Prediction
-                  </p>
-                  <p className="text-sm font-bold text-blue-700">{report.trend_prediction}</p>
+              {/* Suggestions */}
+              {report.suggestions && report.suggestions.length > 0 && (
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-5">
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-emerald-600 mb-4 flex items-center gap-2">
+                    <span>💡</span> Suggestions
+                  </h3>
+                  <ul className="space-y-3">
+                    {report.suggestions.map((suggestion, i) => (
+                      <li key={i} className="text-sm font-bold text-gray-700 flex items-start gap-3">
+                        <span className="text-emerald-500 mt-0.5">•</span>
+                        <span>{suggestion}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </>

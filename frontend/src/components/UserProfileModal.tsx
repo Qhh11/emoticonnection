@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { userApi, socialApi, postApi, Post } from '../services/api'
+import { getAvatarUrl } from '../config/userAvatars'
 
 interface UserProfile {
   _id: string
@@ -9,6 +10,7 @@ interface UserProfile {
   avatar: string
   points: number
   level: number
+  bio?: string
 }
 
 interface SocialStats {
@@ -133,8 +135,8 @@ export default function UserProfileModal({ userId, currentUserId, isOpen, onClos
             {/* Profile Info */}
             <div className="px-8 pb-6 text-center">
               {/* Avatar */}
-              <div className="w-24 h-24 mx-auto rounded-[2rem] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-5xl shadow-lg border-4 border-white">
-                {profile.avatar || '👤'}
+              <div className="w-24 h-24 mx-auto rounded-[2rem] bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden shadow-lg border-4 border-white">
+                <img src={getAvatarUrl(profile.avatar)} alt="" className="w-full h-full object-cover" />
               </div>
 
               {/* Username & Nickname */}
@@ -142,6 +144,13 @@ export default function UserProfileModal({ userId, currentUserId, isOpen, onClos
                 <h2 className="text-xl font-black uppercase tracking-tight">@{profile.username}</h2>
                 <p className="text-gray-400 font-bold text-sm">{profile.nickname}</p>
               </div>
+
+              {/* Bio */}
+              {profile.bio && (
+                <p className="mt-3 text-gray-500 text-sm leading-relaxed px-4">
+                  {profile.bio}
+                </p>
+              )}
 
               {/* Level & Points */}
               <div className="mt-3 inline-flex items-center space-x-3 px-4 py-2 bg-gray-50 rounded-full">

@@ -7,7 +7,7 @@ This file defines all data structures for chat functionality:
 """
 
 from datetime import datetime
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Dict, Any
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -190,6 +190,10 @@ class MessageOut(BaseModel):
     emotion: Optional[str] = Field(
         default=None,
         description="AI-analyzed emotion of the message (only visible to receiver)"
+    )
+    emotion_analysis: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Dual emotion analysis with percentages (primary_emotion, secondary_emotion, etc.)"
     )
     created_at: datetime = Field(..., description="Message creation time (ISO 8601 format)")
 

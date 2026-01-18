@@ -195,6 +195,8 @@ export interface Post {
   id: string
   author_id: string
   author_name: string | null
+  author_avatar: string | null
+  title: string | null
   content: string
   post_type: 'text' | 'image' | 'video' | 'mixed'
   media_urls: string[] | null
@@ -220,6 +222,7 @@ export interface PostsResponse {
 
 export interface CreatePostRequest {
   author_id: string
+  title?: string
   content: string
   post_type?: string
   is_anonymous?: boolean
@@ -266,6 +269,14 @@ export const postApi = {
     if (params?.emotion) searchParams.append('emotion', params.emotion)
     const query = searchParams.toString()
     return request<PostsResponse>(`/api/posts${query ? `?${query}` : ''}`)
+  },
+
+  getFollowingPosts: (params: { user_id: string; page?: number; page_size?: number }) => {
+    const searchParams = new URLSearchParams()
+    searchParams.append('user_id', params.user_id)
+    if (params?.page) searchParams.append('page', params.page.toString())
+    if (params?.page_size) searchParams.append('page_size', params.page_size.toString())
+    return request<PostsResponse>(`/api/posts/following?${searchParams.toString()}`)
   },
 
   getPost: (postId: string, viewerId?: string) => {
@@ -431,6 +442,16 @@ export interface ChatRoom {
   created_at?: string
 }
 
+// 双情绪分析结果
+export interface EmotionAnalysis {
+  primary_emotion: string
+  primary_percentage: number  // 0.0-1.0
+  primary_color: string       // hex color
+  secondary_emotion: string
+  secondary_percentage: number
+  secondary_color: string
+}
+
 export interface ChatMessage {
   id: string
   room_id: string
@@ -440,6 +461,7 @@ export interface ChatMessage {
   media_url?: string | null
   emotion?: string | null
   emotion_color?: string | null
+  emotion_analysis?: EmotionAnalysis | null  // 新增：双情绪分析
   created_at: string
 }
 
@@ -482,6 +504,9 @@ export const chatApi = {
       method: 'POST',
       body: JSON.stringify({ room_id: roomId, user_id: userId }),
     }),
+
+  getOnlineUsers: () =>
+    request<string[]>('/api/chat/online-users'),
 }
 
 // ============ AI 聊天 API ============
@@ -589,6 +614,11 @@ export const aiChatApi = {
 
   getDiary: (diaryId: string) =>
     request<Diary>(`/api/diary/diaries/${diaryId}`),
+
+  deleteDiary: (diaryId: string, userId: string) =>
+    request<{ success: boolean }>(`/api/diary/diaries/${diaryId}?user_id=${userId}`, {
+      method: 'DELETE',
+    }),
 
   createDiary: (data: CreateDiaryRequest) =>
     request<Diary>('/api/diary/diaries', {
@@ -772,7 +802,23 @@ export const mediaApi = {
 
 // ============ WebSocket 连接 ============
 
-export const createChatWebSocket = (roomId: string): WebSocket => {
-  const wsUrl = `ws://localhost:8000/ws/rooms/${roomId}`
+export const createChatWebSocket = (roomId: string, userId?: string): WebSocket => {
+  const wsUrl = userId
+    ? `ws://localhost:8000/ws/rooms/${roomId}?user_id=${userId}`
+    : `ws://localhost:8000/ws/rooms/${roomId}`
   return new WebSocket(wsUrl)
+}
+
+// ============ 工具函数 ============
+
+/**
+ * 获取完整的媒体 URL
+ * 后端返回相对路径 /static/uploads/xxx.jpg，需要加上 BASE_URL
+ */
+export const getMediaUrl = (url: string | undefined | null): string => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  return `${BASE_URL}${url}`
 }

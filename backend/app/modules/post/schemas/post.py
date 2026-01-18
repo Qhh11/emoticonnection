@@ -34,19 +34,21 @@ class PostVisibility(str, Enum):
 class PostCreate(BaseModel):
     """
     Request model for creating a new post
-    
+
     Example JSON:
     {
         "author_id": 1,
+        "title": "My Thoughts",
         "content": "Feeling grateful today! #gratitude #mindfulness",
         "post_type": "text",
         "is_anonymous": true,
         "tags": ["gratitude", "mindfulness"]
     }
-    
+
     Example with media:
     {
         "author_id": 1,
+        "title": "Beautiful Sunset",
         "content": "Beautiful sunset! #nature",
         "post_type": "image",
         "media_urls": ["/static/uploads/sunset.jpg"],
@@ -55,8 +57,14 @@ class PostCreate(BaseModel):
     }
     """
     author_id: Union[int, str] = Field(..., description="Author user ID (ObjectId string or int)", example=1)
+    title: Optional[str] = Field(
+        None,
+        description="Post title (optional)",
+        max_length=100,
+        example="My Thoughts"
+    )
     content: str = Field(
-        ..., 
+        ...,
         description="Post text content",
         min_length=1,
         max_length=2000,
@@ -93,6 +101,7 @@ class PostCreate(BaseModel):
 
 class PostUpdate(BaseModel):
     """Request model for updating a post"""
+    title: Optional[str] = Field(None, max_length=100)
     content: Optional[str] = Field(None, max_length=2000)
     tags: Optional[List[str]] = None
     visibility: Optional[PostVisibility] = None
@@ -101,12 +110,13 @@ class PostUpdate(BaseModel):
 class PostOut(BaseModel):
     """
     Response model for a post
-    
+
     Example JSON:
     {
         "id": "507f1f77bcf86cd799439011",
         "author_id": 1,
         "author_name": "User 1",
+        "title": "My Thoughts",
         "content": "Feeling grateful today!",
         "post_type": "text",
         "media_urls": null,
@@ -125,9 +135,14 @@ class PostOut(BaseModel):
     id: str = Field(..., description="Post ID (MongoDB ObjectId)")
     author_id: Union[int, str] = Field(..., description="Author user ID (ObjectId string or int)")
     author_name: Optional[str] = Field(
-        None, 
+        None,
         description="Author display name (null if anonymous)"
     )
+    author_avatar: Optional[str] = Field(
+        None,
+        description="Author avatar ID (null if anonymous)"
+    )
+    title: Optional[str] = Field(None, description="Post title")
     content: str = Field(..., description="Post text content")
     post_type: PostType = Field(..., description="Type of post")
     media_urls: Optional[List[str]] = Field(None, description="Media URLs")

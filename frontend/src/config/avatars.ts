@@ -7,6 +7,7 @@ export interface Avatar3D {
   personality: string[]
   color: string
   modelPath: string
+  videoPath?: string  // Video path for animated avatar display
   isLocked: boolean
   exposure?: number
   environmentImage?: string
@@ -28,6 +29,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#3266B1',
     modelPath: new URL('../assets/3davatar/Bluey.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Bluey.gif',
     isLocked: false
   },
   {
@@ -43,6 +45,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#D278A3',
     modelPath: new URL('../assets/3davatar/Blushy.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Blushy.gif',
     isLocked: false
   },
   {
@@ -58,6 +61,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#D32F2F',
     modelPath: new URL('../assets/3davatar/Grumpy.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Grumpy.gif',
     isLocked: false
   },
   {
@@ -73,6 +77,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#9381BA',
     modelPath: new URL('../assets/3davatar/Scaredy.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Scaredy.gif',
     isLocked: false
   },
   {
@@ -88,6 +93,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#4B4E91',
     modelPath: new URL('../assets/3davatar/Snoozy.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Snoozy.gif',
     isLocked: false
   },
   {
@@ -103,6 +109,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#F9D849',
     modelPath: new URL('../assets/3davatar/Sunny.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Sunny.gif',
     isLocked: false
   },
   {
@@ -118,6 +125,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#E67E22',
     modelPath: new URL('../assets/3davatar/Zippy.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Zippy.gif',
     isLocked: false
   },
   {
@@ -133,6 +141,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#66B04C',
     modelPath: new URL('../assets/3davatar/Yucky.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Yucky.gif',
     isLocked: false
   },
   {
@@ -148,6 +157,7 @@ export const AVATARS_3D: Avatar3D[] = [
     ],
     color: '#2BA8A4',
     modelPath: new URL('../assets/3davatar/Sparkle.glb', import.meta.url).href,
+    videoPath: '/asset/gif/Sparkle.gif',
     isLocked: false,
     exposure: 1.2, // Mimicking higher HDRI intensity
     environmentImage: 'neutral',

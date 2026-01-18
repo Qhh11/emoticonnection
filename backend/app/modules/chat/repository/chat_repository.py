@@ -143,6 +143,7 @@ class ChatRepository:
         message_type: str = "text",
         media_url: Optional[str] = None,
         emotion: Optional[str] = None,
+        emotion_analysis: Optional[Dict] = None,
         sender_type: str = "user"
     ) -> Dict:
         """
@@ -154,7 +155,8 @@ class ChatRepository:
             content: Message content
             message_type: text/emoji/image/video
             media_url: URL to media file (optional)
-            emotion: AI-analyzed emotion (optional)
+            emotion: AI-analyzed emotion (optional, single emotion for backward compatibility)
+            emotion_analysis: Dual emotion analysis with percentages (optional)
 
         Returns:
             Created message as dict
@@ -173,7 +175,8 @@ class ChatRepository:
             "content": content,
             "message_type": message_type,
             "media_url": media_url,
-            "emotion": emotion,  # NEW: AI emotion analysis
+            "emotion": emotion,  # Single emotion for backward compatibility
+            "emotion_analysis": emotion_analysis,  # Dual emotion analysis with percentages
             "safety_flag": "safe",  # Default to safe
             "safety_note": None,
             "created_at": datetime.utcnow(),
@@ -238,5 +241,6 @@ class ChatRepository:
             "content": message["content"],
             "media_url": message.get("media_url"),
             "emotion": message.get("emotion"),
+            "emotion_analysis": message.get("emotion_analysis"),  # Dual emotion analysis
             "created_at": message["created_at"]
         }

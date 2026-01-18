@@ -37,11 +37,12 @@ class PostRepository:
         visibility: str = "public",
         tags: Optional[List[str]] = None,
         emotion: Optional[str] = None,
-        ai_emotion: Optional[str] = None
+        ai_emotion: Optional[str] = None,
+        title: Optional[str] = None
     ) -> Dict:
         """
         Create a new post
-        
+
         Args:
             author_id: User ID of the author
             content: Post text content
@@ -52,19 +53,21 @@ class PostRepository:
             tags: List of tags (without #)
             emotion: User-selected emotion
             ai_emotion: AI-analyzed emotion
-            
+            title: Optional post title
+
         Returns:
             Created post as dict
         """
         # Extract tags from content if not provided
         if tags is None:
             tags = self._extract_tags(content)
-        
+
         # Normalize tags (lowercase, remove duplicates)
         tags = list(set(tag.lower().strip() for tag in tags if tag.strip()))
-        
+
         new_post = {
             "author_id": author_id,
+            "title": title,
             "content": content,
             "post_type": post_type,
             "media_urls": media_urls or [],
@@ -79,10 +82,10 @@ class PostRepository:
             "updated_at": None,
             "is_deleted": False
         }
-        
+
         result = await self.posts.insert_one(new_post)
         new_post["_id"] = result.inserted_id
-        
+
         return self._post_to_dict(new_post)
 
     async def get_post_by_id(
@@ -167,18 +170,98 @@ class PostRepository:
         for post in posts:
             post_dict = self._post_to_dict(post)
 
-            # Fetch real username if not anonymous
+            # Fetch real username and avatar if not anonymous
             if not post_dict["is_anonymous"]:
                 username = await self._get_username(post_dict["author_id"])
                 if username:
                     post_dict["author_name"] = username
+                avatar = await self._get_user_avatar(post_dict["author_id"])
+                if avatar:
+                    post_dict["author_avatar"] = avatar
 
             if viewer_id:
                 post_dict["is_liked"] = await self._check_user_liked(
                     post_dict["id"], viewer_id
                 )
             result_posts.append(post_dict)
-        
+
+        return {
+            "posts": result_posts,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "has_more": skip + len(posts) < total
+        }
+
+    async def get_following_posts(
+        self,
+        user_id: Union[int, str],
+        page: int = 1,
+        page_size: int = 20,
+        viewer_id: Optional[Union[int, str]] = None
+    ) -> Dict:
+        """
+        Get posts from users that the current user follows
+
+        Args:
+            user_id: Current user's ID
+            page: Page number (1-indexed)
+            page_size: Number of posts per page
+            viewer_id: Current user's ID (to check likes)
+
+        Returns:
+            Dict with posts, total, pagination info
+        """
+        # Get the list of users this user follows from followings collection
+        follows_collection = self.db.followings
+        following_cursor = follows_collection.find({"follower_id": user_id})
+        following_list = await following_cursor.to_list(length=1000)
+        following_ids = [f["following_id"] for f in following_list]
+
+        if not following_ids:
+            return {
+                "posts": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "has_more": False
+            }
+
+        # Build query filter for posts from followed users
+        query = {
+            "author_id": {"$in": following_ids},
+            "is_deleted": False,
+            "visibility": {"$ne": "friends_only"}
+        }
+
+        # Get total count
+        total = await self.posts.count_documents(query)
+
+        # Get paginated results
+        skip = (page - 1) * page_size
+        cursor = self.posts.find(query).sort("created_at", -1).skip(skip).limit(page_size)
+        posts = await cursor.to_list(length=page_size)
+
+        # Convert to dicts and check likes
+        result_posts = []
+        for post in posts:
+            post_dict = self._post_to_dict(post)
+
+            # Fetch real username and avatar if not anonymous
+            if not post_dict["is_anonymous"]:
+                username = await self._get_username(post_dict["author_id"])
+                if username:
+                    post_dict["author_name"] = username
+                avatar = await self._get_user_avatar(post_dict["author_id"])
+                if avatar:
+                    post_dict["author_avatar"] = avatar
+
+            if viewer_id:
+                post_dict["is_liked"] = await self._check_user_liked(
+                    post_dict["id"], viewer_id
+                )
+            result_posts.append(post_dict)
+
         return {
             "posts": result_posts,
             "total": total,
@@ -661,6 +744,25 @@ class PostRepository:
             print(f"[PostRepository] Error fetching username for {user_id}: {e}")
             return None
 
+    async def _get_user_avatar(self, user_id: Union[int, str]) -> Optional[str]:
+        """Get user avatar from user ID"""
+        try:
+            from bson import ObjectId
+            user_oid = None
+            if isinstance(user_id, str) and ObjectId.is_valid(user_id):
+                user_oid = ObjectId(user_id)
+
+            user = await self.users.find_one(
+                {"$or": [{"_id": user_oid}, {"_id": user_id}]} if user_oid else {"_id": user_id}
+            )
+
+            if user:
+                return user.get("avatar", "sunny_female")
+            return None
+        except Exception as e:
+            print(f"[PostRepository] Error fetching avatar for {user_id}: {e}")
+            return None
+
     def _extract_tags(self, content: str) -> List[str]:
         """Extract hashtags from content"""
         import re
@@ -695,11 +797,13 @@ class PostRepository:
         """Convert MongoDB post document to API-compatible dict"""
         if not post:
             return None
-        
+
         return {
             "id": str(post["_id"]),
             "author_id": post["author_id"],
             "author_name": None if post.get("is_anonymous") else f"User {post['author_id']}",
+            "author_avatar": None,  # Will be set by caller if needed
+            "title": post.get("title"),
             "content": post["content"],
             "post_type": post.get("post_type", "text"),
             "media_urls": post.get("media_urls", []),

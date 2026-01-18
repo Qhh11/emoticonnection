@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Avatar3D } from '../../config/avatars'
-import { SocialStats, Post, User, EmotionReport } from '../../services/api'
+import { getAvatarUrl } from '../../config/userAvatars'
+import { SocialStats, Post, User, EmotionReport, getMediaUrl } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
 
 
@@ -71,22 +72,41 @@ interface GalleryCardProps {
   date: string
   color: string
   textColor: string
+  imageUrl?: string
   onClick?: () => void
 }
 
-function GalleryCard({ title, mood, date, color, textColor, onClick }: GalleryCardProps) {
+function GalleryCard({ title, mood, date, color, textColor, imageUrl, onClick }: GalleryCardProps) {
   return (
     <div
       onClick={onClick}
-      className="card-pullable flex-shrink-0 w-64 h-80 rounded-[2.5rem] p-8 flex flex-col justify-between border border-black/[0.04] shadow-xl cursor-pointer hover:scale-[1.02] transition-transform"
+      className="card-pullable flex-shrink-0 w-64 h-80 rounded-[2.5rem] overflow-hidden border border-black/[0.04] shadow-xl cursor-pointer hover:scale-[1.02] transition-transform relative"
       style={{ backgroundColor: color }}
     >
-      <span className="text-[12px] font-black uppercase tracking-widest opacity-40" style={{ color: textColor }}>{date}</span>
-      <div className="space-y-1.5">
-        <p className="text-[14px] font-black uppercase tracking-[0.25em] opacity-80" style={{ color: textColor }}>{mood}</p>
-        <h5 className="text-xl font-black leading-tight tracking-tight" style={{ color: textColor }}>{title}</h5>
-        <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: textColor }}>Click to view</p>
-      </div>
+      {imageUrl ? (
+        // 有图片：显示图片
+        <>
+          <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-6">
+            <span className="text-[12px] font-black uppercase tracking-widest opacity-70 text-white">{date}</span>
+            <div className="mt-2 space-y-1">
+              <p className="text-[14px] font-black uppercase tracking-[0.25em] opacity-90 text-white">{mood}</p>
+              <h5 className="text-lg font-black leading-tight tracking-tight text-white">{title}</h5>
+            </div>
+          </div>
+        </>
+      ) : (
+        // 无图片：渐变色块
+        <div className="p-8 flex flex-col justify-between h-full">
+          <span className="text-[12px] font-black uppercase tracking-widest opacity-40" style={{ color: textColor }}>{date}</span>
+          <div className="space-y-1.5">
+            <p className="text-[14px] font-black uppercase tracking-[0.25em] opacity-80" style={{ color: textColor }}>{mood}</p>
+            <h5 className="text-xl font-black leading-tight tracking-tight" style={{ color: textColor }}>{title}</h5>
+            <p className="text-[11px] font-bold mt-2 opacity-50" style={{ color: textColor }}>Click to view</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -248,12 +268,12 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
 
         <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-center gap-10">
           <div className="relative group">
-            <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] bg-gray-50 flex items-center justify-center text-6xl shadow-inner border-4 border-white group-hover:scale-105 transition-transform duration-700 font-black tracking-tighter overflow-hidden">
-              {avatar}
+            <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] bg-gray-50 flex items-center justify-center shadow-inner border-4 border-white group-hover:scale-105 transition-transform duration-700 overflow-hidden">
+              <img src={getAvatarUrl(avatar)} alt="" className="w-full h-full object-cover" />
             </div>
             <div className="absolute -bottom-1 -right-1 bg-accent text-accent-inverse px-3 py-1 rounded-full text-[14px] font-black uppercase tracking-widest border-2 border-white transition-colors">Lv.{level}</div>
           </div>
-          <div className="flex-1 space-y-6 w-full">
+          <div className="flex-1 space-y-4 w-full">
             <div className="flex justify-between items-start">
               <div className="space-y-0.5">
                 <h3 className="text-xl font-black text-gray-800">{user?.nickname || user?.username || 'User'}</h3>
@@ -280,7 +300,11 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 )}
               </div>
             </div>
-            <div className="flex space-x-10">
+            {/* Bio - inline display */}
+            <p className="text-gray-500 text-sm leading-relaxed">
+              {user?.bio || "This soul hasn't written a bio yet."}
+            </p>
+            <div className="flex space-x-10 pt-2">
               <StatItem label="Posts" value={String(userPosts.length)} />
               <StatItem label="Followers" value={socialStats?.followers_count?.toString() || '0'} onClick={onViewFollowers} />
               <StatItem label="Following" value={socialStats?.following_count?.toString() || '0'} onClick={onViewFollowing} />
@@ -479,6 +503,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
               const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === postMood.toLowerCase())
               const color = moodData?.color || '#4B4E91'
               const textColor = postMood === 'Joy' ? '#121212' : '#ffffff'
+              const imageUrl = post.media_urls && post.media_urls.length > 0 ? getMediaUrl(post.media_urls[0]) : undefined
               return (
                 <GalleryCard
                   key={post.id || i}
@@ -487,6 +512,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                   date={new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase()}
                   color={color}
                   textColor={textColor}
+                  imageUrl={imageUrl}
                   onClick={() => onOpenPostDetail(post)}
                 />
               )

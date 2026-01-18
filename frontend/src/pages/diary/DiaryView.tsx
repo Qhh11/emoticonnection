@@ -193,7 +193,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
 
         {/* Main content area with Avatar */}
         <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-8">
-          {/* 3D Avatar - Large centered display */}
+          {/* Avatar Video - Large centered display */}
           <div className="relative w-48 h-48 mb-8">
             {/* Glow ring */}
             <div
@@ -203,15 +203,26 @@ function ChatAIView({ userId, onRefreshDiaries, avatar }: ChatAIViewProps) {
                 transform: 'scale(1.5)'
               }}
             />
-            <ModelViewer3D
-              modelPath={avatar.modelPath}
-              avatarName={avatar.name}
-              avatarColor={avatar.color}
-              size="large"
-              exposure={avatar.exposure}
-              environmentImage={avatar.environmentImage}
-              shadowIntensity={0}
-            />
+            {avatar.videoPath ? (
+              <img
+                src={avatar.videoPath}
+                alt={avatar.name}
+                className="w-full h-full object-contain"
+                style={{
+                  filter: `drop-shadow(0 0 30px ${avatar.color}60)`
+                }}
+              />
+            ) : (
+              <ModelViewer3D
+                modelPath={avatar.modelPath}
+                avatarName={avatar.name}
+                avatarColor={avatar.color}
+                size="large"
+                exposure={avatar.exposure}
+                environmentImage={avatar.environmentImage}
+                shadowIntensity={0}
+              />
+            )}
           </div>
 
           {/* Message display area */}

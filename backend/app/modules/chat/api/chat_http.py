@@ -277,6 +277,27 @@ async def send_message(
     if not room:
         raise HTTPException(status_code=404, detail=f"Room {room_id} not found")
 
+    # AI Emotion Analysis for text messages
+    emotion_result = None
+    if message_data.message_type.value == "text" and message_data.content:
+        try:
+            from app.modules.ai.core.emotion import EmotionService
+            import re
+
+            emotion_service = EmotionService()
+            raw_result = await emotion_service.analyze_emotion(message_data.content)
+            print(f"[AI HTTP] Raw emotion result: {raw_result}")
+
+            # Parse: "Emotion1: X%, Emotion2: Y%"
+            pattern = r'(\w+):\s*(\d+)%'
+            matches = re.findall(pattern, raw_result)
+
+            if matches:
+                emotion_result = matches[0][0].lower()
+                print(f"[AI HTTP] Detected emotion: {emotion_result}")
+        except Exception as e:
+            print(f"[AI HTTP] Emotion analysis failed: {e}")
+
     # Create the message with support for emoji, image, video, emotion
     message = await _create_message(
         repo=repo,
@@ -284,8 +305,20 @@ async def send_message(
         sender_id=message_data.sender_id,
         content=message_data.content,
         message_type=message_data.message_type.value,
-        media_url=message_data.media_url
+        media_url=message_data.media_url,
+        emotion=emotion_result
     )
+
+    # Add emotion color to response
+    if message.get('emotion'):
+        EMOTION_COLORS = {
+            'bored': '#4B4E91', 'fear': '#9381BA', 'joy': '#F9D849',
+            'sadness': '#3266B1', 'disgust': '#66B04C', 'anxiety': '#E67E22',
+            'anger': '#D32F2F', 'embarrassment': '#D278A3', 'envy': '#2BA8A4',
+            'happiness': '#F9D849', 'calm': '#2BA8A4', 'fatigue': '#4B4E91',
+            'confusion': '#D278A3',
+        }
+        message['emotion_color'] = EMOTION_COLORS.get(message['emotion'].lower(), '#808080')
 
     # Convert dict to MessageOut model and return
     return MessageOut(**message)
@@ -398,6 +431,21 @@ async def get_anonymous_settings(room_id: str, repo: ChatRepository = Depends(ge
         user1_anonymous=not room.get("user1_revealed", True),
         user2_anonymous=not room.get("user2_revealed", True)
     )
+
+
+@router.get("/online-users", response_model=List[str])
+async def get_online_users():
+    """
+    GET /api/chat/online-users
+
+    Returns a list of user IDs that are currently online (have active WebSocket connections).
+
+    RESPONSE:
+    ["user_id_1", "user_id_2", ...]
+    """
+    from app.modules.chat.api.chat_ws import manager
+    online_user_ids = manager.get_online_users()
+    return online_user_ids  # Already strings
 
 
 @router.post("/rooms/{room_id}/reveal", response_model=RevealIdentityResponse)

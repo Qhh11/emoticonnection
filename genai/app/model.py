@@ -13,6 +13,71 @@ class EmotionDataPoint:
 
 
 @dataclass
+class EmotionPair:
+    """Dual emotion analysis result for peer chat messages.
+
+    Represents two emotions with their respective percentages,
+    allowing for more nuanced emotional understanding.
+    """
+    timestamp: str
+    primary_emotion: str        # Main emotion (higher percentage)
+    primary_percentage: float   # 0.0-1.0
+    secondary_emotion: str      # Secondary emotion (lower percentage)
+    secondary_percentage: float # 0.0-1.0
+    intensity: float = 0.5      # 0-1 scale
+    sentiment_score: float = 0.0  # -1 to 1 scale
+    trigger_context: Optional[str] = None
+
+    # Emotion color mapping
+    EMOTION_COLORS: Dict[str, str] = None
+
+    def __post_init__(self):
+        """Normalize percentages and set colors."""
+        # Ensure percentages sum to 1.0
+        total = self.primary_percentage + self.secondary_percentage
+        if total > 0 and abs(total - 1.0) > 0.01:
+            self.primary_percentage /= total
+            self.secondary_percentage /= total
+
+        # Color mapping
+        self._colors = {
+            'bored': '#4B4E91',
+            'fear': '#9381BA',
+            'joy': '#F9D849',
+            'sadness': '#3266B1',
+            'disgust': '#66B04C',
+            'anxiety': '#E67E22',
+            'anger': '#D32F2F',
+            'embarrassment': '#D278A3',
+            'envy': '#2BA8A4',
+        }
+
+    @property
+    def primary_color(self) -> str:
+        """Get color for primary emotion."""
+        return self._colors.get(self.primary_emotion.lower(), '#808080')
+
+    @property
+    def secondary_color(self) -> str:
+        """Get color for secondary emotion."""
+        return self._colors.get(self.secondary_emotion.lower(), '#808080')
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'primary_emotion': self.primary_emotion,
+            'primary_percentage': self.primary_percentage,
+            'primary_color': self.primary_color,
+            'secondary_emotion': self.secondary_emotion,
+            'secondary_percentage': self.secondary_percentage,
+            'secondary_color': self.secondary_color,
+            'intensity': self.intensity,
+            'sentiment_score': self.sentiment_score,
+            'trigger_context': self.trigger_context,
+        }
+
+
+@dataclass
 class EmotionWordCloud:
     """Word cloud data structure."""
     words: Dict[str, int]  # word -> frequency
