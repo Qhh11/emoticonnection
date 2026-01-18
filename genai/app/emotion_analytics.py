@@ -198,8 +198,9 @@ class EmotionAnalytics:
             else:
                 gen_cfg = types.GenerateContentConfig(temperature=0.7)
 
-            response_text = genai.generate_content(
-                model="gemini-2.5-flash-lite",
+            client = genai.Client()
+            response_text = client.models.generate_content(
+                model="gemini-2.0-flash",
                 contents=prompt
             )
             

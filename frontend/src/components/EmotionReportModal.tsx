@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { aiChatApi, EmotionReport } from '../services/api'
+import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 // Emotion color mapping
 const EMOTION_COLORS: Record<string, string> = {
@@ -13,6 +14,10 @@ const EMOTION_COLORS: Record<string, string> = {
   'disgust': '#66B04C',
   'embarrassment': '#D278A3',
   'envy': '#2BA8A4',
+  'happiness': '#F9D849',
+  'calm': '#2BA8A4',
+  'fatigue': '#4B4E91',
+  'confusion': '#D278A3',
 }
 
 const getEmotionColor = (emotion: string): string => {
@@ -31,6 +36,97 @@ const getTrendIcon = (direction: string): string => {
   if (direction === 'improving') return '📈'
   if (direction === 'declining') return '📉'
   return '➡️'
+}
+
+// 缓存相关函数
+const getCacheKey = (userId: string, period: string) =>
+  `emotion_report_${userId}_${period}`
+
+const getCachedReport = (userId: string, period: string): EmotionReport | null => {
+  try {
+    const cached = localStorage.getItem(getCacheKey(userId, period))
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached)
+      // 缓存24小时有效
+      if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+        return data
+      }
+    }
+  } catch {}
+  return null
+}
+
+const setCachedReport = (userId: string, period: string, data: EmotionReport) => {
+  try {
+    localStorage.setItem(getCacheKey(userId, period), JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }))
+  } catch {}
+}
+
+// 生成完整时间轴数据（补全没有数据的日期/周）
+type TimelineDataPoint = { date: string; avg_score: number | null; dominant_emotion: string | null }
+
+const generateFullTimeline = (
+  dataPoints: { date: string; avg_score: number; dominant_emotion: string }[] | undefined,
+  period: 'weekly' | 'monthly',
+  startDate: string
+): TimelineDataPoint[] => {
+  if (!dataPoints || dataPoints.length === 0) return []
+
+  const dataMap = new Map(dataPoints.map(p => [p.date, p]))
+  const start = new Date(startDate)
+
+  if (period === 'weekly') {
+    // 生成 7 天完整时间轴
+    const fullData: TimelineDataPoint[] = []
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start)
+      date.setDate(start.getDate() + i)
+      const dateStr = date.toISOString().split('T')[0]
+
+      const existing = dataMap.get(dateStr)
+      fullData.push(existing || {
+        date: dateStr,
+        avg_score: null,
+        dominant_emotion: null
+      })
+    }
+    return fullData
+  }
+
+  if (period === 'monthly') {
+    // 按周分组，生成 4 周数据
+    const weeks: typeof dataPoints[] = [[], [], [], []]
+    dataPoints.forEach(p => {
+      const date = new Date(p.date)
+      const daysSinceStart = Math.floor((date.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+      const weekIndex = Math.min(3, Math.max(0, Math.floor(daysSinceStart / 7)))
+      weeks[weekIndex].push(p)
+    })
+
+    return weeks.map((week, i): TimelineDataPoint => {
+      if (week.length === 0) {
+        return { date: `W${i + 1}`, avg_score: null, dominant_emotion: null }
+      }
+      const avgScore = week.reduce((sum, p) => sum + p.avg_score, 0) / week.length
+      // 找众数情绪
+      const emotionCounts: Record<string, number> = {}
+      week.forEach(p => {
+        emotionCounts[p.dominant_emotion] = (emotionCounts[p.dominant_emotion] || 0) + 1
+      })
+      const dominant = Object.entries(emotionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'neutral'
+
+      return {
+        date: `W${i + 1}`,
+        avg_score: avgScore,
+        dominant_emotion: dominant
+      }
+    })
+  }
+
+  return dataPoints
 }
 
 interface EmotionReportModalProps {
@@ -54,8 +150,18 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
   }, [isOpen, userId, period])
 
   const loadReport = async () => {
-    setIsLoading(true)
     setError(null)
+
+    // 1. 先尝试显示缓存（秒开）
+    const cached = getCachedReport(userId, period)
+    if (cached) {
+      setReport(cached)
+      // 有缓存时不显示 loading
+    } else {
+      setIsLoading(true)
+    }
+
+    // 2. 后台静默刷新
     try {
       let rawData: EmotionReport | string
       switch (period) {
@@ -69,12 +175,15 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
           rawData = await aiChatApi.getMonthlyReport(userId)
           break
       }
-      // Handle double-serialized JSON from backend (returns JSON string instead of object)
       const data: EmotionReport = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
       setReport(data)
+      setCachedReport(userId, period, data)
     } catch (err) {
       console.error('Failed to load emotion report:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load report')
+      // 如果有缓存，静默失败；无缓存才显示错误
+      if (!cached) {
+        setError(err instanceof Error ? err.message : 'Failed to load report')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -184,30 +293,256 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 </div>
               </div>
 
+              {/* Mood Trend - 根据 period 显示不同内容 */}
+              {period === 'daily' ? (
+                // Daily: 当日情绪卡片（不显示曲线图）
+                report.emotion_trend?.data_points?.[0] && (
+                  <div className="bg-gray-50 rounded-2xl p-5">
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">
+                      Today's Mood
+                    </h3>
+                    <div className="flex items-center justify-center gap-4">
+                      <div
+                        className="w-16 h-16 rounded-full flex items-center justify-center"
+                        style={{
+                          backgroundColor: getEmotionColor(report.emotion_trend.data_points[0].dominant_emotion),
+                          boxShadow: `0 8px 24px ${getEmotionColor(report.emotion_trend.data_points[0].dominant_emotion)}40`
+                        }}
+                      >
+                        <span className="text-3xl">{getMoodEmoji(report.emotion_trend.data_points[0].avg_score)}</span>
+                      </div>
+                      <div>
+                        <p className="text-lg font-black capitalize">
+                          {report.emotion_trend.data_points[0].dominant_emotion}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Score: {report.emotion_trend.data_points[0].avg_score >= 0 ? '+' : ''}
+                          {report.emotion_trend.data_points[0].avg_score.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              ) : (
+                // Weekly/Monthly: 曲线图
+                (() => {
+                  // 生成完整时间轴数据
+                  const chartData = report.emotion_trend?.data_points
+                    ? generateFullTimeline(report.emotion_trend.data_points, period as 'weekly' | 'monthly', report.start_date)
+                    : []
+                  // 过滤出有数据的点用于渐变
+                  const validPoints = chartData.filter(p => p.avg_score !== null)
+
+                  if (validPoints.length === 0) return null
+
+                  return (
+                    <div className="bg-gray-50 rounded-2xl p-5">
+                      <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">
+                        Mood Trend
+                      </h3>
+                      <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={chartData}>
+                            {/* 渐变定义 */}
+                            <defs>
+                              {/* 纵向渐变 - 填充区域从上到下透明 */}
+                              <linearGradient id="emotionAreaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stopColor="#4B4E91" stopOpacity={0.25} />
+                                <stop offset="100%" stopColor="#4B4E91" stopOpacity={0} />
+                              </linearGradient>
+                              {/* 横向渐变 - 使用 userSpaceOnUse 和绝对像素坐标 */}
+                              <linearGradient
+                                id="line-gradient"
+                                gradientUnits="userSpaceOnUse"
+                                x1="0"
+                                y1="0"
+                                x2="500"
+                                y2="0"
+                              >
+                                {validPoints.map((point, index) => {
+                                  const offset = validPoints.length > 1
+                                    ? (index / (validPoints.length - 1)) * 100
+                                    : 0
+                                  return (
+                                    <stop
+                                      key={index}
+                                      offset={`${offset}%`}
+                                      stopColor={getEmotionColor(point.dominant_emotion || 'neutral')}
+                                      stopOpacity={1}
+                                    />
+                                  )
+                                })}
+                              </linearGradient>
+                            </defs>
+
+                            <XAxis
+                              dataKey="date"
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 10, fill: '#9ca3af' }}
+                              tickFormatter={(date) => {
+                                if (period === 'monthly') {
+                                  return date // 已经是 W1, W2, W3, W4 格式
+                                }
+                                return new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
+                              }}
+                            />
+                            <YAxis hide={true} domain={[-1, 1]} />
+
+                            {/* 拟物化气泡 Tooltip */}
+                            <Tooltip
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null
+                                const data = payload[0].payload
+                                // 没有数据的点不显示 tooltip
+                                if (data.avg_score === null) return null
+                                const color = getEmotionColor(data.dominant_emotion || 'neutral')
+                                return (
+                                  <div
+                                    className="bg-white rounded-2xl p-4 border border-gray-100"
+                                    style={{ boxShadow: `0 8px 32px ${color}40, 0 4px 16px rgba(0,0,0,0.1)` }}
+                                  >
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                      {period === 'monthly'
+                                        ? label
+                                        : (label ? new Date(label).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : '')
+                                      }
+                                    </p>
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <div
+                                        className="w-3 h-3 rounded-full"
+                                        style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
+                                      />
+                                      <span className="text-sm font-black capitalize">{data.dominant_emotion}</span>
+                                    </div>
+                                    <p className="text-lg font-black mt-1">
+                                      {data.avg_score >= 0 ? '+' : ''}{data.avg_score.toFixed(2)}
+                                    </p>
+                                  </div>
+                                )
+                              }}
+                            />
+
+                            {/* 填充区域 */}
+                            <Area
+                              type="monotone"
+                              dataKey="avg_score"
+                              stroke="none"
+                              fill="url(#emotionAreaGradient)"
+                              connectNulls={true}
+                              isAnimationActive={true}
+                            />
+
+                            {/* 连线 - 使用 userSpaceOnUse 渐变 */}
+                            <Line
+                              type="monotone"
+                              dataKey="avg_score"
+                              stroke="url(#line-gradient)"
+                              strokeWidth={4}
+                              connectNulls={true}
+                              isAnimationActive={false}
+                              dot={(props: any) => {
+                                const { cx, cy, payload } = props
+                                if (payload.avg_score === null) return <g key={`empty-${payload.date}`} />
+                                const color = getEmotionColor(payload.dominant_emotion || 'neutral')
+                                return (
+                                  <circle
+                                    key={`dot-${payload.date}`}
+                                    cx={cx}
+                                    cy={cy}
+                                    r={6}
+                                    fill={color}
+                                    stroke="white"
+                                    strokeWidth={2.5}
+                                    style={{ filter: `drop-shadow(0 2px 6px ${color}80)` }}
+                                  />
+                                )
+                              }}
+                              activeDot={(props: any) => {
+                                const { cx, cy, payload } = props
+                                if (payload.avg_score === null) return <g key={`empty-active-${payload.date}`} />
+                                const color = getEmotionColor(payload.dominant_emotion || 'neutral')
+                                return (
+                                  <circle
+                                    key={`active-dot-${payload.date}`}
+                                    cx={cx}
+                                    cy={cy}
+                                    r={9}
+                                    fill={color}
+                                    stroke="white"
+                                    strokeWidth={3}
+                                    style={{ filter: `drop-shadow(0 4px 12px ${color})` }}
+                                  />
+                                )
+                              }}
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* 情绪图例 */}
+                      <div className="flex flex-wrap gap-3 mt-4 justify-center">
+                        {['joy', 'sadness', 'anxiety', 'anger', 'calm'].map(emotion => (
+                          <div key={emotion} className="flex items-center gap-1.5">
+                            <div
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: getEmotionColor(emotion) }}
+                            />
+                            <span className="text-[9px] font-bold text-gray-400 capitalize">{emotion}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()
+              )}
+
               {/* Emotion Distribution & Triggers */}
               <div className="grid grid-cols-2 gap-4">
-                {/* Emotion Distribution */}
+                {/* Emotion Distribution - Donut Chart */}
                 <div className="bg-gray-50 rounded-2xl p-5">
                   <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Top Emotions</h3>
-                  <div className="space-y-3">
-                    {topEmotions.map(([emotion, percentage]) => (
-                      <div key={emotion} className="space-y-1">
-                        <div className="flex justify-between text-[11px] font-black">
-                          <span className="capitalize">{emotion}</span>
-                          <span className="text-gray-400">{Math.round(percentage)}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${percentage}%`,
-                              backgroundColor: getEmotionColor(emotion)
-                            }}
-                          />
-                        </div>
+                  {topEmotions.length > 0 ? (
+                    <div className="flex items-center gap-4">
+                      {/* 环形图 */}
+                      <div className="w-28 h-28 flex-shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={topEmotions.map(([emotion, percentage]) => ({
+                                name: emotion,
+                                value: percentage
+                              }))}
+                              innerRadius={30}
+                              outerRadius={50}
+                              dataKey="value"
+                              strokeWidth={0}
+                            >
+                              {topEmotions.map(([emotion], index) => (
+                                <Cell key={`cell-${index}`} fill={getEmotionColor(emotion)} />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
                       </div>
-                    ))}
-                  </div>
+
+                      {/* 图例 */}
+                      <div className="flex-1 space-y-1.5">
+                        {topEmotions.map(([emotion, percentage]) => (
+                          <div key={emotion} className="flex items-center gap-2">
+                            <div
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: getEmotionColor(emotion) }}
+                            />
+                            <span className="text-[10px] font-bold capitalize flex-1 truncate">{emotion}</span>
+                            <span className="text-[10px] font-bold text-gray-400">{Math.round(percentage)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400">No emotion data yet</p>
+                  )}
                 </div>
 
                 {/* Triggers */}
@@ -221,7 +556,11 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                         'health': '🏃',
                         'finance': '💰',
                         'family': '👨‍👩‍👧',
-                        'social': '🤝'
+                        'social': '🤝',
+                        'academic': '📚',
+                        'personal_growth': '🌱',
+                        'daily_routine': '☀️',
+                        'unexpected_events': '⚡'
                       }
                       const icon = icons[trigger.trigger_type.toLowerCase()] || '📌'
                       return (
@@ -229,7 +568,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                           <span className="text-xl">{icon}</span>
                           <div className="flex-1">
                             <div className="flex justify-between text-[11px] font-black">
-                              <span className="capitalize">{trigger.trigger_type}</span>
+                              <span className="capitalize">{trigger.trigger_type.replace('_', ' ')}</span>
                               <span className="text-gray-400">{trigger.frequency}x</span>
                             </div>
                             <p className="text-[9px] text-gray-400 truncate">
@@ -265,6 +604,23 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Key Insights */}
+              {report.key_insights && report.key_insights.length > 0 && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5">
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-blue-600 mb-4 flex items-center gap-2">
+                    <span>🔍</span> Key Insights
+                  </h3>
+                  <ul className="space-y-3">
+                    {report.key_insights.map((insight, i) => (
+                      <li key={i} className="text-sm font-bold text-gray-700 flex items-start gap-3">
+                        <span className="text-blue-500 mt-0.5">{i + 1}.</span>
+                        <span>{insight}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
