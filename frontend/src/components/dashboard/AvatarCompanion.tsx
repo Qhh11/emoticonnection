@@ -14,9 +14,10 @@ interface AvatarCompanionProps {
   onCloseBubble?: () => void     // Close bubble callback
   onSelectText?: (text: string) => void  // Text selection callback
   partnerLastMessage?: string    // Partner's last message for response suggestions
+  chatHistory?: any[] // Context for AI
 }
 
-export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from localStorage or use default
     const saved = localStorage.getItem('avatarCompanionPosition')
@@ -38,7 +39,10 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
   }, [position])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return // Don't drag when clicking buttons
+    // Don't drag when clicking buttons or textareas
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('textarea')) {
+      return
+    }
 
     e.preventDefault() // Prevent browser drag behavior on images
 
@@ -125,9 +129,10 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
         {/* Assistant Bubble - positioned above Avatar */}
         <AssistantBubble
           isOpen={showAssistantBubble || false}
-          onClose={onCloseBubble || (() => {})}
-          onSelectText={onSelectText || (() => {})}
+          onClose={onCloseBubble || (() => { })}
+          onSelectText={onSelectText || (() => { })}
           partnerLastMessage={partnerLastMessage}
+          chatHistory={chatHistory}
         />
 
         {/* Avatar Display - Video or 3D Model fallback */}

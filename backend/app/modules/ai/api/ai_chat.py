@@ -34,6 +34,7 @@ class ChatResponse(BaseModel):
 class CreateSessionRequest(BaseModel):
     user_id: str
 
+
 async def process_upload_file(file: UploadFile, save_dir: str = "/tmp") -> str:
     """Save upload file to disk and return path"""
     file_ext = os.path.splitext(file.filename)[1]
@@ -211,3 +212,5 @@ async def transcribe(file: UploadFile = File(...)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+

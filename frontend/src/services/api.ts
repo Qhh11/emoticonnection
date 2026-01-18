@@ -657,6 +657,58 @@ export const aiChatApi = {
   },
 }
 
+// ============ AI Helper API ============
+
+export interface RewriteRequest {
+  text: string
+  context?: string
+  styles?: string[]
+}
+
+export interface RewriteResponse {
+  rewritten_text: string
+}
+
+export interface SuggestReplyRequest {
+  history: Array<{ role: string; parts: string[] }>
+  context?: string
+  styles?: string[]
+}
+
+export interface SuggestReplyResponse {
+  suggestions: string
+}
+
+export interface SuggestTopicRequest {
+  history: Array<{ role: string; parts: string[] }>
+  context?: string
+}
+
+export interface SuggestTopicResponse {
+  suggestions: string
+}
+
+export const aiHelperApi = {
+  rewrite: (data: RewriteRequest) =>
+    request<RewriteResponse>('/api/ai-helper/rewrite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  suggestReply: (data: SuggestReplyRequest) =>
+    request<SuggestReplyResponse>('/api/ai-helper/suggest-reply', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  suggestTopic: (data: SuggestTopicRequest) =>
+    request<SuggestTopicResponse>('/api/ai-helper/suggest-topic', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+}
+
+
 // Session Summary Response
 export interface SessionSummary {
   session_id: string

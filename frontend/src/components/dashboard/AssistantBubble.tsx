@@ -5,12 +5,14 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { aiHelperApi } from '../../services/api'
 
 interface AssistantBubbleProps {
   isOpen: boolean
   onClose: () => void
   onSelectText: (text: string) => void
   partnerLastMessage?: string
+  chatHistory?: any[]
 }
 
 // 功能按钮配置
@@ -30,7 +32,7 @@ const toneConfigs = {
 
 type ViewType = 'menu' | 'rewrite' | 'response' | 'topic'
 
-export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage }: AssistantBubbleProps) {
+export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory }: AssistantBubbleProps) {
   const [view, setView] = useState<ViewType>('menu')
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -48,45 +50,106 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
     }
   }, [isOpen])
 
-  // Mock API - Rewrite
+  // Rewrite - Real API
   const handleRewrite = async () => {
     if (!input.trim()) return
     setIsThinking(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setOptions({
-      gentle: `${input}... 可以吗？✨`,
-      cool: `${input}. 就这样。`,
-      humorous: `哈哈，${input}！😄`,
-      direct: `说实话，${input}。`
-    })
-    setIsThinking(false)
+    try {
+      const res = await aiHelperApi.rewrite({
+        text: input,
+        styles: ['gentle', 'cool', 'humorous', 'direct']
+      })
+
+      try {
+        const cleanJson = res.rewritten_text.replace(/```json/g, '').replace(/```/g, '').trim()
+        const results = JSON.parse(cleanJson)
+        setOptions(results)
+      } catch (e) {
+        console.error('Failed to parse rewrite JSON:', e, res.rewritten_text)
+        setOptions({ direct: res.rewritten_text })
+      }
+    } catch (err) {
+      console.error('Rewrite failed:', err)
+    } finally {
+      setIsThinking(false)
+    }
   }
 
-  // Mock API - Response suggestions
+  // Suggest Reply - Real API
   const handleResponse = async () => {
-    if (!partnerLastMessage) return
+    // Determine history to use
+    let historyToUse = chatHistory || []
+
+    // If no history but we have a partner message (e.g. from props), construct a fake history
+    if (historyToUse.length === 0 && partnerLastMessage) {
+      historyToUse = [{ role: 'user', text: partnerLastMessage }]
+    }
+
+    if (historyToUse.length === 0) {
+      console.warn('No chat history or partner message to reply to.')
+      return
+    }
+
     setIsThinking(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setOptions({
-      gentle: `I understand what you mean... 💕`,
-      cool: `Got it.`,
-      humorous: `Haha, that's interesting! 😄`,
-      direct: `I see. Let me think about it.`
-    })
-    setIsThinking(false)
+    try {
+      // Format history
+      const history = historyToUse.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [m.text]
+      }))
+
+      const res = await aiHelperApi.suggestReply({
+        history,
+        styles: ['gentle', 'cool', 'humorous', 'direct']
+      })
+
+      try {
+        const cleanJson = res.suggestions.replace(/```json/g, '').replace(/```/g, '').trim()
+        const results = JSON.parse(cleanJson)
+        setOptions(results)
+      } catch (e) {
+        console.error('Failed to parse reply JSON:', e, res.suggestions)
+        setOptions({ direct: res.suggestions })
+      }
+    } catch (err) {
+      console.error('Suggest reply failed:', err)
+    } finally {
+      setIsThinking(false)
+    }
   }
 
-  // Mock API - Topic suggestions
+  // Topic Suggestions - Real API
   const handleTopics = async () => {
+    const historyToUse = chatHistory || []
     setIsThinking(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setTopics([
-      { emoji: '🎬', text: 'What movie are you watching lately?' },
-      { emoji: '🍕', text: 'Had anything good to eat today?' },
-      { emoji: '🌙', text: 'How was your day?' },
-      { emoji: '🎮', text: 'Any hobbies you want to share?' }
-    ])
-    setIsThinking(false)
+    try {
+      // Format history
+      const history = historyToUse.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [m.text]
+      }))
+
+      const res = await aiHelperApi.suggestTopic({ history })
+
+      // Parse suggestions (expecting line separated list)
+      const rawTopics = res.suggestions.split('\n')
+        .map(t => t.replace(/^\d+\.\s*/, '').replace(/^- \s*/, '').trim())
+        .filter(t => t.length > 0)
+        .slice(0, 4)
+
+      // Assign random emojis for visual appeal (since API might not return them consistently)
+      const emojis = ['🎬', '🍕', '🌙', '🎮', '💡', '🎵', '✈️', '📚', '🎨', '🌮', '🧘']
+      const topicObjects = rawTopics.map(text => ({
+        emoji: emojis[Math.floor(Math.random() * emojis.length)],
+        text
+      }))
+
+      setTopics(topicObjects)
+    } catch (err) {
+      console.error('Suggest topics failed:', err)
+    } finally {
+      setIsThinking(false)
+    }
   }
 
   const handleFeatureClick = (featureId: ViewType) => {
@@ -130,9 +193,13 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
           className="absolute -top-4 left-1/2 -translate-x-1/2 -translate-y-full z-[100] w-72"
         >
           {/* Bubble body */}
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl p-4
-            shadow-[0_20px_50px_rgba(0,0,0,0.15),inset_0_-4px_4px_rgba(0,0,0,0.05)]
-            border border-white/50 relative">
+          <div
+            className="bg-white/95 backdrop-blur-md rounded-3xl p-4
+              shadow-[0_20px_50px_rgba(0,0,0,0.15),inset_0_-4px_4px_rgba(0,0,0,0.05)]
+              border border-white/50 relative"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
 
             <AnimatePresence mode="wait">
               {/* Menu View */}
@@ -195,15 +262,21 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
                   )}
 
                   {options && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1 scrollbar-hide">
+                      <p className="text-[10px] text-gray-400 font-bold mb-1 uppercase tracking-widest pl-1">Select a style to send:</p>
                       {Object.entries(toneConfigs).map(([key, config]) => (
                         <button
                           key={key}
                           onClick={() => handleSelectOption(options[key])}
-                          className={`p-2.5 rounded-xl border font-medium text-xs transition-all hover:scale-105 active:scale-95 ${config.color}`}
+                          className={`w-full p-2.5 rounded-xl border font-medium text-xs text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${config.color}`}
                         >
-                          <span className="mr-1">{config.icon}</span>
-                          {config.label}
+                          <div className="flex items-center gap-1.5 mb-1 opacity-70">
+                            <span>{config.icon}</span>
+                            <span className="font-black uppercase text-[9px] tracking-wider">{config.label}</span>
+                          </div>
+                          <div className="line-clamp-3 text-gray-700 leading-relaxed font-semibold">
+                            {options[key]}
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -230,8 +303,26 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
 
                   {isThinking && <ThinkingDots />}
 
-                  {!isThinking && !partnerLastMessage && (
-                    <p className="text-center text-gray-400 text-xs py-4">No partner message yet</p>
+                  {!isThinking && !options && !partnerLastMessage && (
+                    <div className="text-center text-gray-400 text-xs py-4 px-4">
+                      <p className="mb-2">No message to reply to yet.</p>
+                      <p className="text-[10px]">Wait for your partner to say something!</p>
+                    </div>
+                  )}
+
+                  {!isThinking && !options && partnerLastMessage && (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                        <p className="text-[10px] uppercase font-black text-blue-400 tracking-wider mb-1">Replying to</p>
+                        <p className="text-xs font-medium text-gray-600 line-clamp-3 italic">"{partnerLastMessage}"</p>
+                      </div>
+                      <button
+                        onClick={handleResponse}
+                        className="w-full py-2 bg-blue-500 text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-600 transition-all"
+                      >
+                        Generate Suggestions
+                      </button>
+                    </div>
                   )}
 
                   {!isThinking && options && (

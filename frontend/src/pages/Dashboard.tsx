@@ -11,10 +11,10 @@ import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatar
 import CommunityView from './community/CommunityView'
 import PostDetailModal from './community/components/PostDetailModal'
 import DiaryView, { DiaryEntry } from './diary/DiaryView'
-import SoulSyncView from './soulsync/SoulSyncView'
+import SoulSyncView, { PeerSession } from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences, getMediaUrl } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
 
@@ -109,6 +109,9 @@ export default function Dashboard() {
 
   // Partner's last message for AssistantBubble response suggestions
   const [partnerLastMessage, setPartnerLastMessage] = useState('')
+
+  // Active chat session for AssistantBubble context
+  const [activeSession, setActiveSession] = useState<PeerSession | null>(null)
 
   // Text to inject into SoulSync chat input (from AssistantBubble)
   const [chatInputFromBubble, setChatInputFromBubble] = useState<string | null>(null)
@@ -478,7 +481,22 @@ export default function Dashboard() {
       case 'community':
         return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
       case 'soulsync':
-        return <SoulSyncView onInteract={triggerCheckIn} userId={user?._id} userAvatar={user?.avatar} onViewProfile={setViewingUserId} avatar={selectedAvatar} userLevel={level} onSessionChange={setHasActiveSession} onProactiveHintChange={setShowProactiveHint} onPartnerMessageChange={setPartnerLastMessage} externalChatInput={chatInputFromBubble} onExternalChatInputConsumed={() => setChatInputFromBubble(null)} />
+        return (
+          <SoulSyncView
+            onInteract={triggerCheckIn}
+            userId={user?._id}
+            userAvatar={user?.avatar}
+            onViewProfile={setViewingUserId}
+            avatar={selectedAvatar}
+            userLevel={level}
+            onSessionChange={setHasActiveSession}
+            onProactiveHintChange={setShowProactiveHint}
+            onPartnerMessageChange={setPartnerLastMessage}
+            onSessionUpdate={(session) => setActiveSession(session)}
+            externalChatInput={chatInputFromBubble}
+            onExternalChatInputConsumed={() => setChatInputFromBubble(null)}
+          />
+        )
       default:
         return <PlaceholderView title={activeTab} />
     }
@@ -537,6 +555,7 @@ export default function Dashboard() {
             setShowAssistantBubble(false)
           }}
           partnerLastMessage={partnerLastMessage}
+          chatHistory={activeSession?.messages}
         />
       )}
 

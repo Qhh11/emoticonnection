@@ -146,3 +146,5 @@ class AIChatService:
         except Exception as e:
             print(f"❌ Gemini Error: {e}")
             return "抱歉，处理您的请求时遇到问题。"
+
+

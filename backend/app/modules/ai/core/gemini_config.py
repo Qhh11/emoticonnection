@@ -16,10 +16,10 @@ load_dotenv(root_env)
 class GeminiModels:
     """Gemini 模型名称常量"""
     # 主要模型 - 用于 AI 对话、情绪分析、日记生成
-    CHAT = "gemini-2.5-flash-lite"
+    CHAT = "gemini-2.5-flash-lite-preview-09-2025"
     
     # 音频转文字模型 - 用于语音识别
-    AUDIO_STT = "gemini-2.5-flash-lite"
+    AUDIO_STT = "gemini-2.5-flash-preview-tts"
     
     # 情绪分析模型
     EMOTION = "gemini-2.5-flash-lite"
@@ -32,6 +32,9 @@ class GeminiModels:
     
     # 原生语音对话模型 (Sustainable Voice)
     NATIVE_AUDIO = "gemini-2.5-flash-native-audio-preview-12-2025"
+    
+    # 助手功能模型 (Rewrite, Reply, Topic)
+    HELPER = "gemini-3-flash-preview"
 
 
 class GeminiClient:
@@ -108,3 +111,7 @@ def get_diary_model():
 def get_analytics_model():
     """获取数据分析模型"""
     return GeminiClient.get_model(GeminiModels.ANALYTICS)
+
+def get_helper_model(system_instruction: str = None):
+    """获取助手功能模型"""
+    return GeminiClient.get_model(GeminiModels.HELPER, system_instruction)
