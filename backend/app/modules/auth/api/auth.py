@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Body
+import os
 from app.modules.auth.schemas.auth import LoginRequest, RegisterRequest, AuthResponse
 from app.modules.auth.core.jwt_utils import create_access_token
 
@@ -106,3 +107,11 @@ def get_users():
         }
         for u in users
     ]
+
+@router.get("/gemini-key")
+def get_gemini_key():
+    """Retrieve Gemini API key for direct client connection (Development only)"""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=404, detail="GEMINI_API_KEY not configured on server")
+    return {"api_key": api_key}

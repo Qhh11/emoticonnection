@@ -187,3 +187,27 @@ async def create_new_session(request: CreateSessionRequest, repo: AIChatReposito
 async def get_session_history(session_id: str, repo: AIChatRepository = Depends(get_ai_repo)):
     """Get message history for a session"""
     return await repo.get_session_messages(session_id)
+@router.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    """
+    Just transcribe audio and return text.
+    Used by VoiceChatOverlay for real-time feedback.
+    """
+    try:
+        # Save to temp file
+        temp_path = await process_upload_file(file)
+        try:
+            # Call AudioService for STT
+            print(f"🎙️ [Transcribe] Processing file: {file.filename}")
+            transcribed_text = await audio_service.transcribe_audio(temp_path)
+            print(f"✅ [Transcribe] Result: {transcribed_text}")
+            return {"text": transcribed_text}
+        finally:
+            # Cleanup temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    except Exception as e:
+        print(f"❌ [Transcribe] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

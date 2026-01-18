@@ -126,6 +126,7 @@ class AudioService:
                     input=text
                 )
                 response.stream_to_file(save_path)
+                print(f"✅ [TTS] Used OpenAI TTS with voice: {voice}")
                 return f"/static/uploads/ai_voice/{filename}"
             except Exception as e:
                 print(f"⚠️ OpenAI TTS failed: {e}. Trying gTTS...")
@@ -135,6 +136,7 @@ class AudioService:
             from gtts import gTTS
             tts = gTTS(text=text, lang='en')
             tts.save(str(save_path))
+            print(f"✅ [TTS] Used gTTS fallback")
             return f"/static/uploads/ai_voice/{filename}"
         except Exception as e:
             print(f"❌ gTTS Error: {e}")

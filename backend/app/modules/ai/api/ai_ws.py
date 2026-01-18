@@ -66,12 +66,13 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                     print(f"[WS] Voice preference set to: {voice_preference}")
                 
                 # 2. Process Input (Text or Audio)
-                if msg_type == "audio_blob":
+                if msg_type in ["audio", "audio_blob"]:
                     # Handle Audio
-                    base64_data = message.get("data")
+                    base64_data = message.get("audio") or message.get("data")
                     audio_format = message.get("format", "webm")
                     
                     if not base64_data:
+                        print("[WS] Missing audio data in message")
                         continue
                         
                     # Save and Transcribe
@@ -83,7 +84,7 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                         # Send transcript back to client
                         await websocket.send_json({
                             "type": "transcript",
-                            "content": user_text
+                            "text": user_text
                         })
                         
                         # Clean up temp file
@@ -96,6 +97,14 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                         
                 elif msg_type == "text":
                     user_text = message.get("content", "")
+                
+                elif msg_type == "voice_preference":
+                    # Handle voice selection for TTS
+                    voice = message.get("voice", "nova")
+                    print(f"[WS] Voice preference set to: {voice}")
+                    # Store voice preference in session or pass to TTS later
+                    # For now, just acknowledge it
+                    continue
                 
                 else:
                     await websocket.send_json({"type": "error", "content": "Unknown message type"})
@@ -125,8 +134,8 @@ async def websocket_ai_chat(websocket: WebSocket, user_id: str):
                     
                     # Send text response
                     await websocket.send_json({
-                        "type": "pushed_text",
-                        "content": response_text
+                        "type": "ai_response",
+                        "text": response_text
                     })
                     
                     # 5. Generate Audio (TTS)

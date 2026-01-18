@@ -29,6 +29,9 @@ class GeminiModels:
     
     # 数据分析模型
     ANALYTICS = "gemini-2.5-flash-lite"
+    
+    # 原生语音对话模型 (Sustainable Voice)
+    NATIVE_AUDIO = "gemini-2.5-flash-native-audio-preview-12-2025"
 
 
 class GeminiClient:

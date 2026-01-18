@@ -26,7 +26,7 @@ export interface DiaryEntry {
   text: string
 }
 
-type DiaryMode = 'manual' | 'ai'
+type DiaryMode = 'manual' | 'ai' | 'voice'
 
 export interface DiaryViewProps {
   onInteract: (e: React.MouseEvent) => void
@@ -456,7 +456,13 @@ export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEnt
             onClick={() => setMode('ai')}
             className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'ai' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
           >
-            AI Reflection
+            AI Chat
+          </button>
+          <button
+            onClick={() => setMode('voice')}
+            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'voice' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
+          >
+            🎤 Voice
           </button>
         </div>
       </header>
@@ -531,9 +537,18 @@ export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEnt
             </div>
           </div>
         </div>
-      ) : (
+      ) : mode === 'ai' ? (
         <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
           <ChatAIView userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} embedded />
+        </div>
+      ) : (
+        <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
+          <VoiceChatOverlay
+            isOpen={true}
+            onClose={() => { }}
+            userId={userId || 'anonymous'}
+            embedded={true}
+          />
         </div>
       )}
 
