@@ -2,18 +2,27 @@
 Media Upload API Routes
 
 This file implements endpoints for:
-- Uploading images
-- Uploading videos
+- Uploading images/videos to MongoDB GridFS (cloud storage)
+- Retrieving media files
 - Managing media files
+
+Storage: MongoDB GridFS (stored in MongoDB Atlas cloud)
 """
 
-import os
-import uuid
+import sys
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
+
+# Import database config
+database_path = Path(__file__).resolve().parents[5] / "database"
+sys.path.insert(0, str(database_path))
+from config.mongodb_config import get_database  # type: ignore
+
+# Import GridFS storage
+from app.modules.media.gridfs_storage import GridFSStorage
 
 # ============================================================================
 # Initialize Router
@@ -28,18 +37,23 @@ router = APIRouter(
 # Configuration
 # ============================================================================
 
-# Get the backend directory (parent of app/)
-# __file__ is at: backend/app/api/v1/routers/media.py
-# We need to go up to: backend/
-# media.py -> routers -> v1 -> api -> app -> backend (5 levels up)
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
-UPLOAD_DIR = BASE_DIR / "static" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
 # Allowed file types
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".avi"}
 ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_VIDEO_EXTENSIONS
+
+# MIME types mapping
+MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".avi": "video/x-msvideo",
+}
 
 # Max file sizes (in bytes)
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -56,11 +70,18 @@ class MediaUploadResponse(BaseModel):
     media_type: str
     filename: str
     file_size: int
+    file_id: str  # GridFS file ID
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+def get_gridfs_storage() -> GridFSStorage:
+    """Get GridFS storage instance"""
+    db = get_database()
+    return GridFSStorage(db)
+
 
 def get_file_extension(filename: str) -> str:
     """Extract file extension from filename"""
@@ -83,11 +104,10 @@ def get_media_type(filename: str) -> str:
     return "unknown"
 
 
-def generate_unique_filename(original_filename: str) -> str:
-    """Generate unique filename to avoid collisions"""
-    ext = get_file_extension(original_filename)
-    unique_id = uuid.uuid4().hex
-    return f"{unique_id}{ext}"
+def get_content_type(filename: str) -> str:
+    """Get MIME type for file"""
+    ext = get_file_extension(filename)
+    return MIME_TYPES.get(ext, "application/octet-stream")
 
 
 # ============================================================================
@@ -97,9 +117,9 @@ def generate_unique_filename(original_filename: str) -> str:
 @router.post("/upload", response_model=MediaUploadResponse)
 async def upload_media(file: UploadFile = File(...)):
     """
-    Upload an image or video file
+    Upload an image or video file to MongoDB GridFS (cloud storage)
 
-    ENDPOINT: POST /media/upload
+    ENDPOINT: POST /api/media/upload
 
     REQUEST:
     - Content-Type: multipart/form-data
@@ -108,10 +128,11 @@ async def upload_media(file: UploadFile = File(...)):
     RESPONSE:
     {
         "success": true,
-        "media_url": "/static/uploads/abc123.jpg",
+        "media_url": "/api/media/file/507f1f77bcf86cd799439011",
         "media_type": "image",
         "filename": "abc123.jpg",
-        "file_size": 245678
+        "file_size": 245678,
+        "file_id": "507f1f77bcf86cd799439011"
     }
 
     VALIDATION:
@@ -129,6 +150,7 @@ async def upload_media(file: UploadFile = File(...)):
 
     # Determine media type
     media_type = get_media_type(file.filename)
+    content_type = get_content_type(file.filename)
 
     # Read file content
     file_content = await file.read()
@@ -146,73 +168,100 @@ async def upload_media(file: UploadFile = File(...)):
             detail=f"Video too large. Max size: {MAX_VIDEO_SIZE / 1024 / 1024} MB"
         )
 
-    # Generate unique filename
-    unique_filename = generate_unique_filename(file.filename)
-    file_path = UPLOAD_DIR / unique_filename
-
-    # Save file
+    # Upload to GridFS
+    storage = get_gridfs_storage()
     try:
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        result = await storage.upload_file(
+            file_content=file_content,
+            filename=file.filename,
+            content_type=content_type,
+            metadata={"media_type": media_type}
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save file: {str(e)}"
+            detail=f"Failed to upload file: {str(e)}"
         )
 
-    # Generate URL for accessing the file
-    media_url = f"/static/uploads/{unique_filename}"
-
-    print(f"[Media] Uploaded {media_type}: {unique_filename} ({file_size} bytes)")
+    print(f"[Media] Uploaded {media_type} to GridFS: {result['filename']} ({file_size} bytes)")
 
     return MediaUploadResponse(
         success=True,
-        media_url=media_url,
+        media_url=result["url"],
         media_type=media_type,
-        filename=unique_filename,
-        file_size=file_size
+        filename=result["filename"],
+        file_size=file_size,
+        file_id=result["file_id"]
     )
 
 
-@router.get("/info/{filename}")
-async def get_media_info(filename: str):
+@router.get("/file/{file_id}")
+async def get_media_file(file_id: str):
+    """
+    Retrieve a media file from GridFS
+
+    ENDPOINT: GET /api/media/file/{file_id}
+
+    Returns the actual file content with appropriate Content-Type header
+    """
+    storage = get_gridfs_storage()
+    file_data = await storage.get_file(file_id)
+
+    if not file_data:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return Response(
+        content=file_data["content"],
+        media_type=file_data["content_type"],
+        headers={
+            "Content-Disposition": f'inline; filename="{file_data["filename"]}"',
+            "Cache-Control": "public, max-age=31536000"  # Cache for 1 year
+        }
+    )
+
+
+@router.get("/info/{file_id}")
+async def get_media_info(file_id: str):
     """
     Get information about an uploaded media file
 
-    ENDPOINT: GET /media/info/abc123.jpg
+    ENDPOINT: GET /api/media/info/{file_id}
 
     RESPONSE:
     {
         "exists": true,
+        "file_id": "507f1f77bcf86cd799439011",
         "filename": "abc123.jpg",
         "media_type": "image",
         "file_size": 245678,
-        "url": "/static/uploads/abc123.jpg"
+        "url": "/api/media/file/507f1f77bcf86cd799439011"
     }
     """
-    file_path = UPLOAD_DIR / filename
+    storage = get_gridfs_storage()
+    file_info = await storage.get_file_info(file_id)
 
-    if not file_path.exists():
+    if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
-    file_size = file_path.stat().st_size
-    media_type = get_media_type(filename)
+    media_type = file_info.get("metadata", {}).get("media_type", "unknown")
 
     return {
         "exists": True,
-        "filename": filename,
+        "file_id": file_info["file_id"],
+        "filename": file_info["filename"],
         "media_type": media_type,
-        "file_size": file_size,
-        "url": f"/static/uploads/{filename}"
+        "file_size": file_info["size"],
+        "content_type": file_info["content_type"],
+        "url": f"/api/media/file/{file_id}"
     }
 
 
-@router.delete("/delete/{filename}")
-async def delete_media(filename: str):
+@router.delete("/delete/{file_id}")
+async def delete_media(file_id: str):
     """
-    Delete an uploaded media file
+    Delete an uploaded media file from GridFS
 
-    ENDPOINT: DELETE /media/delete/abc123.jpg
+    ENDPOINT: DELETE /api/media/delete/{file_id}
 
     RESPONSE:
     {
@@ -222,20 +271,13 @@ async def delete_media(filename: str):
 
     NOTE: In production, add authentication to prevent unauthorized deletion
     """
-    file_path = UPLOAD_DIR / filename
+    storage = get_gridfs_storage()
+    success = await storage.delete_file(file_id)
 
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+    if not success:
+        raise HTTPException(status_code=404, detail="File not found or failed to delete")
 
-    try:
-        file_path.unlink()
-        print(f"[Media] Deleted file: {filename}")
-        return {
-            "success": True,
-            "message": "File deleted successfully"
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete file: {str(e)}"
-        )
+    return {
+        "success": True,
+        "message": "File deleted successfully"
+    }

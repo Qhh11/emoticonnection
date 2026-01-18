@@ -24,6 +24,7 @@ from pathlib import Path
 database_path = Path(__file__).resolve().parents[5] / "database"
 sys.path.insert(0, str(database_path))
 from config.mongodb_config import get_database  # type: ignore
+from crud.following_crud import get_mutual_following  # type: ignore
 
 # ============================================================================
 # Initialize Router and ConnectionManager
@@ -99,9 +100,16 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str, user_id: s
     # ========================================================================
     await manager.connect(room_id_str, websocket, user_id_str)
 
-    # Broadcast user online status to the room
+    # Broadcast user online status to the room and to mutual friends
     if user_id_str:
         await manager.broadcast_user_status_to_room(room_id_str, user_id_str, "online")
+        # Notify mutual friends that this user is online
+        try:
+            mutual_friends = get_mutual_following(user_id_str)
+            if mutual_friends:
+                await manager.broadcast_user_status_to_users(mutual_friends, user_id_str, "online")
+        except Exception as e:
+            print(f"[WebSocket] Failed to notify friends of online status: {e}")
 
     try:
         # ====================================================================
@@ -280,6 +288,13 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str, user_id: s
         # Only broadcast offline if user has no other active connections
         if user_id_str and not manager.is_user_online(user_id_str):
             await manager.broadcast_user_status_to_room(room_id_str, user_id_str, "offline")
+            # Notify mutual friends that this user is offline
+            try:
+                mutual_friends = get_mutual_following(user_id_str)
+                if mutual_friends:
+                    await manager.broadcast_user_status_to_users(mutual_friends, user_id_str, "offline")
+            except Exception as e:
+                print(f"[WebSocket] Failed to notify friends of offline status: {e}")
         print(f"[WebSocket] Client disconnected from room {room_id}")
 
         try:
@@ -293,5 +308,34 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str, user_id: s
         except Exception as e:
             print(f"[WebSocket] Failed to broadcast disconnect: {e}")
 
+
+@router.websocket("/ws/presence/{user_id}")
+async def websocket_presence_endpoint(websocket: WebSocket, user_id: str):
+    """WebSocket endpoint for user presence notifications"""
+    presence_room = f"presence_{user_id}"
+    await manager.connect(presence_room, websocket, user_id)
+
+    # Notify friends this user is online
+    try:
+        friends = get_mutual_following(user_id)
+        if friends:
+            await manager.broadcast_user_status_to_users(friends, user_id, "online")
+    except Exception as e:
+        print(f"[Presence] Error notifying online: {e}")
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        await manager.disconnect(presence_room, websocket)
+        if not manager.is_user_online(user_id):
+            try:
+                friends = get_mutual_following(user_id)
+                if friends:
+                    await manager.broadcast_user_status_to_users(friends, user_id, "offline")
+            except Exception as e:
+                print(f"[Presence] Error notifying offline: {e}")
 
 

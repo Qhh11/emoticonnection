@@ -80,15 +80,19 @@ def _get_user_info_by_id(user_id: str) -> dict:
         return {"username": None, "avatar": None}
 
 
-async def _get_or_create_room(repo: ChatRepository, user1_id: Union[int, str], user2_id: Union[int, str], is_anonymous: bool = False) -> dict:
+async def _get_or_create_room(repo: ChatRepository, user1_id: Union[int, str], user2_id: Union[int, str], is_anonymous: bool = False, source: str = None) -> dict:
     """
     Get existing room or create new one for two users
     Now using MongoDB via ChatRepository
+
+    Args:
+        source: 'matching' for rooms created via matching, 'direct' for direct friend chat
     """
     return await repo.get_or_create_session(
         str(user1_id),
         str(user2_id),
-        is_anonymous
+        is_anonymous,
+        source
     )
 
 
@@ -406,6 +410,7 @@ async def get_user_rooms(user_id: str, repo: ChatRepository = Depends(get_chat_r
             other_user_name=other_user_info["username"],
             other_user_avatar=other_user_info["avatar"],
             is_anonymous=room.get("is_anonymous", False),
+            source=room.get("source"),  # 'matching' or 'direct'
             last_message=last_msg["content"][:50] if last_msg else None,
             last_message_time=last_msg["created_at"] if last_msg else None
         ))

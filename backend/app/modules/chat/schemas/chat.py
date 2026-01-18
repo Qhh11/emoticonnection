@@ -69,6 +69,7 @@ class RoomCreateExtended(BaseModel):
     user1_id: str
     user2_id: str
     is_anonymous: bool = False
+    source: Optional[str] = None  # 'matching' or 'direct' - to distinguish room origin
 
 
 
@@ -77,6 +78,7 @@ class RoomExtended(BaseModel):
     user1_id: str
     user2_id: str
     is_anonymous: bool = False
+    source: Optional[str] = None  # 'matching' or 'direct' - to distinguish room origin
     created_at: datetime = Field(default_factory=datetime.utcnow)
     user1_revealed: bool = True
     user2_revealed: bool = True  
@@ -88,6 +90,7 @@ class RoomListItem(BaseModel):
     other_user_name: Optional[str] = None  # None when anonymous
     other_user_avatar: Optional[str] = None  # User's emoji avatar (None when anonymous)
     is_anonymous: bool
+    source: Optional[str] = None  # 'matching' or 'direct' - to distinguish room origin
     last_message: Optional[str] = None
     last_message_time: Optional[datetime] = None
 

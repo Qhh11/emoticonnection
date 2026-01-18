@@ -471,6 +471,7 @@ export interface UserRoom {
   other_user_name: string
   other_user_avatar?: string  // User's emoji avatar (e.g., 🦊)
   is_anonymous: boolean
+  source?: string  // 'matching' or 'direct' - to distinguish room origin
   last_message?: string
   last_message_time?: string
 }
@@ -803,9 +804,21 @@ export const mediaApi = {
 // ============ WebSocket 连接 ============
 
 export const createChatWebSocket = (roomId: string, userId?: string): WebSocket => {
+  // 动态获取 WebSocket URL，支持本地开发和生产环境
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  // 使用 BASE_URL 的主机部分，或者回退到当前页面主机
+  let wsHost: string
+  try {
+    wsHost = new URL(BASE_URL).host
+  } catch {
+    wsHost = window.location.host
+  }
+
   const wsUrl = userId
-    ? `ws://localhost:8000/ws/rooms/${roomId}?user_id=${userId}`
-    : `ws://localhost:8000/ws/rooms/${roomId}`
+    ? `${wsProtocol}//${wsHost}/ws/rooms/${roomId}?user_id=${userId}`
+    : `${wsProtocol}//${wsHost}/ws/rooms/${roomId}`
+
+  console.log('[WebSocket] Connecting to:', wsUrl)
   return new WebSocket(wsUrl)
 }
 

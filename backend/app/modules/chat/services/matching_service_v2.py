@@ -178,15 +178,25 @@ class MatchingServiceV2:
     async def find_match(self, request: MatchRequestV2Internal) -> MatchResponseV2:
         """Main matching entry point"""
         request.user_id = str(request.user_id)
+        print(f"[MatchV2] === find_match called ===")
+        print(f"[MatchV2] User: {request.user_id}")
+        print(f"[MatchV2] Mode: {request.mode}")
+        print(f"[MatchV2] Role: {request.role}, Need: {request.support_need}, Topic: {request.topic}")
+        print(f"[MatchV2] Emotion: {request.current_emotion}, Intensity: {request.emotion_intensity}")
+
         if request.risk_level == RiskLevel.CRISIS:
             return self._handle_crisis_user(request)
-        
+
         if request.user_id in self.user_match_map:
             return self._return_existing_match(request.user_id)
-        
+
         self._cleanup_expired_entries()
-        
+
         queue = self.queues.get(request.mode, [])
+        print(f"[MatchV2] Queue size for {request.mode}: {len(queue)}")
+        for i, entry in enumerate(queue):
+            print(f"[MatchV2]   Queue[{i}]: user={entry.request.user_id}, role={entry.request.role}, emotion={entry.request.current_emotion}")
+
         best_match = self._find_best_match(request, queue)
         
         if best_match:
@@ -206,21 +216,27 @@ class MatchingServiceV2:
     def _find_best_match(self, request: MatchRequestV2Internal, queue: List[QueueEntry]) -> Optional[QueueEntry]:
         """Find the best match from queue"""
         candidates: List[Tuple[QueueEntry, float, str]] = []
-        
+
         for entry in queue:
             other = entry.request
             if other.user_id == request.user_id:
+                print(f"[MatchV2] Skipping self: {other.user_id}")
                 continue
             if not self._is_safe_to_match(request, other):
+                print(f"[MatchV2] Not safe to match with {other.user_id}")
                 continue
-            
+
             score, reason = self._calculate_match_score(request, other)
+            print(f"[MatchV2] Score with {other.user_id}: {score:.2f} (min required: 3.0)")
             if score >= 3.0:
                 candidates.append((entry, score, reason))
-        
+            else:
+                print(f"[MatchV2] Score too low, not adding to candidates")
+
         if not candidates:
+            print(f"[MatchV2] No candidates found, user will be added to queue")
             return None
-        
+
         candidates.sort(key=lambda x: x[1], reverse=True)
         best = candidates[0]
         print(f"[MatchV2] Found match candidate: score={best[1]:.2f}, reason={best[2]}")
@@ -367,8 +383,9 @@ class MatchingServiceV2:
         
         from app.modules.chat.api.chat_http import get_chat_repo, _get_or_create_room
         repo = get_chat_repo()
-        room = await _get_or_create_room(repo, user1_id=request.user_id, 
-                                         user2_id=matched_request.user_id, is_anonymous=is_anonymous)
+        room = await _get_or_create_room(repo, user1_id=request.user_id,
+                                         user2_id=matched_request.user_id, is_anonymous=is_anonymous,
+                                         source='matching')
         
         room_id = room["id"]
         self.active_matches[room_id] = (request.user_id, matched_request.user_id)

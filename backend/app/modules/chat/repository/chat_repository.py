@@ -26,7 +26,8 @@ class ChatRepository:
         self,
         user1_id: str,
         user2_id: str,
-        is_anonymous: bool = False
+        is_anonymous: bool = False,
+        source: str = None
     ) -> Dict:
         """
         Get existing peer chat session or create new one
@@ -35,6 +36,7 @@ class ChatRepository:
             user1_id: First user ID (string representation of ObjectId or int)
             user2_id: Second user ID
             is_anonymous: Whether the session is anonymous
+            source: Source of the room ('matching' or 'direct')
 
         Returns:
             Session document as dict
@@ -76,6 +78,7 @@ class ChatRepository:
             "is_favorited": False,
             "is_blocked": False,
             "is_anonymous": is_anonymous,
+            "source": source,  # 'matching' or 'direct'
             "user1_revealed": not is_anonymous,
             "user2_revealed": not is_anonymous
         }
@@ -222,6 +225,7 @@ class ChatRepository:
             "user1_id": str(session["user_id"]),
             "user2_id": str(session.get("peer_user_id")),
             "is_anonymous": session.get("is_anonymous", False),
+            "source": session.get("source"),  # 'matching' or 'direct'
             "created_at": session.get("started_at", session.get("created_at")),
             "user1_revealed": session.get("user1_revealed", True),
             "user2_revealed": session.get("user2_revealed", True),

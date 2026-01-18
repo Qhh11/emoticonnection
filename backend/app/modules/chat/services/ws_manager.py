@@ -269,4 +269,24 @@ class ConnectionManager:
                 except:
                     pass
 
+    async def broadcast_user_status_to_users(self, target_user_ids: List[str], user_id: str, status: str) -> None:
+        """Broadcast user status change to specific users (e.g., friends)"""
+        for target_id in target_user_ids:
+            if target_id == user_id:
+                continue  # Don't send to the user themselves
+            if target_id not in self.user_sockets:
+                continue  # User not online
+
+            for websocket in self.user_sockets[target_id][:]:
+                try:
+                    await websocket.send_json({
+                        "event_type": WSEventType.USER_STATUS.value,
+                        "data": {
+                            "user_id": user_id,
+                            "status": status
+                        }
+                    })
+                except:
+                    pass
+
 

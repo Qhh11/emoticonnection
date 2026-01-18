@@ -71,10 +71,10 @@ export default function PostGrid({
 
   return (
     <div className="w-full">
-      {/* 三列瀑布流布局 */}
-      <div className="columns-1 md:columns-2 lg:columns-3 gap-4">
+      {/* 三列网格布局 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {posts.map((post) => (
-          <div key={post.id} className="break-inside-avoid mb-4">
+          <div key={post.id}>
             <PostCard
               post={post}
               onClick={() => onPostClick(post)}

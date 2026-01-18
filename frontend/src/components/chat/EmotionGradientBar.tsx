@@ -28,9 +28,9 @@ export default function EmotionGradientBar({
   const transitionEnd = Math.min(100, primaryPct + 15)
 
   return (
-    <div className="w-full max-w-[200px] space-y-1">
+    <div className="w-full max-w-[240px] space-y-1">
       {/* 情绪标签 - 只显示情绪名称，不显示百分比 */}
-      <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-wider">
+      <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-wider gap-2">
         <span style={{ color: primaryColor }}>
           {primaryEmotion}
         </span>

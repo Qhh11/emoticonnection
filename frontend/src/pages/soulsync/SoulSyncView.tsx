@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { matchApi, chatApi, socialApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
+import { matchApi, chatApi, socialApi, userApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
 
 // Extended FollowUser with online status
 interface FriendWithOnlineStatus extends FollowUser {
@@ -157,6 +157,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
 
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null)
+  const presenceWsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Proactive hint - show tooltip after 8s of typing pause
@@ -180,6 +181,78 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     if (userId) {
       loadUserRooms()
       loadMutualFriends()
+    }
+  }, [userId])
+
+  // Presence WebSocket for real-time friend status updates
+  useEffect(() => {
+    if (!userId) return
+
+    // Connect to presence WebSocket
+    // 动态获取 WebSocket URL，与 createChatWebSocket 保持一致
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsHost = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.host}`
+    const presenceWs = new WebSocket(`${wsHost}/ws/presence/${userId}`)
+
+    presenceWs.onopen = () => {
+      console.log('[Presence WS] Connected')
+    }
+
+    presenceWs.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        console.log('[Presence WS] Received:', data)
+
+        if (data.event_type === 'user_status') {
+          const { user_id: statusUserId, status } = data.data
+          const isOnline = status === 'online'
+          console.log('[Presence WS] Friend status update:', statusUserId, status)
+
+          // Update sessions
+          setSessions(prev => prev.map(s =>
+            s.partnerId === statusUserId ? { ...s, isOnline } : s
+          ))
+
+          // Update mutual friends list
+          setMutualFriends(prev => {
+            const updated = prev.map(f =>
+              f.id === statusUserId ? { ...f, isOnline } : f
+            )
+            return updated.sort((a, b) => {
+              if (a.isOnline && !b.isOnline) return -1
+              if (!a.isOnline && b.isOnline) return 1
+              return 0
+            })
+          })
+        }
+      } catch (err) {
+        console.error('[Presence WS] Parse error:', err)
+      }
+    }
+
+    presenceWs.onerror = (err) => {
+      console.error('[Presence WS] Error:', err)
+    }
+
+    presenceWs.onclose = () => {
+      console.log('[Presence WS] Disconnected')
+    }
+
+    presenceWsRef.current = presenceWs
+
+    // Ping to keep connection alive
+    const pingInterval = setInterval(() => {
+      if (presenceWs.readyState === WebSocket.OPEN) {
+        presenceWs.send('ping')
+      }
+    }, 30000)
+
+    return () => {
+      clearInterval(pingInterval)
+      if (presenceWsRef.current) {
+        presenceWsRef.current.close()
+        presenceWsRef.current = null
+      }
     }
   }, [userId])
 
@@ -237,7 +310,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             matchScore: status.match_score,
             matchReason: status.match_reason
           })
-          setIsSearching(false)
+          // Don't set isSearching to false here - keep the modal open to show match result
           return
         }
 
@@ -261,7 +334,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             matchScore: status.match_score,
             matchReason: status.match_reason
           })
-          setIsSearching(false)
+          // Don't set isSearching to false here - keep the modal open to show match result
         } else if (status.in_queue) {
           setQueuePosition(status.queue_position || null)
           setEstimatedWait(status.estimated_wait || null)
@@ -326,17 +399,17 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         chatApi.getOnlineUsers()
       ])
 
-      // Only show anonymous (matched) sessions in Synchronized Echoes
-      const anonymousRooms = rooms.filter((room: UserRoom) => room.is_anonymous)
+      // Only show matching rooms in Synchronized Echoes (regardless of anonymous status)
+      const matchingRooms = rooms.filter((room: UserRoom) => room.source === 'matching')
 
-      const sessionsFromRooms: PeerSession[] = anonymousRooms.map((room: UserRoom) => ({
+      const sessionsFromRooms: PeerSession[] = matchingRooms.map((room: UserRoom) => ({
         id: room.room_id,
         roomId: room.room_id,
-        partnerName: 'Anonymous',
+        partnerName: room.is_anonymous ? 'Anonymous' : (room.other_user_name || 'User'),
         partnerId: room.other_user_id,
-        partnerAvatar: '🎭',
-        isAnonymous: true,
-        isRevealed: false,
+        partnerAvatar: room.is_anonymous ? '🎭' : (room.other_user_avatar || '👤'),
+        isAnonymous: room.is_anonymous,
+        isRevealed: !room.is_anonymous,
         lastMessage: room.last_message || 'Start chatting...',
         moodColor: '#9381BA',
         messages: [],
@@ -429,12 +502,26 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         // Handle user status updates
         if (data.event_type === 'user_status') {
           const { user_id: statusUserId, status } = data.data
+          const isOnline = status === 'online'
           console.log('[WS] User status update:', statusUserId, status)
+          // Update sessions
           setSessions(prev => prev.map(s =>
             s.partnerId === statusUserId
-              ? { ...s, isOnline: status === 'online' }
+              ? { ...s, isOnline }
               : s
           ))
+          // Update mutual friends list
+          setMutualFriends(prev => {
+            const updated = prev.map(f =>
+              f.id === statusUserId ? { ...f, isOnline } : f
+            )
+            // Re-sort: online users first
+            return updated.sort((a, b) => {
+              if (a.isOnline && !b.isOnline) return -1
+              if (!a.isOnline && b.isOnline) return 1
+              return 0
+            })
+          })
           return
         }
 
@@ -563,12 +650,25 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       return
     }
 
+    // For non-anonymous matches, fetch the partner's real info
+    let partnerName = 'Anonymous'
+    let partnerAvatar = '🎭'
+    if (!matchedPartner.isAnonymous && matchedPartner.partnerId && matchedPartner.partnerId !== 'unknown') {
+      try {
+        const partnerUser = await userApi.getUser(matchedPartner.partnerId)
+        partnerName = partnerUser.nickname || partnerUser.username
+        partnerAvatar = partnerUser.avatar || '💠'
+      } catch (err) {
+        console.error('Failed to fetch partner info:', err)
+      }
+    }
+
     const newSession: PeerSession = {
       id: roomId,
       roomId,
-      partnerName: matchedPartner.isAnonymous ? 'Ghost_Vibe' : 'Echo_Explorer',
+      partnerName,
       partnerId: matchedPartner.partnerId,
-      partnerAvatar: matchedPartner.isAnonymous ? '🎭' : '💠',
+      partnerAvatar,
       isAnonymous: matchedPartner.isAnonymous,
       isRevealed: !matchedPartner.isAnonymous,
       lastMessage: 'Connection established',
@@ -705,40 +805,15 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
               </button>
             </>
           ) : (
-            <div className="bg-white p-12 rounded-[3.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.15)] border border-black/5 text-center space-y-8 animate-in zoom-in-95 duration-500">
-              <div className="w-32 h-32 mx-auto rounded-[2.5rem] bg-gray-50 flex items-center justify-center text-6xl shadow-inner border-4 border-white" style={{ borderColor: selectedMood.color + '40' }}>
-                {matchedPartner.isAnonymous ? '🎭' : '💠'}
-              </div>
+            <div className="bg-white p-10 rounded-[3.5rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.15)] border border-black/5 text-center space-y-8 animate-in zoom-in-95 duration-500">
               <div className="space-y-2">
-                <h3 className="text-3xl font-black uppercase tracking-tighter">
-                  {matchedPartner.isAnonymous ? 'Ghost_Vibe' : 'Echo_Explorer'}
-                </h3>
                 <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-green-50 text-green-600 border border-green-100">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                   <span className="text-[12px] font-black uppercase tracking-widest">Match Found!</span>
                 </div>
               </div>
-              {(matchedPartner.matchScore || matchedPartner.matchReason) && (
-                <div className="flex justify-center gap-4">
-                  {matchedPartner.matchScore && (
-                    <div className="px-4 py-2 bg-accent/10 rounded-xl">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Compatibility</p>
-                      <p className="text-xl font-black text-accent">{Math.round(matchedPartner.matchScore * 10)}%</p>
-                    </div>
-                  )}
-                  {matchedPartner.matchReason && (
-                    <div className="px-4 py-2 bg-gray-50 rounded-xl">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Match Type</p>
-                      <p className="text-sm font-black text-gray-600">{matchedPartner.matchReason.replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-              <p className="text-gray-400 text-sm font-bold max-w-xs mx-auto">
-                Soul matched on your current frequency. Enter the pulse?
-              </p>
-              <button onClick={confirmMatch} className="w-full py-5 bg-black text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all">
-                Connect Pulse
+              <button onClick={confirmMatch} className="px-12 py-5 bg-black text-white rounded-[1.5rem] text-sm font-black uppercase tracking-wide shadow-xl hover:scale-105 active:scale-95 transition-all">
+                Confirm Connection
               </button>
             </div>
           )}
@@ -1113,7 +1188,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
           <div className="w-80 border-r border-black/5 flex flex-col">
             <div className="p-4 border-b border-black/5">
               <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
-                {socialCategory === 'chats' ? 'Synchronized Echoes' : 'Friends Online'}
+                {socialCategory === 'chats' ? 'Synchronized Echoes' : 'Friends'}
               </h3>
             </div>
             <div className="flex-1 overflow-y-auto">
