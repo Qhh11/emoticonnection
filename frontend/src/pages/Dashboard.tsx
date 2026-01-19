@@ -311,26 +311,6 @@ export default function Dashboard() {
     }
   }
 
-  const aiAddDiaryEntry = async (content: string) => {
-    if (user?._id) {
-      try {
-        await aiChatApi.aiSaveDiary(user._id, content)
-        // 标记用户活动，用于 Report 缓存判断
-        markUserActivity(user._id)
-        refreshDiaries()
-      } catch (err) {
-        console.error('Failed to AI-save diary:', err)
-        // Fallback to manual save if AI fails
-        addDiaryEntry({
-          title: `Journal - ${new Date().toLocaleDateString()}`,
-          mood: 'Neutral',
-          color: '#121212',
-          text: content
-        })
-      }
-    }
-  }
-
   const refreshDiaries = () => {
     if (user?._id) {
       aiChatApi.getDiaries(user._id)
@@ -513,7 +493,6 @@ export default function Dashboard() {
             onInteract={triggerCheckIn}
             entries={diaryEntries}
             onAddEntry={addDiaryEntry}
-            onAISaveEntry={aiAddDiaryEntry}
             userId={user?._id}
             onRefreshDiaries={refreshDiaries}
             onOpenEntryDetail={setSelectedJournalModal}

@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { aiChatApi } from '../../services/api'
 import { AVATARS_3D, Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 import VoiceChatOverlay from '../../components/chat/VoiceChatOverlay'
 import { markUserActivity } from '../../components/EmotionReportModal'
+import { useGeminiLive } from '../../hooks/useGeminiLive'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -36,7 +38,6 @@ export interface DiaryViewProps {
   userId?: string
   onRefreshDiaries?: () => void
   onOpenEntryDetail: (entry: DiaryEntry) => void
-  onAISaveEntry?: (content: string) => void
   avatar?: Avatar3D | null
 }
 
@@ -52,11 +53,24 @@ interface ChatMessage {
   content: string
 }
 
+// Voice recording status type
+type VoiceStatus = 'idle' | 'recording' | 'processing' | 'speaking'
+
 function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIViewProps) {
   // Determine avatar and its greeting once at the start of component lifecycle
   // Default to AVATARS_3D[0] (Blushy) if no avatar is provided by parent
   const [activeAvatar, setActiveAvatar] = useState<Avatar3D>(() => initialAvatar || AVATARS_3D[0])
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+
+  // Text mode messages (separate from voice mode)
+  const [textMessages, setTextMessages] = useState<ChatMessage[]>(() => [
+    {
+      role: 'ai',
+      content: (initialAvatar || AVATARS_3D[0]).greeting
+    }
+  ])
+
+  // Voice mode messages (separate from text mode)
+  const [voiceMessages, setVoiceMessages] = useState<ChatMessage[]>(() => [
     {
       role: 'ai',
       content: (initialAvatar || AVATARS_3D[0]).greeting
@@ -70,21 +84,76 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
   const [saveSuccess, setSaveSuccess] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Voice mode states
+  const [chatMode, setChatMode] = useState<'text' | 'voice'>('text')
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
+  const [transcript, setTranscript] = useState('')
+
+  // Get current mode's messages
+  const messages = chatMode === 'text' ? textMessages : voiceMessages
+  const setMessages = chatMode === 'text' ? setTextMessages : setVoiceMessages
+
+  // Gemini Live hook for voice chat
+  const geminiLive = useGeminiLive({
+    onTranscript: (text) => {
+      console.log('[ChatAIView] Gemini transcript:', text)
+      setTranscript(text)
+      // Add AI response to voice messages (always use setVoiceMessages directly)
+      if (text && voiceStatus === 'speaking') {
+        setVoiceMessages(prev => {
+          // Update the last AI message or add new one
+          const lastMsg = prev[prev.length - 1]
+          if (lastMsg?.role === 'ai' && lastMsg.content.startsWith('🎤')) {
+            // Update streaming message
+            return [...prev.slice(0, -1), { role: 'ai', content: text }]
+          }
+          return [...prev, { role: 'ai', content: text }]
+        })
+      }
+    },
+    onError: (error) => {
+      console.error('[ChatAIView] Gemini Live error:', error)
+      setVoiceStatus('idle')
+    },
+    onTurnComplete: () => {
+      console.log('[ChatAIView] Gemini turn complete')
+      setVoiceStatus('idle')
+    }
+  })
+
+  // Sync voice status with Gemini Live state
+  useEffect(() => {
+    if (geminiLive.isSpeaking) {
+      setVoiceStatus('speaking')
+    } else if (geminiLive.isRecording) {
+      setVoiceStatus('recording')
+    }
+  }, [geminiLive.isSpeaking, geminiLive.isRecording])
+
   // Sync with initialAvatar if it changes from parent (e.g. user selects in Gallery)
   useEffect(() => {
     if (initialAvatar && initialAvatar.id !== activeAvatar?.id) {
       setActiveAvatar(initialAvatar)
-      // If conversation hasn't started, also update the greeting
-      if (messages.length <= 1) {
-        setMessages([{ role: 'ai', content: initialAvatar.greeting }])
+      // If conversation hasn't started, also update the greeting for both modes
+      if (textMessages.length <= 1) {
+        setTextMessages([{ role: 'ai', content: initialAvatar.greeting }])
+      }
+      if (voiceMessages.length <= 1) {
+        setVoiceMessages([{ role: 'ai', content: initialAvatar.greeting }])
       }
     }
   }, [initialAvatar])
 
   // Update greeting when picking a different avatar via the inline switcher
   useEffect(() => {
-    if (messages.length <= 1 && activeAvatar) {
-      setMessages([{ role: 'ai', content: activeAvatar.greeting }])
+    if (activeAvatar) {
+      // Update greeting for both modes if conversation hasn't started
+      if (textMessages.length <= 1) {
+        setTextMessages([{ role: 'ai', content: activeAvatar.greeting }])
+      }
+      if (voiceMessages.length <= 1) {
+        setVoiceMessages([{ role: 'ai', content: activeAvatar.greeting }])
+      }
     }
   }, [activeAvatar?.id])
 
@@ -106,22 +175,21 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
     }
   }, [userId])
 
-  // Get the latest AI message to display
+  // Get the latest AI message to display (used in voice mode)
   const latestAiMessage = messages.filter(m => m.role === 'ai').slice(-1)[0]?.content || ''
-  const latestUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]?.content || ''
 
   const handleSend = async () => {
     if (!input.trim()) return
 
     const userMessage = input
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+    setTextMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setInput('')
     setIsLoading(true)
 
     try {
       // Build history for context - skip the first hardcoded welcome message
       // Only include messages after the initial greeting (index > 0)
-      const history = messages.slice(1).map(m => ({
+      const history = textMessages.slice(1).map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [m.content]
       }))
@@ -134,7 +202,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
         avatar_id: activeAvatar?.id
       })
 
-      setMessages(prev => [...prev, { role: 'ai', content: response.response }])
+      setTextMessages(prev => [...prev, { role: 'ai', content: response.response }])
 
       // 标记用户有新活动，用于 Emotion Report 缓存失效
       if (userId) {
@@ -144,7 +212,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
       console.error('Failed to get AI response:', err)
       // Show error message to user instead of fake fallback
       const errorMessage = err instanceof Error ? err.message : 'Failed to connect to AI service'
-      setMessages(prev => [...prev, { role: 'ai', content: `⚠️ Error: ${errorMessage}. Please check if the backend server is running.` }])
+      setTextMessages(prev => [...prev, { role: 'ai', content: `⚠️ Error: ${errorMessage}. Please check if the backend server is running.` }])
     } finally {
       setIsLoading(false)
     }
@@ -187,170 +255,346 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
     }
   }
 
-  // VIP Immersive View - Dark background with centered 3D Avatar
+  // ========== Voice Recording Functions (using Gemini Live) ==========
+
+  const startVoiceRecording = async () => {
+    setTranscript('')
+    setVoiceStatus('recording')
+    try {
+      await geminiLive.startRecording()
+    } catch (error) {
+      console.error('[ChatAIView] Error starting voice recording:', error)
+      setVoiceStatus('idle')
+    }
+  }
+
+  const stopVoiceRecording = () => {
+    geminiLive.stopRecording()
+    setVoiceStatus('processing')
+  }
+
+  // Switch between text and voice modes with animation
+  const switchToVoiceMode = async () => {
+    setChatMode('voice')
+    setTranscript('')
+    setVoiceStatus('idle')
+    // Pre-connect to Gemini Live for faster response
+    try {
+      await geminiLive.connect()
+    } catch (err) {
+      console.error('[ChatAIView] Failed to connect to Gemini Live:', err)
+    }
+  }
+
+  const switchToTextMode = () => {
+    // Stop any ongoing recording and disconnect
+    geminiLive.stopRecording()
+    geminiLive.disconnect()
+    setChatMode('text')
+    setVoiceStatus('idle')
+  }
+
+  // VIP Immersive View - Dark background with Text/Voice mode switching
   if (activeAvatar) {
     return (
-      <div className="h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
-        {/* Ambient glow effect */}
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            background: `radial-gradient(ellipse at center, ${activeAvatar.color}40 0%, transparent 70%)`
-          }}
-        />
+      <LayoutGroup>
+        <div className="h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
+          {/* Ambient glow effect */}
+          <motion.div
+            className="absolute inset-0 opacity-30"
+            animate={{
+              background: `radial-gradient(ellipse at center, ${activeAvatar.color}40 0%, transparent 70%)`
+            }}
+            transition={{ duration: 0.5 }}
+          />
 
-        {/* Top bar with save button and Avatar Switcher */}
-        <div className="relative z-10 flex items-center justify-between p-6">
-          <div className="flex items-center space-x-4 overflow-hidden">
-            {messages.length <= 1 ? (
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide py-1">
-                  {AVATARS_3D.map(a => (
-                    <button
-                      key={a.id}
-                      onClick={() => setActiveAvatar(a)}
-                      className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'border-white/10 opacity-40'}`}
-                    >
-                      <img src={a.videoPath || ''} alt={a.name} className="w-full h-full object-contain" />
-                    </button>
-                  ))}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-white text-[12px] font-black uppercase tracking-widest">
-                    {activeAvatar.name}
-                  </span>
-                  <span className="text-white/60 text-[11px] font-medium leading-relaxed">
-                    {activeAvatar.description}
-                  </span>
-                </div>
+          {/* Top bar - shared between modes */}
+          <div className="relative z-10 flex items-center justify-between p-6">
+            <div className="flex items-center space-x-6 overflow-hidden">
+              {/* Avatar Switcher - Always visible */}
+              <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide py-1">
+                {AVATARS_3D.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={() => setActiveAvatar(a)}
+                    className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'border-white/10 opacity-40'}`}
+                  >
+                    <img src={a.videoPath || ''} alt={a.name} className="w-full h-full object-contain" />
+                  </button>
+                ))}
               </div>
-            ) : (
               <div className="flex flex-col">
-                <div className="flex items-center space-x-3">
-                  <span className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
-                    VIP
-                  </span>
-                  <span className="text-white text-[12px] font-black uppercase tracking-widest">
-                    {activeAvatar.name}
-                  </span>
-                </div>
-                <span className="text-white/50 text-[11px] font-medium mt-1 leading-relaxed">
+                <span className="text-white text-[12px] font-black uppercase tracking-widest">
+                  {activeAvatar.name}
+                </span>
+                <span className="text-white/60 text-[11px] font-medium leading-relaxed">
                   {activeAvatar.description}
                 </span>
               </div>
-            )}
-          </div>
-          <button
-            onClick={handleSaveReflection}
-            disabled={isSaving || messages.length < 2}
-            className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${saveSuccess
-              ? 'bg-green-500 text-white'
-              : 'bg-white/10 text-white/80 hover:bg-white/20'
-              } disabled:opacity-30 disabled:cursor-not-allowed`}
-          >
-            {isSaving ? '...' : saveSuccess ? 'Saved!' : 'Save'}
-          </button>
-        </div>
+            </div>
 
-        {/* Main content area with Avatar */}
-        <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-8">
-          {/* Avatar Video - Large centered display */}
-          <div className="relative w-48 h-48 mb-8">
-            {/* Glow ring */}
-            <div
-              className="absolute inset-0 rounded-full animate-pulse"
-              style={{
-                background: `radial-gradient(circle, ${activeAvatar.color}30 0%, transparent 70%)`,
-                transform: 'scale(1.5)'
-              }}
-            />
-            {activeAvatar.videoPath ? (
-              <img
-                src={activeAvatar.videoPath}
-                alt={activeAvatar.name}
-                className="w-full h-full object-contain"
-                style={{
-                  filter: `drop-shadow(0 0 30px ${activeAvatar.color}60)`
-                }}
-              />
-            ) : (
-              <ModelViewer3D
-                modelPath={activeAvatar.modelPath}
-                avatarName={activeAvatar.name}
-                avatarColor={activeAvatar.color}
-                size="large"
-                exposure={activeAvatar.exposure}
-                environmentImage={activeAvatar.environmentImage}
-                shadowIntensity={0}
-              />
-            )}
+            <div className="flex items-center space-x-3">
+              {/* Mode switch button */}
+              {chatMode === 'voice' && (
+                <button
+                  onClick={switchToTextMode}
+                  className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all flex items-center space-x-2"
+                  title="Switch to text mode"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+                  </svg>
+                  <span className="text-white text-[10px] font-black uppercase tracking-widest">Text</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleSaveReflection}
+                disabled={isSaving || textMessages.length < 2}
+                className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${saveSuccess
+                  ? 'bg-green-500 text-white'
+                  : 'bg-white/10 text-white/80 hover:bg-white/20'
+                  } disabled:opacity-30 disabled:cursor-not-allowed`}
+              >
+                {isSaving ? '...' : saveSuccess ? 'Saved!' : 'Save'}
+              </button>
+            </div>
           </div>
 
-          {/* Message display area */}
-          <div className="w-full max-w-md text-center space-y-4">
-            {/* AI Response */}
-            <div className="min-h-[80px]">
-              {isLoading ? (
-                <div className="flex justify-center space-x-2">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '300ms' }}></div>
+          {/* ========== TEXT MODE ========== */}
+          {chatMode === 'text' && (
+            <>
+              {/* Fixed Avatar area with layoutId for smooth transition */}
+              <div className="relative z-10 flex flex-col items-center py-2 flex-shrink-0">
+                <motion.div
+                  layoutId="chat-avatar"
+                  className="relative w-20 h-20"
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                >
+                  <motion.div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: `radial-gradient(circle, ${activeAvatar.color}30 0%, transparent 70%)`,
+                      transform: 'scale(1.4)'
+                    }}
+                  />
+                  {activeAvatar.videoPath ? (
+                    <img
+                      src={activeAvatar.videoPath}
+                      alt={activeAvatar.name}
+                      className="w-full h-full object-contain"
+                      style={{ filter: `drop-shadow(0 0 15px ${activeAvatar.color}60)` }}
+                    />
+                  ) : (
+                    <ModelViewer3D
+                      modelPath={activeAvatar.modelPath}
+                      avatarName={activeAvatar.name}
+                      avatarColor={activeAvatar.color}
+                      size="small"
+                      exposure={activeAvatar.exposure}
+                      environmentImage={activeAvatar.environmentImage}
+                      shadowIntensity={0}
+                    />
+                  )}
+                </motion.div>
+              </div>
+
+            {/* Chat messages area - scrollable, Avatar is fixed above */}
+            <div className="flex-1 overflow-y-auto px-8 py-4 space-y-4 min-h-0 relative z-10">
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                  <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                    {msg.role === 'ai' && (
+                      <span className="text-[9px] font-black uppercase text-white/40 mb-1 ml-3 tracking-widest">
+                        {activeAvatar.name}
+                      </span>
+                    )}
+                    <div
+                      className={`p-4 rounded-2xl ${msg.role === 'user'
+                        ? 'bg-white/20 text-white rounded-br-sm'
+                        : 'bg-white/10 text-white/90 rounded-bl-sm'
+                        }`}
+                    >
+                      <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2 animate-in fade-in duration-500">
-                  <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
-                    {activeAvatar.name}
-                  </p>
-                  <p className="text-white text-lg font-bold leading-relaxed">
-                    {latestAiMessage}
-                  </p>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="p-4 rounded-2xl bg-white/10 rounded-bl-sm">
+                    <div className="flex space-x-2">
+                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
-            {/* User's last message (if any) */}
-            {latestUserMessage && (
-              <p className="text-white/40 text-sm font-bold">
-                You: "{latestUserMessage}"
-              </p>
-            )}
-          </div>
-        </div>
+            {/* Bottom input area with voice button */}
+            <div className="relative z-10 p-4 border-t border-white/5">
+              <div className="flex items-center space-x-3 max-w-2xl mx-auto">
+                {/* Text input */}
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Share your thoughts..."
+                    className="w-full px-5 py-3 bg-white/10 backdrop-blur-sm rounded-full border border-white/10 focus:outline-none focus:border-white/30 text-white text-sm font-bold placeholder:text-white/30"
+                  />
+                </div>
 
-        {/* Bottom input area */}
-        <div className="relative z-10 p-6 pb-8">
-          <div className="flex items-center justify-center space-x-4 max-w-md mx-auto">
+                {/* Voice button - switches to voice mode */}
+                <button
+                  onClick={switchToVoiceMode}
+                  className="w-12 h-12 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-all hover:scale-105 active:scale-95"
+                  title="Switch to voice mode"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                  </svg>
+                </button>
 
-
-            {/* Text input button - opens input */}
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Share your thoughts..."
-                className="w-full px-6 py-4 bg-white/10 backdrop-blur-sm rounded-full border border-white/10 focus:outline-none focus:border-white/30 text-white text-sm font-bold placeholder:text-white/30"
-              />
+                {/* Send button */}
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isLoading}
+                  className="w-12 h-12 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
+                  style={{
+                    background: `linear-gradient(135deg, ${activeAvatar.color} 0%, ${activeAvatar.color}80 100%)`,
+                    boxShadow: `0 0 20px ${activeAvatar.color}40`
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                  </svg>
+                </button>
+              </div>
             </div>
+          </>
+        )}
 
-            {/* Send button */}
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              className="w-14 h-14 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-              style={{
-                background: `linear-gradient(135deg, ${activeAvatar.color} 0%, ${activeAvatar.color}80 100%)`,
-                boxShadow: `0 0 30px ${activeAvatar.color}40`
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-            </button>
-          </div>
+          {/* ========== VOICE MODE ========== */}
+          {chatMode === 'voice' && (
+            <>
+              {/* Main content - Large centered avatar with layoutId */}
+              <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-8">
+                {/* Large Avatar with smooth transition via layoutId */}
+                <motion.div
+                  layoutId="chat-avatar"
+                  className="relative w-48 h-48 mb-6"
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                >
+                  {/* Glow ring - pulses when recording */}
+                  <motion.div
+                    className={`absolute inset-0 rounded-full ${voiceStatus === 'recording' ? 'animate-pulse' : ''}`}
+                    style={{
+                      background: `radial-gradient(circle, ${activeAvatar.color}${voiceStatus === 'recording' ? '50' : '30'} 0%, transparent 70%)`,
+                      transform: voiceStatus === 'recording' ? 'scale(1.8)' : 'scale(1.5)'
+                    }}
+                  />
+                  {activeAvatar.videoPath ? (
+                    <img
+                      src={activeAvatar.videoPath}
+                      alt={activeAvatar.name}
+                      className="w-full h-full object-contain"
+                      style={{
+                        filter: `drop-shadow(0 0 ${voiceStatus === 'recording' ? '40px' : '30px'} ${activeAvatar.color}60)`
+                      }}
+                    />
+                  ) : (
+                    <ModelViewer3D
+                      modelPath={activeAvatar.modelPath}
+                      avatarName={activeAvatar.name}
+                      avatarColor={activeAvatar.color}
+                      size="large"
+                      exposure={activeAvatar.exposure}
+                      environmentImage={activeAvatar.environmentImage}
+                      shadowIntensity={0}
+                    />
+                  )}
+                </motion.div>
+
+                {/* Status text */}
+                <div className="text-center mb-6">
+                  <p className="text-white/60 text-sm font-bold uppercase tracking-widest">
+                    {voiceStatus === 'idle' && 'Tap to speak'}
+                    {voiceStatus === 'recording' && 'Listening...'}
+                    {voiceStatus === 'processing' && 'Processing...'}
+                    {voiceStatus === 'speaking' && `${activeAvatar.name} is responding...`}
+                  </p>
+                </div>
+
+                {/* Latest AI response (if any) */}
+                {latestAiMessage && voiceStatus === 'idle' && (
+                  <div className="w-full max-w-md text-center animate-in fade-in duration-500">
+                    <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                      {activeAvatar.name}
+                    </p>
+                    <p className="text-white text-base font-bold leading-relaxed">
+                      {latestAiMessage}
+                    </p>
+                  </div>
+                )}
+
+                {/* Transcript display */}
+                {transcript && (
+                  <div className="mt-4 px-6 py-3 bg-white/10 rounded-2xl max-w-md">
+                    <p className="text-white/70 text-sm font-bold italic text-center">
+                      "{transcript}"
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom - Recording button */}
+              <div className="relative z-10 p-6 pb-8 flex justify-center">
+                <button
+                  onClick={voiceStatus === 'recording' ? stopVoiceRecording : startVoiceRecording}
+                  disabled={voiceStatus === 'processing' || voiceStatus === 'speaking'}
+                  className={`w-20 h-20 rounded-full flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    voiceStatus === 'recording'
+                      ? 'bg-red-500 hover:bg-red-600 scale-110'
+                      : 'hover:scale-105 active:scale-95'
+                  }`}
+                  style={voiceStatus !== 'recording' ? {
+                    background: `linear-gradient(135deg, ${activeAvatar.color} 0%, ${activeAvatar.color}80 100%)`,
+                    boxShadow: `0 0 40px ${activeAvatar.color}50`
+                  } : {
+                    boxShadow: '0 0 40px rgba(239, 68, 68, 0.5)'
+                  }}
+                >
+                  {voiceStatus === 'recording' ? (
+                    // Stop icon
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                  ) : voiceStatus === 'processing' || voiceStatus === 'speaking' ? (
+                    // Loading spinner
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  ) : (
+                    // Microphone icon
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      </LayoutGroup>
     )
   }
 
@@ -438,7 +682,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
   )
 }
 
-export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar }: DiaryViewProps) {
+export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar }: DiaryViewProps) {
   const [mode, setMode] = useState<DiaryMode>('manual')
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
@@ -447,18 +691,13 @@ export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEnt
   const handleSave = (e: React.MouseEvent) => {
     if (!content.trim()) return
 
-    if (onAISaveEntry) {
-      // Use AI to process and save
-      onAISaveEntry(content)
-    } else {
-      // Manual save fallback
-      onAddEntry({
-        title: title.trim() || `Journal - ${new Date().toLocaleDateString()}`,
-        mood: selectedMood?.label || 'Neutral',
-        color: selectedMood?.color || '#121212',
-        text: content
-      })
-    }
+    // Manual mode: save with user-selected mood and color
+    onAddEntry({
+      title: title.trim() || `Journal - ${new Date().toLocaleDateString()}`,
+      mood: selectedMood?.label || 'Neutral',
+      color: selectedMood?.color || '#121212',
+      text: content
+    })
 
     setContent('')
     setTitle('')
@@ -537,7 +776,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEnt
                 className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 text-xl font-bold leading-relaxed placeholder:text-gray-200 resize-none"
               />
               <div className="flex justify-end">
-                <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Process with AI & Log</button>
+                <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Save</button>
               </div>
             </div>
           </div>
@@ -545,7 +784,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, onAISaveEnt
             <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-8">
               <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Previous Logs</h4>
               <div className="diary-stack">
-                {entries.map((item, i) => (
+                {entries.slice(0, 5).map((item, i) => (
                   <div
                     key={i}
                     onClick={() => onOpenEntryDetail(item)}

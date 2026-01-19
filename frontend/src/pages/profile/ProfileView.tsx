@@ -612,7 +612,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
         <h4 className="text-3xl font-black tracking-tighter uppercase px-4">My Journals</h4>
         {diaryEntries.length > 0 ? (
           <div className="diary-stack px-4">
-            {diaryEntries.slice(0, 4).map((entry, i) => (
+            {diaryEntries.map((entry, i) => (
               <DiaryStackItem
                 key={i}
                 title={entry.title}
