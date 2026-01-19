@@ -36,6 +36,24 @@ const getEmotionColor = (emotion: string): string => {
   return EMOTION_COLORS[emotion.toLowerCase()] || '#808080'
 }
 
+// 根据分数获取颜色（与 EmotionReportModal 保持一致）
+const getScoreColor = (score: number): string => {
+  if (score >= 0.6) return '#FF9500'   // 橙色 - Great
+  if (score >= 0.2) return '#F9D849'   // 黄色 - Good
+  if (score >= -0.2) return '#66B04C'  // 绿色 - Okay
+  if (score >= -0.6) return '#3266B1'  // 蓝色 - Low
+  return '#D32F2F'                      // 红色 - Bad
+}
+
+// 根据分数获取标签
+const getScoreLabel = (score: number): string => {
+  if (score >= 0.6) return 'Great'
+  if (score >= 0.2) return 'Good'
+  if (score >= -0.2) return 'Okay'
+  if (score >= -0.6) return 'Low'
+  return 'Bad'
+}
+
 export interface Theme {
   name: string
   color: string
@@ -425,9 +443,9 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 const isFuture = day.date > today
 
                 if (data) {
-                  // Has data: show emotion color + height based on score
+                  // Has data: show score color + height based on score
                   const height = Math.max(20, ((data.avg_score + 1) / 2) * 100)
-                  const barColor = getEmotionColor(data.dominant_emotion)
+                  const barColor = getScoreColor(data.avg_score)
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1">
                       <div
@@ -437,7 +455,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                           minHeight: '20px',
                           backgroundColor: barColor
                         }}
-                        title={`${data.dominant_emotion}: ${data.avg_score.toFixed(2)}`}
+                        title={`${getScoreLabel(data.avg_score)}: ${data.avg_score.toFixed(2)}`}
                       />
                     </div>
                   )

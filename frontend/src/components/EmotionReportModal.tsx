@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { aiChatApi, EmotionReport } from '../services/api'
-import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceArea } from 'recharts'
 
 // Emotion color mapping
 const EMOTION_COLORS: Record<string, string> = {
@@ -22,6 +22,24 @@ const EMOTION_COLORS: Record<string, string> = {
 
 const getEmotionColor = (emotion: string): string => {
   return EMOTION_COLORS[emotion.toLowerCase()] || '#808080'
+}
+
+// 根据分数获取颜色（正分暖色，负分冷色）
+const getScoreColor = (score: number): string => {
+  if (score >= 0.6) return '#FF9500'   // 橙色 - Great
+  if (score >= 0.2) return '#F9D849'   // 黄色 - Good
+  if (score >= -0.2) return '#66B04C'  // 绿色 - Okay
+  if (score >= -0.6) return '#3266B1'  // 蓝色 - Low
+  return '#D32F2F'                      // 红色 - Bad
+}
+
+// 根据分数获取标签
+const getScoreLabel = (score: number): string => {
+  if (score >= 0.6) return 'Great'
+  if (score >= 0.2) return 'Good'
+  if (score >= -0.2) return 'Okay'
+  if (score >= -0.6) return 'Low'
+  return 'Bad'
 }
 
 // 根据情绪类型返回对应的 emoji
@@ -78,7 +96,7 @@ const getLastActivityTime = (userId: string): number => {
   }
 }
 
-const getCachedReport = (userId: string, period: string): EmotionReport | null => {
+export const getCachedReport = (userId: string, period: string): EmotionReport | null => {
   try {
     const cached = localStorage.getItem(getCacheKey(userId, period))
     if (cached) {
@@ -99,7 +117,7 @@ const getCachedReport = (userId: string, period: string): EmotionReport | null =
   return null
 }
 
-const setCachedReport = (userId: string, period: string, data: EmotionReport) => {
+export const setCachedReport = (userId: string, period: string, data: EmotionReport) => {
   try {
     localStorage.setItem(getCacheKey(userId, period), JSON.stringify({
       data,
@@ -393,7 +411,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                                     <stop
                                       key={index}
                                       offset={`${offset}%`}
-                                      stopColor={getEmotionColor(point.dominant_emotion || 'neutral')}
+                                      stopColor={getScoreColor(point.avg_score ?? 0)}
                                       stopOpacity={1}
                                     />
                                   )
@@ -413,7 +431,20 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                                 return new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
                               }}
                             />
-                            <YAxis hide={true} domain={[-1, 1]} />
+                            <YAxis
+                              domain={[-1, 1]}
+                              axisLine={false}
+                              tickLine={false}
+                              tick={false}
+                              width={0}
+                            />
+
+                            {/* 背景色块 - 5个分数区间 */}
+                            <ReferenceArea y1={0.6} y2={1} fill="#FF9500" fillOpacity={0.15} />
+                            <ReferenceArea y1={0.2} y2={0.6} fill="#F9D849" fillOpacity={0.15} />
+                            <ReferenceArea y1={-0.2} y2={0.2} fill="#66B04C" fillOpacity={0.15} />
+                            <ReferenceArea y1={-0.6} y2={-0.2} fill="#3266B1" fillOpacity={0.15} />
+                            <ReferenceArea y1={-1} y2={-0.6} fill="#D32F2F" fillOpacity={0.15} />
 
                             {/* 拟物化气泡 Tooltip */}
                             <Tooltip
@@ -422,7 +453,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                                 const data = payload[0].payload
                                 // 没有数据的点不显示 tooltip
                                 if (data.avg_score === null) return null
-                                const color = getEmotionColor(data.dominant_emotion || 'neutral')
+                                const color = getScoreColor(data.avg_score)
                                 return (
                                   <div
                                     className="bg-white rounded-2xl p-4 border border-gray-100"
@@ -439,7 +470,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                                         className="w-3 h-3 rounded-full"
                                         style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
                                       />
-                                      <span className="text-sm font-black capitalize">{data.dominant_emotion}</span>
+                                      <span className="text-sm font-black">{getScoreLabel(data.avg_score)}</span>
                                     </div>
                                     <p className="text-lg font-black mt-1">
                                       {data.avg_score >= 0 ? '+' : ''}{data.avg_score.toFixed(2)}
@@ -470,7 +501,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                               dot={(props: any) => {
                                 const { cx, cy, payload } = props
                                 if (payload.avg_score === null) return <g key={`empty-${payload.date}`} />
-                                const color = getEmotionColor(payload.dominant_emotion || 'neutral')
+                                const color = getScoreColor(payload.avg_score)
                                 return (
                                   <circle
                                     key={`dot-${payload.date}`}
@@ -487,7 +518,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                               activeDot={(props: any) => {
                                 const { cx, cy, payload } = props
                                 if (payload.avg_score === null) return <g key={`empty-active-${payload.date}`} />
-                                const color = getEmotionColor(payload.dominant_emotion || 'neutral')
+                                const color = getScoreColor(payload.avg_score)
                                 return (
                                   <circle
                                     key={`active-dot-${payload.date}`}
@@ -506,15 +537,21 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                         </ResponsiveContainer>
                       </div>
 
-                      {/* 情绪图例 */}
+                      {/* 分数图例 */}
                       <div className="flex flex-wrap gap-3 mt-4 justify-center">
-                        {['joy', 'sadness', 'anxiety', 'anger', 'calm'].map(emotion => (
-                          <div key={emotion} className="flex items-center gap-1.5">
+                        {[
+                          { label: 'Great', color: '#FF9500' },
+                          { label: 'Good', color: '#F9D849' },
+                          { label: 'Okay', color: '#66B04C' },
+                          { label: 'Low', color: '#3266B1' },
+                          { label: 'Bad', color: '#D32F2F' },
+                        ].map(item => (
+                          <div key={item.label} className="flex items-center gap-1.5">
                             <div
                               className="w-2.5 h-2.5 rounded-full"
-                              style={{ backgroundColor: getEmotionColor(emotion) }}
+                              style={{ backgroundColor: item.color }}
                             />
-                            <span className="text-[9px] font-bold text-gray-400 capitalize">{emotion}</span>
+                            <span className="text-[9px] font-bold text-gray-400">{item.label}</span>
                           </div>
                         ))}
                       </div>

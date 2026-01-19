@@ -4,7 +4,7 @@ import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
-import EmotionReportModal, { markUserActivity } from '../components/EmotionReportModal'
+import EmotionReportModal, { markUserActivity, getCachedReport, setCachedReport } from '../components/EmotionReportModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D, AVATARS_3D } from '../config/avatars'
 import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatars'
@@ -228,14 +228,21 @@ export default function Dashboard() {
         })
         .catch(err => console.error('Failed to fetch check-in status:', err))
 
-      // 加载周报 - 暂时禁用自动加载，避免阻塞后端
-      // TODO: 改为后台异步加载或用户手动触发
-      // aiChatApi.getWeeklyReport(user._id)
-      //   .then(rawData => {
-      //     const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
-      //     setWeeklyReport(data)
-      //   })
-      //   .catch(err => console.error('Failed to fetch weekly report:', err))
+      // 加载周报 - 使用缓存机制避免重复调用
+      const cachedReport = getCachedReport(user._id, 'weekly')
+      if (cachedReport) {
+        // 有效缓存，秒开
+        setWeeklyReport(cachedReport)
+      } else {
+        // 无缓存，后台异步加载（不阻塞UI）
+        aiChatApi.getWeeklyReport(user._id)
+          .then(rawData => {
+            const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
+            setWeeklyReport(data)
+            setCachedReport(user._id, 'weekly', data)
+          })
+          .catch(err => console.error('Failed to fetch weekly report:', err))
+      }
     }
   }, [user?._id])
 
