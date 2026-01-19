@@ -15,9 +15,12 @@ interface AvatarCompanionProps {
   onSelectText?: (text: string) => void  // Text selection callback
   partnerLastMessage?: string    // Partner's last message for response suggestions
   chatHistory?: any[] // Context for AI
+  initialAction?: 'rewrite' | 'response' | 'topic' | null  // Initial action from chat toolbar
+  initialInputText?: string      // Initial input text for rewrite action
+  onActionConsumed?: () => void  // Callback when action is consumed
 }
 
-export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from localStorage or use default
     const saved = localStorage.getItem('avatarCompanionPosition')
@@ -126,13 +129,17 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
     >
       {/* Main Avatar Container */}
       <div className="relative group">
-        {/* Assistant Bubble - positioned above Avatar */}
+        {/* Assistant Bubble - smart positioning based on Avatar location */}
         <AssistantBubble
           isOpen={showAssistantBubble || false}
           onClose={onCloseBubble || (() => { })}
           onSelectText={onSelectText || (() => { })}
           partnerLastMessage={partnerLastMessage}
           chatHistory={chatHistory}
+          initialAction={initialAction}
+          initialInputText={initialInputText}
+          onActionConsumed={onActionConsumed}
+          avatarPosition={position}
         />
 
         {/* Avatar Display - Video or 3D Model fallback */}

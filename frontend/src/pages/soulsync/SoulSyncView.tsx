@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { matchApi, chatApi, socialApi, userApi, aiHelperApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
+import { matchApi, chatApi, socialApi, userApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
 import { markUserActivity } from '../../components/EmotionReportModal'
 
 // Extended FollowUser with online status
@@ -100,9 +100,10 @@ interface SoulSyncViewProps {
   onSessionUpdate?: (session: PeerSession | null) => void // For Avatar Context
   externalChatInput?: string | null  // Text from AssistantBubble
   onExternalChatInputConsumed?: () => void  // Clear external input after consuming
+  onOpenAssistantWithAction?: (action: 'rewrite' | 'response' | 'topic', inputText?: string) => void  // Open Avatar Assistant with specific action
 }
 
-export default function SoulSyncView({ onInteract, userId, userAvatar, onViewProfile, avatar: _avatar, onSessionChange, onProactiveHintChange, onPartnerMessageChange, onSessionUpdate, externalChatInput, onExternalChatInputConsumed }: SoulSyncViewProps) {
+export default function SoulSyncView({ onInteract, userId, userAvatar, onViewProfile, avatar: _avatar, onSessionChange, onProactiveHintChange, onPartnerMessageChange, onSessionUpdate, externalChatInput, onExternalChatInputConsumed, onOpenAssistantWithAction }: SoulSyncViewProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<'matching' | 'social'>('matching')
 
@@ -117,10 +118,8 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   const [isLoading, setIsLoading] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
 
-  // AI Helper State
-  const [isAiLoading, setIsAiLoading] = useState(false)
-  const [replySuggestions, setReplySuggestions] = useState<string[]>([])
-  const [topicSuggestions, setTopicSuggestions] = useState<string[]>([])
+  // AI Helper State - suggestions now handled by Avatar AssistantBubble
+  // Removed: replySuggestions, topicSuggestions (output moved to Avatar)
 
   // V2 Matching preferences
   const [selectedRole, setSelectedRole] = useState<SupportRole>('either')
@@ -404,9 +403,11 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   }, [currentSessionId, userId])
 
   // Notify parent when session state changes
+  // Only show AI Helper when user is in social tab with an active chat session
+  // Matching tab is for setting preferences, not for chatting
   useEffect(() => {
-    onSessionChange?.(!!currentSessionId)
-  }, [currentSessionId, onSessionChange])
+    onSessionChange?.(activeTab === 'social' && !!currentSessionId)
+  }, [currentSessionId, activeTab, onSessionChange])
 
   const loadUserRooms = async () => {
     if (!userId) return
@@ -970,88 +971,24 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   )
 
 
-  // AI Handlers
-  const handleRewrite = async () => {
-    if (!chatInput.trim() || isAiLoading) return
-    setIsAiLoading(true)
-    try {
-      const response = await aiHelperApi.rewrite({ text: chatInput })
-      if (response && response.rewritten_text) {
-        setChatInput(response.rewritten_text)
-      }
-    } catch (err) {
-      console.error('Rewrite failed:', err)
-    } finally {
-      setIsAiLoading(false)
-    }
+  // AI Handlers - Now delegate to Avatar AssistantBubble
+  const handleRewrite = () => {
+    if (!chatInput.trim()) return
+    // Open Avatar Assistant with rewrite action and current input
+    onOpenAssistantWithAction?.('rewrite', chatInput)
   }
 
-  const handleSuggestReply = async () => {
-    if (!currentSessionId || isAiLoading) return
+  const handleSuggestReply = () => {
+    if (!currentSessionId) return
     const session = sessions.find(s => s.id === currentSessionId)
     if (!session || session.messages.length === 0) return
-
-    setIsAiLoading(true)
-    try {
-      // Format history
-      const history = session.messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [m.text]
-      }))
-
-      const response = await aiHelperApi.suggestReply({ history })
-      if (response && response.suggestions) {
-        // Simple parsing: split by newlines and remove numbering
-        const rawSuggestions = response.suggestions.split('\n')
-        const cleanSuggestions = rawSuggestions
-          .map(s => s.replace(/^\d+\.\s*/, '').trim())
-          .filter(s => s.length > 0)
-          .slice(0, 3) // Take top 3
-        setReplySuggestions(cleanSuggestions)
-        setTopicSuggestions([]) // Clear others
-      }
-    } catch (err) {
-      console.error('Suggest reply failed:', err)
-    } finally {
-      setIsAiLoading(false)
-    }
+    // Open Avatar Assistant with response action
+    onOpenAssistantWithAction?.('response')
   }
 
-  const handleSuggestTopic = async () => {
-    if (!currentSessionId || isAiLoading) return
-    const session = sessions.find(s => s.id === currentSessionId)
-    if (!session) return
-
-    setIsAiLoading(true)
-    try {
-      // Format history
-      const history = session.messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [m.text]
-      }))
-
-      const response = await aiHelperApi.suggestTopic({ history })
-      if (response && response.suggestions) {
-        // Simple parsing
-        const rawSuggestions = response.suggestions.split('\n')
-        const cleanSuggestions = rawSuggestions
-          .map(s => s.replace(/^\d+\.\s*/, '').replace(/^- \s*/, '').trim())
-          .filter(s => s.length > 0)
-          .slice(0, 3)
-        setTopicSuggestions(cleanSuggestions)
-        setReplySuggestions([]) // Clear others
-      }
-    } catch (err) {
-      console.error('Suggest topic failed:', err)
-    } finally {
-      setIsAiLoading(false)
-    }
-  }
-
-  const applySuggestion = (text: string) => {
-    setChatInput(text)
-    setReplySuggestions([])
-    setTopicSuggestions([])
+  const handleSuggestTopic = () => {
+    // Open Avatar Assistant with topic action
+    onOpenAssistantWithAction?.('topic')
   }
 
 
@@ -1139,58 +1076,29 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
 
       {/* Input Area */}
       <div className="p-4 border-t border-black/5 bg-white relative">
-        {/* Suggestions Overlay */}
-        {(replySuggestions.length > 0 || topicSuggestions.length > 0) && (
-          <div className="absolute bottom-full left-4 right-4 mb-2 flex flex-col gap-2">
-            <div className="flex justify-between items-center px-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                {replySuggestions.length > 0 ? 'Suggested Replies' : 'Conversation Starters'}
-              </span>
-              <button
-                onClick={() => { setReplySuggestions([]); setTopicSuggestions([]) }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[...replySuggestions, ...topicSuggestions].map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => applySuggestion(s)}
-                  className="px-4 py-2 bg-white/90 backdrop-blur border border-accent/20 rounded-xl shadow-lg hover:bg-accent/5 hover:scale-[1.02] transition-all text-sm font-medium text-gray-700 text-left max-w-full truncate"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* AI Toolbar */}
+        {/* AI Toolbar - Output now shows in Avatar AssistantBubble */}
         <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide">
           <button
             onClick={handleRewrite}
-            disabled={!chatInput.trim() || isAiLoading}
+            disabled={!chatInput.trim()}
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
           >
-            <span className={isAiLoading ? "animate-spin" : ""}>✨</span>
+            <span>✨</span>
             <span>Rewrite</span>
           </button>
           <button
             onClick={handleSuggestReply}
-            disabled={isAiLoading || session.messages.length === 0}
+            disabled={session.messages.length === 0}
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
           >
-            <span className={isAiLoading ? "animate-spin" : ""}>💡</span>
+            <span>💡</span>
             <span>Suggest Reply</span>
           </button>
           <button
             onClick={handleSuggestTopic}
-            disabled={isAiLoading}
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
           >
-            <span className={isAiLoading ? "animate-spin" : ""}>🗣️</span>
+            <span>🗣️</span>
             <span>Topic</span>
           </button>
         </div>

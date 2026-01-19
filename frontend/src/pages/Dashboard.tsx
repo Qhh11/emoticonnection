@@ -126,6 +126,12 @@ export default function Dashboard() {
   // Text to inject into SoulSync chat input (from AssistantBubble)
   const [chatInputFromBubble, setChatInputFromBubble] = useState<string | null>(null)
 
+  // Assistant action state (for opening AssistantBubble with specific action from chat toolbar)
+  const [assistantAction, setAssistantAction] = useState<{
+    action: 'rewrite' | 'response' | 'topic' | null
+    inputText?: string
+  }>({ action: null })
+
   // Emotion Report Modal state
   const [showEmotionReport, setShowEmotionReport] = useState(false)
 
@@ -154,6 +160,14 @@ export default function Dashboard() {
     // 保存主题到 localStorage
     localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
+
+  // Close AssistantBubble when switching away from soulsync tab
+  useEffect(() => {
+    if (activeTab !== 'soulsync') {
+      setShowAssistantBubble(false)
+      setAssistantAction({ action: null })
+    }
+  }, [activeTab])
 
   // 刷新社交统计的函数
   const refreshSocialStats = () => {
@@ -383,6 +397,12 @@ export default function Dashboard() {
     }
   }
 
+  // Handle opening AssistantBubble with specific action (from chat toolbar buttons)
+  const handleOpenAssistantWithAction = (action: 'rewrite' | 'response' | 'topic', inputText?: string) => {
+    setAssistantAction({ action, inputText })
+    setShowAssistantBubble(true)
+  }
+
   const handleOpenSettings = () => {
     console.log('Opening settings for user:', user)
 
@@ -510,6 +530,7 @@ export default function Dashboard() {
             onSessionUpdate={(session) => setActiveSession(session)}
             externalChatInput={chatInputFromBubble}
             onExternalChatInputConsumed={() => setChatInputFromBubble(null)}
+            onOpenAssistantWithAction={handleOpenAssistantWithAction}
           />
         )
       default:
@@ -564,13 +585,20 @@ export default function Dashboard() {
           showVipHint={activeTab === 'soulsync' && hasActiveSession && !showAssistantBubble}
           showProactiveHint={activeTab === 'soulsync' && showProactiveHint && !showAssistantBubble}
           showAssistantBubble={showAssistantBubble}
-          onCloseBubble={() => setShowAssistantBubble(false)}
+          onCloseBubble={() => {
+            setShowAssistantBubble(false)
+            setAssistantAction({ action: null })
+          }}
           onSelectText={(text) => {
             setChatInputFromBubble(text)
             setShowAssistantBubble(false)
+            setAssistantAction({ action: null })
           }}
           partnerLastMessage={partnerLastMessage}
           chatHistory={activeSession?.messages}
+          initialAction={assistantAction.action}
+          initialInputText={assistantAction.inputText}
+          onActionConsumed={() => setAssistantAction({ action: null })}
         />
       )}
 
