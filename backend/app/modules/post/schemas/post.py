@@ -227,6 +227,7 @@ class CommentOut(BaseModel):
     post_id: str = Field(..., description="Parent post ID")
     author_id: Union[int, str] = Field(..., description="Author user ID (ObjectId string or int)")
     author_name: Optional[str] = Field(None, description="Author name (null if anonymous)")
+    author_avatar: Optional[str] = Field(None, description="Author avatar ID (null if anonymous)")
     content: str = Field(..., description="Comment content")
     is_anonymous: bool = Field(..., description="Whether comment is anonymous")
     parent_id: Optional[str] = Field(None, description="Parent comment ID")

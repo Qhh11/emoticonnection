@@ -546,15 +546,18 @@ class PostRepository:
         cursor = self.comments.find(query).sort("created_at", 1).skip(skip).limit(page_size)
         comments = await cursor.to_list(length=page_size)
 
-        # Convert comments and fetch usernames
+        # Convert comments and fetch usernames and avatars
         result_comments = []
         for comment in comments:
             comment_dict = self._comment_to_dict(comment)
-            # Fetch real username if not anonymous
+            # Fetch real username and avatar if not anonymous
             if not comment_dict["is_anonymous"]:
                 username = await self._get_username(comment_dict["author_id"])
                 if username:
                     comment_dict["author_name"] = username
+                avatar = await self._get_user_avatar(comment_dict["author_id"])
+                if avatar:
+                    comment_dict["author_avatar"] = avatar
             result_comments.append(comment_dict)
 
         return {
@@ -829,6 +832,7 @@ class PostRepository:
             "post_id": str(comment["post_id"]),
             "author_id": comment["author_id"],
             "author_name": None if comment.get("is_anonymous") else f"User {comment['author_id']}",
+            "author_avatar": None,  # Will be set by caller if needed
             "content": comment["content"],
             "is_anonymous": comment.get("is_anonymous", False),
             "parent_id": str(comment["parent_id"]) if comment.get("parent_id") else None,

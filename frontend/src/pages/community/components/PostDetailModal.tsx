@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom'
 import { Post, Comment, postApi, getMediaUrl } from '../../../services/api'
 import CommentBubble from './CommentBubble'
 import { getMoodColors } from './PostCard'
+import { getAvatarUrl } from '../../../config/userAvatars'
 import ConfirmModal from '../../../components/ConfirmModal'
 
 // 默认紫色渐变（无情绪时使用）
@@ -207,11 +208,17 @@ export default function PostDetailModal({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => !post.is_anonymous && onViewProfile?.(post.author_id)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black uppercase
+                className={`w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-sm font-black uppercase
                   ${post.is_anonymous ? 'bg-gray-300 cursor-default' : 'bg-gray-200 hover:ring-2 ring-gray-300'}`}
                 disabled={post.is_anonymous}
               >
-                {post.is_anonymous ? '?' : authorName.charAt(0)}
+                {post.is_anonymous ? '?' : (
+                  post.author_avatar ? (
+                    <img src={getAvatarUrl(post.author_avatar)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    authorName.charAt(0)
+                  )
+                )}
               </button>
               <div>
                 <p className="text-sm font-black">{authorName}</p>

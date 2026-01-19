@@ -237,6 +237,7 @@ export interface Comment {
   post_id: string
   author_id: string
   author_name: string | null
+  author_avatar: string | null
   content: string
   is_anonymous: boolean
   parent_id: string | null
