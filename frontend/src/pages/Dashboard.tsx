@@ -214,13 +214,14 @@ export default function Dashboard() {
         })
         .catch(err => console.error('Failed to fetch check-in status:', err))
 
-      // 加载周报
-      aiChatApi.getWeeklyReport(user._id)
-        .then(rawData => {
-          const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
-          setWeeklyReport(data)
-        })
-        .catch(err => console.error('Failed to fetch weekly report:', err))
+      // 加载周报 - 暂时禁用自动加载，避免阻塞后端
+      // TODO: 改为后台异步加载或用户手动触发
+      // aiChatApi.getWeeklyReport(user._id)
+      //   .then(rawData => {
+      //     const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
+      //     setWeeklyReport(data)
+      //   })
+      //   .catch(err => console.error('Failed to fetch weekly report:', err))
     }
   }, [user?._id])
 

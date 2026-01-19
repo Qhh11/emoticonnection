@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Avatar3D } from '../../config/avatars'
 import { getAvatarUrl } from '../../config/userAvatars'
-import { SocialStats, Post, User, EmotionReport, getMediaUrl } from '../../services/api'
+import { SocialStats, Post, User, EmotionReport, getMediaUrl, userApi, CheckInHistoryItem } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
 
 
@@ -200,37 +200,80 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
   const effectiveCheckIn = todayCheckIn || checkedInMood
   const [showThemeSelector, setShowThemeSelector] = useState(false)
 
-  // Generate current month calendar
-  const [calendarData] = useState(() => {
+  // Calendar state with check-in history
+  type CalendarDate = {
+    day: number
+    isToday: boolean
+    isPast: boolean
+    mood: typeof MOOD_DATA[0] | null
+  }
+
+  const [calendarData, setCalendarData] = useState<{ monthYear: string; dates: CalendarDate[] }>(() => {
     const today = new Date()
     const year = today.getFullYear()
     const month = today.getMonth()
     const currentDay = today.getDate()
-
-    // Get month name
     const monthName = today.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-
-    // Get number of days in current month
     const daysInMonth = new Date(year, month + 1, 0).getDate()
 
-    const dates = []
+    const dates: CalendarDate[] = []
     for (let day = 1; day <= daysInMonth; day++) {
-      const isToday = day === currentDay
-      const isPast = day < currentDay
-
       dates.push({
         day,
-        isToday,
-        isPast,
-        mood: null as typeof MOOD_DATA[0] | null // Explicit type cast to avoid 'never' inference
+        isToday: day === currentDay,
+        isPast: day < currentDay,
+        mood: null
       })
     }
 
-    return {
-      monthYear: `${monthName} ${year}`,
-      dates
-    }
+    return { monthYear: `${monthName} ${year}`, dates }
   })
+
+  // Fetch check-in history and populate calendar
+  useEffect(() => {
+    if (!user?._id) return
+
+    const fetchCheckInHistory = async () => {
+      try {
+        const history = await userApi.getCheckInHistory(user._id, 31)
+
+        // Create a map of date -> mood
+        const today = new Date()
+        const year = today.getFullYear()
+        const month = today.getMonth()
+
+        const checkInMap = new Map<number, typeof MOOD_DATA[0]>()
+
+        history.forEach((item: CheckInHistoryItem) => {
+          const itemDate = new Date(item.date)
+          // Only consider check-ins from current month
+          if (itemDate.getFullYear() === year && itemDate.getMonth() === month) {
+            const day = itemDate.getDate()
+            // Find matching mood data
+            const moodData = MOOD_DATA.find(m =>
+              m.label.toLowerCase() === item.mood.toLowerCase()
+            )
+            if (moodData) {
+              checkInMap.set(day, moodData)
+            }
+          }
+        })
+
+        // Update calendar with check-in data
+        setCalendarData(prev => ({
+          ...prev,
+          dates: prev.dates.map(dateInfo => ({
+            ...dateInfo,
+            mood: checkInMap.get(dateInfo.day) || null
+          }))
+        }))
+      } catch (err) {
+        console.error('Failed to fetch check-in history:', err)
+      }
+    }
+
+    fetchCheckInHistory()
+  }, [user?._id])
 
   const currentMonth = calendarData.monthYear
   const calendarDates = calendarData.dates
