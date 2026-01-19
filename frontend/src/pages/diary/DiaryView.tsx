@@ -3,6 +3,7 @@ import { aiChatApi } from '../../services/api'
 import { AVATARS_3D, Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 import VoiceChatOverlay from '../../components/chat/VoiceChatOverlay'
+import { markUserActivity } from '../../components/EmotionReportModal'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -134,6 +135,11 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
       })
 
       setMessages(prev => [...prev, { role: 'ai', content: response.response }])
+
+      // 标记用户有新活动，用于 Emotion Report 缓存失效
+      if (userId) {
+        markUserActivity(userId)
+      }
     } catch (err) {
       console.error('Failed to get AI response:', err)
       // Show error message to user instead of fake fallback
@@ -161,6 +167,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
         try {
           // 调用 AI 生成日记 API - 会基于对话历史生成日记式的 summary
           await aiChatApi.generateDiary(sessionId, userId)
+
+          // 标记用户有新活动，用于 Emotion Report 缓存失效
+          markUserActivity(userId)
 
           if (onRefreshDiaries) {
             onRefreshDiaries()

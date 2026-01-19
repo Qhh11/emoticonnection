@@ -208,13 +208,18 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
     mood: typeof MOOD_DATA[0] | null
   }
 
-  const [calendarData, setCalendarData] = useState<{ monthYear: string; dates: CalendarDate[] }>(() => {
+  const [calendarData, setCalendarData] = useState<{ monthYear: string; dates: CalendarDate[]; startDayOffset: number }>(() => {
     const today = new Date()
     const year = today.getFullYear()
     const month = today.getMonth()
     const currentDay = today.getDate()
     const monthName = today.toLocaleString('en-US', { month: 'short' }).toUpperCase()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+    // 计算本月第一天是星期几 (0=Sunday, 1=Monday, ...)
+    const firstDayOfMonth = new Date(year, month, 1).getDay()
+    // 转换为 Mon=0, Tue=1, ... Sun=6 格式
+    const startDayOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1
 
     const dates: CalendarDate[] = []
     for (let day = 1; day <= daysInMonth; day++) {
@@ -226,7 +231,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
       })
     }
 
-    return { monthYear: `${monthName} ${year}`, dates }
+    return { monthYear: `${monthName} ${year}`, dates, startDayOffset }
   })
 
   // Fetch check-in history and populate calendar
@@ -497,7 +502,21 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
             </div>
           )}
 
-          <div className="grid grid-cols-7 gap-2 z-10 max-h-[300px] overflow-y-auto scrollbar-hide">
+          {/* 星期表头 */}
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
+              <div key={i} className="text-center text-[10px] font-black uppercase tracking-wider text-gray-400">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2 z-10 max-h-[260px] overflow-y-auto scrollbar-hide">
+            {/* 空白占位 - 对齐到正确的星期几 */}
+            {Array.from({ length: calendarData.startDayOffset }).map((_, i) => (
+              <div key={`empty-${i}`} className="aspect-square" />
+            ))}
+
             {calendarDates.map((dateInfo, i) => {
               // Today - show check-in button
               if (dateInfo.isToday) {

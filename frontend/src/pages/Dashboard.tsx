@@ -4,7 +4,7 @@ import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
-import EmotionReportModal from '../components/EmotionReportModal'
+import EmotionReportModal, { markUserActivity } from '../components/EmotionReportModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D, AVATARS_3D } from '../config/avatars'
 import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatars'
@@ -275,6 +275,8 @@ export default function Dashboard() {
           content: entry.text,
           mood: entry.mood
         })
+        // 标记用户活动，用于 Report 缓存判断
+        markUserActivity(user._id)
         // Refresh diaries from backend to get the saved entry with ID
         refreshDiaries()
       } catch (err) {
@@ -292,6 +294,8 @@ export default function Dashboard() {
     if (user?._id) {
       try {
         await aiChatApi.aiSaveDiary(user._id, content)
+        // 标记用户活动，用于 Report 缓存判断
+        markUserActivity(user._id)
         refreshDiaries()
       } catch (err) {
         console.error('Failed to AI-save diary:', err)

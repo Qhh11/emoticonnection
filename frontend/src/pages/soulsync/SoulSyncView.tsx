@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { matchApi, chatApi, socialApi, userApi, aiHelperApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
+import { markUserActivity } from '../../components/EmotionReportModal'
 
 // Extended FollowUser with online status
 interface FriendWithOnlineStatus extends FollowUser {
@@ -739,6 +740,9 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         content: messageContent
       }).catch(err => console.error('Failed to send message:', err))
     }
+
+    // 标记用户有新活动，用于 Emotion Report 缓存失效
+    markUserActivity(userId)
 
     setChatInput('')
   }

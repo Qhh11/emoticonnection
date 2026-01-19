@@ -24,31 +24,74 @@ const getEmotionColor = (emotion: string): string => {
   return EMOTION_COLORS[emotion.toLowerCase()] || '#808080'
 }
 
-const getMoodEmoji = (score: number): string => {
-  if (score >= 0.6) return '😊'
-  if (score >= 0.2) return '🙂'
-  if (score >= -0.2) return '😐'
-  if (score >= -0.6) return '😔'
-  return '😢'
+// 根据情绪类型返回对应的 emoji
+const getEmotionEmoji = (emotion: string): string => {
+  const emojiMap: Record<string, string> = {
+    'joy': '😊',
+    'happiness': '😊',
+    'calm': '😌',
+    'sadness': '😢',
+    'anger': '😠',
+    'anxiety': '😰',
+    'fear': '😨',
+    'disgust': '🤢',
+    'bored': '😐',
+    'embarrassment': '😳',
+    'envy': '😒',
+    'fatigue': '😴',
+    'confusion': '😕',
+  }
+  return emojiMap[emotion.toLowerCase()] || '😐'
 }
 
-const getTrendIcon = (direction: string): string => {
-  if (direction === 'improving') return '📈'
-  if (direction === 'declining') return '📉'
-  return '➡️'
+// 清除 markdown 格式，确保显示纯文本
+const stripMarkdown = (text: string): string => {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** -> bold
+    .replace(/\*([^*]+)\*/g, '$1')       // *italic* -> italic
+    .replace(/__([^_]+)__/g, '$1')       // __bold__ -> bold
+    .replace(/_([^_]+)_/g, '$1')         // _italic_ -> italic
+    .replace(/`([^`]+)`/g, '$1')         // `code` -> code
 }
 
 // 缓存相关函数
 const getCacheKey = (userId: string, period: string) =>
   `emotion_report_${userId}_${period}`
 
+const getLastActivityKey = (userId: string) =>
+  `emotion_last_activity_${userId}`
+
+// 记录用户最后活动时间（写日记、聊天等）
+export const markUserActivity = (userId: string) => {
+  try {
+    localStorage.setItem(getLastActivityKey(userId), Date.now().toString())
+  } catch {}
+}
+
+// 获取用户最后活动时间
+const getLastActivityTime = (userId: string): number => {
+  try {
+    const time = localStorage.getItem(getLastActivityKey(userId))
+    return time ? parseInt(time, 10) : 0
+  } catch {
+    return 0
+  }
+}
+
 const getCachedReport = (userId: string, period: string): EmotionReport | null => {
   try {
     const cached = localStorage.getItem(getCacheKey(userId, period))
     if (cached) {
       const { data, timestamp } = JSON.parse(cached)
-      // 缓存24小时有效
-      if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+      const lastActivity = getLastActivityTime(userId)
+
+      // 缓存有效条件：
+      // 1. 缓存时间在24小时内
+      // 2. 缓存时间晚于最后活动时间（没有新内容）
+      const isWithin24Hours = Date.now() - timestamp < 24 * 60 * 60 * 1000
+      const noNewContent = timestamp > lastActivity
+
+      if (isWithin24Hours && noNewContent) {
         return data
       }
     }
@@ -156,12 +199,12 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
     const cached = getCachedReport(userId, period)
     if (cached) {
       setReport(cached)
-      // 有缓存时不显示 loading
-    } else {
-      setIsLoading(true)
+      // 有缓存时直接使用，不再调用 API（节省配额）
+      return
     }
 
-    // 2. 后台静默刷新
+    // 2. 无缓存时才调用 API
+    setIsLoading(true)
     try {
       let rawData: EmotionReport | string
       switch (period) {
@@ -180,10 +223,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
       setCachedReport(userId, period, data)
     } catch (err) {
       console.error('Failed to load emotion report:', err)
-      // 如果有缓存，静默失败；无缓存才显示错误
-      if (!cached) {
-        setError(err instanceof Error ? err.message : 'Failed to load report')
-      }
+      setError(err instanceof Error ? err.message : 'Failed to load report')
     } finally {
       setIsLoading(false)
     }
@@ -232,8 +272,8 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                   onClick={() => setPeriod(p)}
                   className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
                     period === p
-                      ? 'bg-black text-white'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-accent text-accent-inverse'
+                      : 'text-gray-400 hover:text-accent'
                   }`}
                 >
                   {p}
@@ -270,17 +310,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
           ) : report ? (
             <>
               {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-3">
-                <div className="bg-gray-50 rounded-2xl p-4 text-center">
-                  <span className="text-3xl">{getMoodEmoji(report.average_mood_score)}</span>
-                  <p className="text-lg font-black mt-1">{report.average_mood_score.toFixed(1)}</p>
-                  <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Mood</p>
-                </div>
-                <div className="bg-gray-50 rounded-2xl p-4 text-center">
-                  <span className="text-3xl">{getTrendIcon(report.emotion_trend?.trend_direction || 'stable')}</span>
-                  <p className="text-lg font-black mt-1 capitalize">{report.emotion_trend?.trend_direction || 'stable'}</p>
-                  <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Trend</p>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-2xl p-4 text-center">
                   <span className="text-3xl">🎯</span>
                   <p className="text-lg font-black mt-1">{Math.round(report.mood_stability * 100)}%</p>
@@ -309,15 +339,11 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                           boxShadow: `0 8px 24px ${getEmotionColor(report.emotion_trend.data_points[0].dominant_emotion)}40`
                         }}
                       >
-                        <span className="text-3xl">{getMoodEmoji(report.emotion_trend.data_points[0].avg_score)}</span>
+                        <span className="text-3xl">{getEmotionEmoji(report.emotion_trend.data_points[0].dominant_emotion)}</span>
                       </div>
                       <div>
                         <p className="text-lg font-black capitalize">
                           {report.emotion_trend.data_points[0].dominant_emotion}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Score: {report.emotion_trend.data_points[0].avg_score >= 0 ? '+' : ''}
-                          {report.emotion_trend.data_points[0].avg_score.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -585,27 +611,37 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 </div>
               </div>
 
-              {/* Word Cloud (Simple version) */}
-              {report.word_cloud?.top_emotions && report.word_cloud.top_emotions.length > 0 && (
-                <div className="bg-gray-50 rounded-2xl p-5">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Emotion Words</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(report.word_cloud?.words || {}).slice(0, 15).map(([word, count]) => (
-                      <span
-                        key={word}
-                        className="px-3 py-1.5 rounded-full text-white font-bold"
-                        style={{
-                          fontSize: `${Math.min(14, 10 + count)}px`,
-                          backgroundColor: getEmotionColor(word) || '#808080',
-                          opacity: Math.min(1, 0.5 + count * 0.1)
-                        }}
-                      >
-                        {word}
-                      </span>
-                    ))}
+              {/* Word Cloud */}
+              {report.word_cloud?.top_emotions && report.word_cloud.top_emotions.length > 0 && (() => {
+                const words = report.word_cloud?.words || {}
+                const maxCount = Math.max(...Object.values(words).map(Number), 1)
+                return (
+                  <div className="bg-gray-50 rounded-2xl p-5">
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Emotion Words</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(words).slice(0, 15).map(([word, count]) => {
+                        const bgOpacity = Math.min(1, 0.3 + (Number(count) / maxCount) * 0.7)
+                        return (
+                          <span
+                            key={word}
+                            className="px-3 py-1.5 rounded-full font-bold relative"
+                            style={{ fontSize: '14px', color: 'var(--accent-text)' }}
+                          >
+                            <span
+                              className="absolute inset-0 rounded-full"
+                              style={{
+                                backgroundColor: 'var(--accent-color)',
+                                opacity: bgOpacity
+                              }}
+                            />
+                            <span className="relative">{word}</span>
+                          </span>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* Key Insights */}
               {report.key_insights && report.key_insights.length > 0 && (
@@ -617,7 +653,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                     {report.key_insights.map((insight, i) => (
                       <li key={i} className="text-sm font-bold text-gray-700 flex items-start gap-3">
                         <span className="text-blue-500 mt-0.5">{i + 1}.</span>
-                        <span>{insight}</span>
+                        <span>{stripMarkdown(insight)}</span>
                       </li>
                     ))}
                   </ul>
@@ -634,7 +670,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                     {report.suggestions.map((suggestion, i) => (
                       <li key={i} className="text-sm font-bold text-gray-700 flex items-start gap-3">
                         <span className="text-emerald-500 mt-0.5">•</span>
-                        <span>{suggestion}</span>
+                        <span>{stripMarkdown(suggestion)}</span>
                       </li>
                     ))}
                   </ul>
@@ -653,7 +689,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
         <div className="p-4 border-t border-black/5 flex-shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-3 bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors"
+            className="w-full py-3 bg-accent text-accent-inverse rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
           >
             Close
           </button>
