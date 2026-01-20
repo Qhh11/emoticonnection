@@ -1,17 +1,65 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import Button from '../components/ui/Button'
-import Decor from '../components/ui/Decor'
 import { useAuth } from '../contexts/AuthContext'
+
+// Avatar images
+import Bluey from '../assets/2d/Bluey.png'
+import Blushy from '../assets/2d/Blushy.png'
+import Grumpy from '../assets/2d/Grumpy.png'
+import Scaredy from '../assets/2d/Scaredy.png'
+import Snoozy from '../assets/2d/Snoozy.png'
+import Sparkle from '../assets/2d/Sparkle.png'
+import Sunny from '../assets/2d/Sunny.png'
+import Yucky from '../assets/2d/Yucky.png'
+import Zippy from '../assets/2d/Zippy.png'
+
+interface CharacterDecoration {
+  src: string
+  name: string
+  x: number
+  y: number
+  factor: number
+  size: number
+  rotate: number
+  opacity: number
+}
+
+const characters: CharacterDecoration[] = [
+  // 左侧阵营
+  { src: Bluey, name: 'Bluey', x: 20, y: 10, factor: 0.025, size: 210, rotate: -12, opacity: 0.65 },
+  { src: Sparkle, name: 'Sparkle', x: 18, y: 65, factor: 0.02, size: 250, rotate: -8, opacity: 0.68 },
+  { src: Snoozy, name: 'Snoozy', x: 6, y: 45, factor: 0.028, size: 200, rotate: 8, opacity: 0.62 },
+  // 中轴阵营
+  { src: Blushy, name: 'Blushy', x: 40, y: 20, factor: 0.015, size: 190, rotate: 5, opacity: 0.6 },
+  { src: Zippy, name: 'Zippy', x: 41, y: 60, factor: 0.022, size: 220, rotate: 12, opacity: 0.68 },
+  // 右侧阵营
+  { src: Sunny, name: 'Sunny', x: 82, y: 22, factor: 0.035, size: 230, rotate: 10, opacity: 0.7 },
+  { src: Grumpy, name: 'Grumpy', x: 78, y: 68, factor: 0.03, size: 220, rotate: 15, opacity: 0.65 },
+  { src: Scaredy, name: 'Scaredy', x: 50, y: 70, factor: 0.04, size: 210, rotate: -15, opacity: 0.65 },
+  { src: Yucky, name: 'Yucky', x: 85, y: 45, factor: 0.032, size: 190, rotate: -10, opacity: 0.6 },
+]
 
 export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
 
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  // Mouse tracking for avatar animation
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const x = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2)
+      const y = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2)
+      setMousePosition({ x, y })
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,114 +77,162 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex items-center justify-center">
-      {/* Background decorations */}
-      <Decor
-        type="circle"
-        color="royal"
-        size="lg"
-        className="absolute -top-10 -right-20 animate-float-slow"
-      />
-      <Decor
-        type="blob"
-        color="vivid"
-        size="md"
-        className="absolute bottom-1/4 -left-16 animate-float-slower"
-      />
-      <Decor
-        type="sparkle"
-        color="coral"
-        size="sm"
-        className="absolute top-1/3 right-1/4"
-      />
+    <div className="relative min-h-screen overflow-hidden bg-white text-[#1a1a1a]" style={{ transform: 'scale(0.8)', transformOrigin: 'top center', width: '125%', marginLeft: '-12.5%' }}>
+      {/* Background blobs for that modern style */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100 rounded-full blob opacity-50 pointer-events-none"></div>
+      <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-green-50 rounded-full blob opacity-50 pointer-events-none"></div>
+      <div className="absolute top-[20%] right-[10%] w-[20%] h-[20%] bg-purple-50 rounded-full blob opacity-30 pointer-events-none"></div>
 
-      {/* Login Form */}
-      <div className="relative z-10 w-full max-w-md px-6">
-        {/* Logo */}
-        <div className="flex items-center justify-center space-x-3 mb-12">
-          <div className="w-12 h-12 bg-vivid-300 rounded-full flex items-center justify-center">
-            <span className="text-2xl">✨</span>
-          </div>
-          <h1 className="font-display font-bold text-3xl text-text-dark">
-            EmotionConnect
-          </h1>
-        </div>
+      {/* Decorative Avatars - cursor following */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden select-none -z-0">
+        {characters.map(character => (
+          <img
+            key={character.name}
+            src={character.src}
+            alt={character.name}
+            className="absolute transition-transform duration-700 ease-out select-none pointer-events-none drop-shadow-xl"
+            style={{
+              left: `${character.x}%`,
+              top: `${character.y}%`,
+              transform: `translate(${mousePosition.x * character.factor * 1000}px, ${mousePosition.y * character.factor * 1000}px) rotate(${character.rotate + (mousePosition.x * 25)}deg)`,
+              opacity: character.opacity,
+              width: `${character.size}px`,
+              height: `${character.size}px`,
+            }}
+            draggable={false}
+          />
+        ))}
+      </div>
 
-        {/* Form Card */}
-        <div className="bg-white rounded-3xl shadow-soft-lg p-8 md:p-10">
-          <h2 className="text-display-sm font-display mb-2 text-text-dark">
-            Welcome back
-          </h2>
-          <p className="text-text-muted mb-8">
-            Log in to continue your journey
-          </p>
-
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm">
-              {error}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Navbar */}
+        <nav className="flex items-center justify-between py-8">
+          <Link to="/" className="flex items-center space-x-2">
+            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-text-dark mb-2"
-              >
-                Username
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
-                placeholder="your_username"
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-text-dark mb-2"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-text-dark border-opacity-20 focus:border-vivid-500 focus:outline-none focus:ring-2 focus:ring-vivid-300 transition-all"
-                placeholder="••••••••"
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Logging in...' : 'Log in'}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-text-muted">
-              Don't have an account?{' '}
-              <Link to="/signup" className="text-vivid-600 hover:text-vivid-500 font-medium">
-                Sign up
-              </Link>
-            </p>
-          </div>
-        </div>
-
-        {/* Back to home */}
-        <div className="mt-6 text-center">
-          <Link to="/" className="text-sm text-text-muted hover:text-text-dark transition-colors">
-            ← Back to home
+            <span className="text-2xl font-black tracking-tight text-[#1a1a1a]">emoticonnection</span>
           </Link>
+        </nav>
+
+        {/* Hero Section */}
+        <div className="mt-16 md:mt-24 grid lg:grid-cols-2 gap-12 items-center">
+          {/* Left Side - Hero Content */}
+          <div className="space-y-8">
+            <h1 className="text-6xl md:text-8xl font-black leading-[0.9] tracking-tight text-[#1a1a1a]">
+              Connect <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-purple-500 to-green-400">
+                beyond
+              </span> <br />
+              words.
+            </h1>
+
+            <p className="text-xl text-gray-500 max-w-lg leading-relaxed font-medium">
+              emoticonnection is the world's first platform designed around genuine human emotions. Shared feelings, synchronized smiles.
+            </p>
+
+            <div className="flex items-center space-x-6">
+              <Link to="/signup">
+                <button className="px-10 py-5 bg-[#1a1a1a] text-white font-black rounded-3xl shadow-lg hover:-translate-y-1.5 hover:scale-[1.02] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out text-lg active:scale-95">
+                  Sign up
+                </button>
+              </Link>
+              <Link to="/">
+                <button className="px-10 py-5 bg-white text-[#1a1a1a] font-black rounded-3xl shadow-lg border-2 border-gray-200 hover:-translate-y-1.5 hover:scale-[1.02] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out text-lg active:scale-95">
+                  Home
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Right Side - Login Form Card */}
+          <div className="relative flex justify-center lg:justify-end">
+            <div className="w-full max-w-[450px] bg-white/95 backdrop-blur-2xl rounded-[3rem] p-10 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.15)] border border-gray-100">
+              <h2 className="text-3xl font-black text-[#1a1a1a] mb-2">
+                Welcome back
+              </h2>
+              <p className="text-gray-500 mb-8 font-medium">
+                Log in to continue your journey
+              </p>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm font-medium">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label
+                    htmlFor="username"
+                    className="block text-sm font-bold text-[#1a1a1a] mb-2"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-4 py-4 rounded-2xl border border-gray-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all text-[#1a1a1a] placeholder:text-gray-400 font-medium"
+                    placeholder="your_username"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-bold text-[#1a1a1a] mb-2"
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-4 rounded-2xl border border-gray-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all text-[#1a1a1a] placeholder:text-gray-400 font-medium"
+                    placeholder="••••••••"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-4 bg-[#1a1a1a] text-white font-black rounded-3xl shadow-lg hover:-translate-y-1 hover:shadow-xl active:scale-95 transition-all text-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-lg"
+                >
+                  {isLoading ? 'Logging in...' : 'Log in'}
+                </button>
+              </form>
+
+              <div className="mt-8 text-center">
+                <p className="text-gray-500 font-medium">
+                  Don't have an account?{' '}
+                  <Link to="/signup" className="text-purple-600 hover:text-purple-700 font-bold">
+                    Sign up
+                  </Link>
+                </p>
+              </div>
+            </div>
+
+            {/* Connection Lines Illustration */}
+            <svg className="absolute top-0 left-0 w-full h-full -z-10 opacity-30 hidden lg:block" viewBox="0 0 400 400">
+              <path d="M50 200 Q 150 50 350 200" fill="none" stroke="#4f46e5" strokeWidth="4" strokeDasharray="10,10" />
+              <path d="M50 100 Q 200 350 350 150" fill="none" stroke="#10b981" strokeWidth="4" strokeDasharray="10,10" />
+            </svg>
+          </div>
         </div>
+      </div>
+
+      {/* Simple Footer */}
+      <div className="relative z-10 py-12 text-center text-gray-400 text-sm bg-white mt-24">
+        <p className="font-medium tracking-wide">© 2024 emoticonnection. Feel the world.</p>
       </div>
     </div>
   )
