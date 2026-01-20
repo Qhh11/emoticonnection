@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initAuth = () => {
       const token = getToken()
-      const savedUser = localStorage.getItem('user')
+      const savedUser = sessionStorage.getItem('user')
 
       if (token && savedUser) {
         try {
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           // 无效的用户数据，清除
           removeToken()
-          localStorage.removeItem('user')
+          sessionStorage.removeItem('user')
         }
       }
       setIsLoading(false)
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // avatar: response.avatar,
       }
       setUser(authUser)
-      localStorage.setItem('user', JSON.stringify(authUser))
+      sessionStorage.setItem('user', JSON.stringify(authUser))
     } else {
       throw new Error(response.message || 'Login failed')
     }
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // avatar: response.avatar,
       }
       setUser(authUser)
-      localStorage.setItem('user', JSON.stringify(authUser))
+      sessionStorage.setItem('user', JSON.stringify(authUser))
     } else {
       throw new Error(response.message || 'Registration failed')
     }
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     removeToken()
-    localStorage.removeItem('user')
+    sessionStorage.removeItem('user')
     setUser(null)
   }
 

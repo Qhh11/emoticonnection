@@ -67,8 +67,8 @@
 
     <script>
         const API_BASE = 'http://localhost:8000/api';
-        const currentUserId = localStorage.getItem('chat_user_id');
-        const currentUsername = localStorage.getItem('chat_username');
+        const currentUserId = sessionStorage.getItem('chat_user_id');
+        const currentUsername = sessionStorage.getItem('chat_username');
 
         // Check auth
         if (!currentUserId) {
@@ -144,19 +144,19 @@
 
         function clearCache() {
             if (confirm('This will log you out. Continue?')) {
-                localStorage.clear();
-                localStorage.clear();
+                sessionStorage.clear();
+                sessionStorage.clear();
                 window.location.href = 'login.html';
             }
         }
 
         // Show debug info
         document.getElementById('debugInfo').innerHTML = `
-            <h3>localStorage:</h3>
+            <h3>sessionStorage:</h3>
             <pre>${JSON.stringify({
-                chat_user_id: localStorage.getItem('chat_user_id'),
-                chat_username: localStorage.getItem('chat_username'),
-                chat_nickname: localStorage.getItem('chat_nickname')
+                chat_user_id: sessionStorage.getItem('chat_user_id'),
+                chat_username: sessionStorage.getItem('chat_username'),
+                chat_nickname: sessionStorage.getItem('chat_nickname')
             }, null, 2)}</pre>
         `;
     </script>

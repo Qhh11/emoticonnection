@@ -277,8 +277,8 @@
         let currentUsername = '';
 
         // Check authentication
-        const storedUserId = localStorage.getItem('chat_user_id');
-        const storedUsername = localStorage.getItem('chat_username');
+        const storedUserId = sessionStorage.getItem('chat_user_id');
+        const storedUsername = sessionStorage.getItem('chat_username');
 
         if (!storedUserId) {
             window.location.href = 'login.html';

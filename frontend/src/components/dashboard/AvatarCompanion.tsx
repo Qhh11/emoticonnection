@@ -27,8 +27,8 @@ interface AvatarCompanionProps {
 
 export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton, profileDialogueText, animateLookingCloser, showCommunityPolishButton }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
-    // Load saved position from localStorage or use default
-    const saved = localStorage.getItem('avatarCompanionPosition')
+    // Load saved position from sessionStorage or use default
+    const saved = sessionStorage.getItem('avatarCompanionPosition')
     return saved ? JSON.parse(saved) : { x: window.innerWidth - 200, y: 100 }
   })
   const [isDragging, setIsDragging] = useState(false)
@@ -41,9 +41,9 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
   const onClickRef = useRef(onClick)
   onClickRef.current = onClick
 
-  // Save position to localStorage whenever it changes
+  // Save position to sessionStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('avatarCompanionPosition', JSON.stringify(position))
+    sessionStorage.setItem('avatarCompanionPosition', JSON.stringify(position))
   }, [position])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

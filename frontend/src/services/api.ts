@@ -4,15 +4,15 @@ const BASE_URL = 'http://localhost:8000'
 
 // Token 管理
 export const getToken = (): string | null => {
-  return localStorage.getItem('access_token')
+  return sessionStorage.getItem('access_token')
 }
 
 export const setToken = (token: string): void => {
-  localStorage.setItem('access_token', token)
+  sessionStorage.setItem('access_token', token)
 }
 
 export const removeToken = (): void => {
-  localStorage.removeItem('access_token')
+  sessionStorage.removeItem('access_token')
 }
 
 // 通用请求函数

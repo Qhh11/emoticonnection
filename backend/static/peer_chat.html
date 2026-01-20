@@ -604,14 +604,14 @@
         // Read Status Management
         // ====================================================================
         function getReadRooms() {
-            const readRooms = localStorage.getItem(`read_rooms_${currentUserId}`);
+            const readRooms = sessionStorage.getItem(`read_rooms_${currentUserId}`);
             return readRooms ? JSON.parse(readRooms) : {};
         }
 
         function markRoomAsRead(otherUserId) {
             const readRooms = getReadRooms();
             readRooms[otherUserId] = new Date().toISOString();
-            localStorage.setItem(`read_rooms_${currentUserId}`, JSON.stringify(readRooms));
+            sessionStorage.setItem(`read_rooms_${currentUserId}`, JSON.stringify(readRooms));
         }
 
         function isRoomRead(otherUserId, lastMessageTime) {
@@ -636,8 +636,8 @@
         // ====================================================================
         // Authentication Check
         // ====================================================================
-        const storedUserId = localStorage.getItem('chat_user_id');
-        const storedUsername = localStorage.getItem('chat_username');
+        const storedUserId = sessionStorage.getItem('chat_user_id');
+        const storedUsername = sessionStorage.getItem('chat_username');
 
         if (!storedUserId) {
             window.location.href = 'login.html';

@@ -82,14 +82,14 @@ const getLastActivityKey = (userId: string) =>
 // 记录用户最后活动时间（写日记、聊天等）
 export const markUserActivity = (userId: string) => {
   try {
-    localStorage.setItem(getLastActivityKey(userId), Date.now().toString())
+    sessionStorage.setItem(getLastActivityKey(userId), Date.now().toString())
   } catch {}
 }
 
 // 获取用户最后活动时间
 const getLastActivityTime = (userId: string): number => {
   try {
-    const time = localStorage.getItem(getLastActivityKey(userId))
+    const time = sessionStorage.getItem(getLastActivityKey(userId))
     return time ? parseInt(time, 10) : 0
   } catch {
     return 0
@@ -98,7 +98,7 @@ const getLastActivityTime = (userId: string): number => {
 
 export const getCachedReport = (userId: string, period: string): EmotionReport | null => {
   try {
-    const cached = localStorage.getItem(getCacheKey(userId, period))
+    const cached = sessionStorage.getItem(getCacheKey(userId, period))
     if (cached) {
       const { data, timestamp } = JSON.parse(cached)
       const lastActivity = getLastActivityTime(userId)
@@ -119,7 +119,7 @@ export const getCachedReport = (userId: string, period: string): EmotionReport |
 
 export const setCachedReport = (userId: string, period: string, data: EmotionReport) => {
   try {
-    localStorage.setItem(getCacheKey(userId, period), JSON.stringify({
+    sessionStorage.setItem(getCacheKey(userId, period), JSON.stringify({
       data,
       timestamp: Date.now()
     }))

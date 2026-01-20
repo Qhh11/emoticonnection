@@ -181,7 +181,7 @@
     <script>
         const API_BASE = 'http://localhost:8000/api/ai-chat';
         // Use user ID from chat
-        const userId = localStorage.getItem('chat_user_id');
+        const userId = sessionStorage.getItem('chat_user_id');
 
         async function loadDiaries() {
             if (!userId) {

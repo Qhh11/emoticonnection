@@ -215,7 +215,7 @@
 
 <script>
 const API_BASE = 'http://localhost:8000/api'
-const userId = localStorage.getItem('chat_user_id')
+const userId = sessionStorage.getItem('chat_user_id')
 
 if (!userId) {
   alert('Not logged in')

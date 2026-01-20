@@ -41,7 +41,7 @@ export default function Dashboard() {
   const [level, setLevel] = useState(1)
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([])
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('currentTheme')
+    const saved = sessionStorage.getItem('currentTheme')
     if (saved) {
       const parsed = JSON.parse(saved)
       // 找到匹配的主题，确保引用完整的 Theme 对象
@@ -59,7 +59,7 @@ export default function Dashboard() {
   // Avatar gallery state
   const [showAvatarGallery, setShowAvatarGallery] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<Avatar3D | null>(() => {
-    const saved = localStorage.getItem('selectedAvatar')
+    const saved = sessionStorage.getItem('selectedAvatar')
     if (saved) {
       try {
         const savedAvatar = JSON.parse(saved)
@@ -180,8 +180,8 @@ export default function Dashboard() {
     root.style.setProperty('--accent-color', currentTheme.color)
     root.style.setProperty('--accent-soft', currentTheme.soft)
     root.style.setProperty('--accent-text', currentTheme.text)
-    // 保存主题到 localStorage
-    localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
+    // 保存主题到 sessionStorage
+    sessionStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
   // Close AssistantBubble when switching away from tabs that support it
@@ -467,12 +467,12 @@ export default function Dashboard() {
 
   const handleSelectAvatar = (avatar: Avatar3D) => {
     setSelectedAvatar(avatar)
-    localStorage.setItem('selectedAvatar', JSON.stringify(avatar))
+    sessionStorage.setItem('selectedAvatar', JSON.stringify(avatar))
   }
 
   const handleCloseCompanion = () => {
     setSelectedAvatar(null)
-    localStorage.removeItem('selectedAvatar')
+    sessionStorage.removeItem('selectedAvatar')
   }
 
   // Handle Avatar click based on current tab - toggle bubble
