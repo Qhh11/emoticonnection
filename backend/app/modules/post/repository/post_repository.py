@@ -228,10 +228,12 @@ class PostRepository:
             }
 
         # Build query filter for posts from followed users
+        # Exclude anonymous posts - following feed should only show identifiable posts
         query = {
             "author_id": {"$in": following_ids},
             "is_deleted": False,
-            "visibility": {"$ne": "friends_only"}
+            "visibility": {"$ne": "friends_only"},
+            "is_anonymous": False
         }
 
         # Get total count

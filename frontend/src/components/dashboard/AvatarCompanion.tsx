@@ -18,9 +18,11 @@ interface AvatarCompanionProps {
   initialAction?: 'rewrite' | 'response' | 'topic' | null  // Initial action from chat toolbar
   initialInputText?: string      // Initial input text for rewrite action
   onActionConsumed?: () => void  // Callback when action is consumed
+  showPolishHint?: boolean       // Show polish hint tooltip (diary manual mode)
+  showPolishButton?: boolean     // Show polish button (diary manual mode)
 }
 
-export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from localStorage or use default
     const saved = localStorage.getItem('avatarCompanionPosition')
@@ -186,6 +188,14 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
           </div>
         )}
 
+        {/* Polish hint - 5 second reminder on diary manual mode */}
+        {showPolishHint && !isDragging && !showAssistantBubble && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-5 py-3 bg-white rounded-2xl shadow-xl border border-purple-100 whitespace-nowrap animate-in fade-in zoom-in-95 duration-300">
+            <p className="text-sm font-bold text-gray-700">Try the polish feature! ✨</p>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-white"></div>
+          </div>
+        )}
+
         {/* Control buttons - only show on hover */}
         {isHovered && !isDragging && (
           <div className="absolute -top-2 -right-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
@@ -214,8 +224,18 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
           </div>
         )}
 
-        {/* Drag hint - only show when no VIP hint */}
-        {!isDragging && !showVipHint && (
+        {/* Polish button - Show in diary manual mode (same style as Click me!) */}
+        {showPolishButton && !isDragging && !showAssistantBubble && (
+          <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
+            <div className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg whitespace-nowrap flex items-center space-x-1">
+              <span>✨</span>
+              <span>Polish</span>
+            </div>
+          </div>
+        )}
+
+        {/* Drag hint - only show when no VIP hint or Polish button */}
+        {!isDragging && !showVipHint && !showPolishButton && (
           <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
             Drag to move
           </div>

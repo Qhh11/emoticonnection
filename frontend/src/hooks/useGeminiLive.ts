@@ -17,6 +17,11 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
     const playbackQueueRef = useRef<Int16Array[]>([]);
     const isPlayingRef = useRef(false);
 
+    // For continuous streaming - keep track of media stream and audio context
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+    const recordingContextRef = useRef<AudioContext | null>(null);
+    const processorRef = useRef<AudioWorkletNode | null>(null);
+
     // Helpers
     const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
         let binary = '';
@@ -184,19 +189,26 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         source.start();
     }, []);
 
-    // Control functions
-    const startRecording = useCallback(async () => {
+    // Start live conversation - connect + start continuous microphone streaming
+    const startLiveConversation = useCallback(async () => {
         try {
+            // 1. Connect if not already connected
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
                 await connect();
             }
 
+            // 2. Start microphone streaming
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaStreamRef.current = stream;
+
             const audioContext = new AudioContext({ sampleRate: 16000 });
+            recordingContextRef.current = audioContext;
+
             const source = audioContext.createMediaStreamSource(stream);
 
             await audioContext.audioWorklet.addModule('/gemini-audio-processor.js');
             const processor = new AudioWorkletNode(audioContext, 'gemini-audio-processor');
+            processorRef.current = processor;
 
             processor.port.onmessage = (event) => {
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -215,14 +227,58 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
 
             source.connect(processor);
             setIsRecording(true);
-            console.log('[GeminiLive] Recording started (streaming directly to Google)');
+            console.log('[GeminiLive] Live conversation started - continuous streaming active');
         } catch (error) {
-            console.error('[GeminiLive] Failed to start recording:', error);
-            onError?.(error instanceof Error ? error.message : 'Failed to start recording');
+            console.error('[GeminiLive] Failed to start live conversation:', error);
+            onError?.(error instanceof Error ? error.message : 'Failed to start live conversation');
+            throw error;
         }
     }, [connect, onError]);
 
+    // Stop live conversation - stop microphone + disconnect WebSocket
+    const stopLiveConversation = useCallback(() => {
+        // Stop microphone stream
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+        }
+
+        // Close recording audio context
+        if (recordingContextRef.current && recordingContextRef.current.state !== 'closed') {
+            recordingContextRef.current.close();
+            recordingContextRef.current = null;
+        }
+
+        processorRef.current = null;
+        setIsRecording(false);
+
+        // Disconnect WebSocket
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+        setIsConnected(false);
+        setStatus('idle');
+
+        console.log('[GeminiLive] Live conversation ended');
+    }, []);
+
+    // Legacy functions for backwards compatibility (can be removed later)
+    const startRecording = useCallback(async () => {
+        await startLiveConversation();
+    }, [startLiveConversation]);
+
     const stopRecording = useCallback(() => {
+        // Just stop recording, don't disconnect (for push-to-talk mode)
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+        }
+        if (recordingContextRef.current && recordingContextRef.current.state !== 'closed') {
+            recordingContextRef.current.close();
+            recordingContextRef.current = null;
+        }
+        processorRef.current = null;
         setIsRecording(false);
         console.log('[GeminiLive] Recording stopped');
     }, []);
@@ -251,6 +307,13 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
 
     useEffect(() => {
         return () => {
+            // Cleanup on unmount
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            }
+            if (recordingContextRef.current && recordingContextRef.current.state !== 'closed') {
+                recordingContextRef.current.close();
+            }
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;
@@ -267,6 +330,8 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         disconnect,
         startRecording,
         stopRecording,
+        startLiveConversation,
+        stopLiveConversation,
         sendAudioData,
         // Expose the raw readyState for immediate checks (bypass React state lag)
         getReadyState: () => wsRef.current?.readyState
@@ -279,6 +344,8 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         disconnect,
         startRecording,
         stopRecording,
+        startLiveConversation,
+        stopLiveConversation,
         sendAudioData
     ]);
 };

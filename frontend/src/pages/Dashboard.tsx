@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
@@ -126,6 +126,14 @@ export default function Dashboard() {
   // Text to inject into SoulSync chat input (from AssistantBubble)
   const [chatInputFromBubble, setChatInputFromBubble] = useState<string | null>(null)
 
+  // Diary mode tracking and rewrite function ref
+  const [diaryMode, setDiaryMode] = useState<'ai' | 'voice' | 'manual'>('manual')
+  const diaryRewriteRef = useRef<() => void>()
+  const diarySetContentRef = useRef<(text: string) => void>()
+
+  // Polish hint state for diary manual mode (5 second reminder)
+  const [showDiaryPolishHint, setShowDiaryPolishHint] = useState(false)
+
   // Assistant action state (for opening AssistantBubble with specific action from chat toolbar)
   const [assistantAction, setAssistantAction] = useState<{
     action: 'rewrite' | 'response' | 'topic' | null
@@ -161,13 +169,26 @@ export default function Dashboard() {
     localStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
-  // Close AssistantBubble when switching away from soulsync tab
+  // Close AssistantBubble when switching away from tabs that support it
   useEffect(() => {
-    if (activeTab !== 'soulsync') {
+    // AssistantBubble is supported on soulsync and diary (manual mode) tabs
+    const supportsAssistant = activeTab === 'soulsync' || (activeTab === 'diary' && diaryMode === 'manual')
+    if (!supportsAssistant) {
       setShowAssistantBubble(false)
       setAssistantAction({ action: null })
     }
-  }, [activeTab])
+  }, [activeTab, diaryMode])
+
+  // Show polish hint for 5 seconds when entering diary manual mode
+  useEffect(() => {
+    if (activeTab === 'diary' && diaryMode === 'manual') {
+      setShowDiaryPolishHint(true)
+      const timer = setTimeout(() => setShowDiaryPolishHint(false), 5000)
+      return () => clearTimeout(timer)
+    } else {
+      setShowDiaryPolishHint(false)
+    }
+  }, [activeTab, diaryMode])
 
   // 刷新社交统计的函数
   const refreshSocialStats = () => {
@@ -381,6 +402,9 @@ export default function Dashboard() {
   const handleAvatarClick = () => {
     if (activeTab === 'soulsync' && hasActiveSession) {
       setShowAssistantBubble(prev => !prev)
+    } else if (activeTab === 'diary' && diaryMode === 'manual') {
+      // Trigger rewrite in DiaryView manual mode
+      diaryRewriteRef.current?.()
     }
   }
 
@@ -497,6 +521,13 @@ export default function Dashboard() {
             onRefreshDiaries={refreshDiaries}
             onOpenEntryDetail={setSelectedJournalModal}
             avatar={selectedAvatar}
+            onModeChange={setDiaryMode}
+            onRewriteReady={(fn) => { diaryRewriteRef.current = fn }}
+            onOpenAssistantWithRewrite={(text) => {
+              setAssistantAction({ action: 'rewrite', inputText: text })
+              setShowAssistantBubble(true)
+            }}
+            onSetContentReady={(fn) => { diarySetContentRef.current = fn }}
           />
         )
       case 'community':
@@ -561,8 +592,8 @@ export default function Dashboard() {
         userLevel={level}
       />
 
-      {/* Avatar Companion - Floating on dashboard (hidden on diary page since Avatar is embedded in chat) */}
-      {selectedAvatar && activeTab !== 'diary' && (
+      {/* Avatar Companion - Floating on dashboard (shown on diary manual mode too for rewrite) */}
+      {selectedAvatar && (activeTab !== 'diary' || diaryMode === 'manual') && (
         <AvatarCompanion
           avatar={selectedAvatar}
           onClose={handleCloseCompanion}
@@ -570,13 +601,21 @@ export default function Dashboard() {
           onClick={handleAvatarClick}
           showVipHint={activeTab === 'soulsync' && hasActiveSession && !showAssistantBubble}
           showProactiveHint={activeTab === 'soulsync' && showProactiveHint && !showAssistantBubble}
+          showPolishHint={activeTab === 'diary' && diaryMode === 'manual' && showDiaryPolishHint}
+          showPolishButton={activeTab === 'diary' && diaryMode === 'manual' && !showAssistantBubble}
           showAssistantBubble={showAssistantBubble}
           onCloseBubble={() => {
             setShowAssistantBubble(false)
             setAssistantAction({ action: null })
           }}
           onSelectText={(text) => {
-            setChatInputFromBubble(text)
+            if (activeTab === 'diary' && diaryMode === 'manual') {
+              // Update DiaryView content with rewrite result
+              diarySetContentRef.current?.(text)
+            } else {
+              // Update SoulSync chat input
+              setChatInputFromBubble(text)
+            }
             setShowAssistantBubble(false)
             setAssistantAction({ action: null })
           }}
@@ -990,10 +1029,17 @@ interface NavItemProps {
   label: string
 }
 
-function NavItem({ active, onClick, icon }: NavItemProps) {
+function NavItem({ active, onClick, icon, label }: NavItemProps) {
   return (
-    <button onClick={onClick} className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${active ? 'bg-accent text-accent-inverse shadow-xl scale-110' : 'text-gray-300 hover:text-accent'}`}>
+    <button
+      onClick={onClick}
+      className={`relative group w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${active ? 'bg-accent text-accent-inverse shadow-xl scale-110' : 'text-gray-300 hover:text-accent'}`}
+    >
       {icon}
+      {/* Tooltip */}
+      <span className="absolute left-full ml-3 px-3 py-1.5 bg-accent text-accent-inverse text-xs font-bold rounded-lg whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 capitalize shadow-lg">
+        {label}
+      </span>
     </button>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
+import { motion, LayoutGroup } from 'framer-motion'
 import { aiChatApi } from '../../services/api'
 import { AVATARS_3D, Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
@@ -39,6 +39,10 @@ export interface DiaryViewProps {
   onRefreshDiaries?: () => void
   onOpenEntryDetail: (entry: DiaryEntry) => void
   avatar?: Avatar3D | null
+  onModeChange?: (mode: 'ai' | 'voice' | 'manual') => void
+  onRewriteReady?: (fn: () => void) => void
+  onOpenAssistantWithRewrite?: (text: string) => void  // Open AssistantBubble with rewrite action
+  onSetContentReady?: (fn: (text: string) => void) => void  // Register setContent function with parent
 }
 
 interface ChatAIViewProps {
@@ -53,8 +57,8 @@ interface ChatMessage {
   content: string
 }
 
-// Voice recording status type
-type VoiceStatus = 'idle' | 'recording' | 'processing' | 'speaking'
+// Voice status type for real-time conversation
+type VoiceStatus = 'idle' | 'connecting' | 'connected'
 
 function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIViewProps) {
   // Determine avatar and its greeting once at the start of component lifecycle
@@ -93,21 +97,21 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
   const messages = chatMode === 'text' ? textMessages : voiceMessages
   const setMessages = chatMode === 'text' ? setTextMessages : setVoiceMessages
 
-  // Gemini Live hook for voice chat
+  // Gemini Live hook for real-time voice chat
   const geminiLive = useGeminiLive({
     onTranscript: (text) => {
       console.log('[ChatAIView] Gemini transcript:', text)
       setTranscript(text)
-      // Add AI response to voice messages (always use setVoiceMessages directly)
-      if (text && voiceStatus === 'speaking') {
+      // Add AI response to voice messages when in connected state
+      if (text && voiceStatus === 'connected') {
         setVoiceMessages(prev => {
           // Update the last AI message or add new one
           const lastMsg = prev[prev.length - 1]
-          if (lastMsg?.role === 'ai' && lastMsg.content.startsWith('🎤')) {
-            // Update streaming message
-            return [...prev.slice(0, -1), { role: 'ai', content: text }]
+          if (lastMsg?.role === 'ai' && lastMsg.content !== text) {
+            // Add new AI message
+            return [...prev, { role: 'ai', content: text }]
           }
-          return [...prev, { role: 'ai', content: text }]
+          return prev
         })
       }
     },
@@ -117,18 +121,20 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
     },
     onTurnComplete: () => {
       console.log('[ChatAIView] Gemini turn complete')
-      setVoiceStatus('idle')
+      // Don't reset to idle - stay connected for continuous conversation
     }
   })
 
-  // Sync voice status with Gemini Live state
+  // Sync voice status with Gemini Live connection state
   useEffect(() => {
-    if (geminiLive.isSpeaking) {
-      setVoiceStatus('speaking')
-    } else if (geminiLive.isRecording) {
-      setVoiceStatus('recording')
+    if (geminiLive.status === 'connecting') {
+      setVoiceStatus('connecting')
+    } else if (geminiLive.status === 'connected' && geminiLive.isRecording) {
+      setVoiceStatus('connected')
+    } else if (geminiLive.status === 'disconnected' || geminiLive.status === 'error') {
+      setVoiceStatus('idle')
     }
-  }, [geminiLive.isSpeaking, geminiLive.isRecording])
+  }, [geminiLive.status, geminiLive.isRecording])
 
   // Sync with initialAvatar if it changes from parent (e.g. user selects in Gallery)
   useEffect(() => {
@@ -219,6 +225,8 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 检查是否在 IME 组合输入中（如中文输入法选词）
+    if (e.nativeEvent.isComposing) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -255,41 +263,40 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
     }
   }
 
-  // ========== Voice Recording Functions (using Gemini Live) ==========
+  // ========== Live Conversation Functions (using Gemini Live) ==========
 
-  const startVoiceRecording = async () => {
+  // Start real-time conversation - like starting a phone call
+  const startLiveConversation = async () => {
     setTranscript('')
-    setVoiceStatus('recording')
+    setVoiceStatus('connecting')
     try {
-      await geminiLive.startRecording()
+      await geminiLive.startLiveConversation()
+      setVoiceStatus('connected')
     } catch (error) {
-      console.error('[ChatAIView] Error starting voice recording:', error)
+      console.error('[ChatAIView] Error starting live conversation:', error)
       setVoiceStatus('idle')
     }
   }
 
-  const stopVoiceRecording = () => {
-    geminiLive.stopRecording()
-    setVoiceStatus('processing')
+  // End real-time conversation - like hanging up the phone
+  const endLiveConversation = () => {
+    geminiLive.stopLiveConversation()
+    setVoiceStatus('idle')
   }
 
   // Switch between text and voice modes with animation
-  const switchToVoiceMode = async () => {
+  const switchToVoiceMode = () => {
     setChatMode('voice')
     setTranscript('')
     setVoiceStatus('idle')
-    // Pre-connect to Gemini Live for faster response
-    try {
-      await geminiLive.connect()
-    } catch (err) {
-      console.error('[ChatAIView] Failed to connect to Gemini Live:', err)
-    }
+    // Don't auto-connect - user will tap to start conversation
   }
 
   const switchToTextMode = () => {
-    // Stop any ongoing recording and disconnect
-    geminiLive.stopRecording()
-    geminiLive.disconnect()
+    // End any ongoing conversation
+    if (voiceStatus === 'connected') {
+      endLiveConversation()
+    }
     setChatMode('text')
     setVoiceStatus('idle')
   }
@@ -491,12 +498,12 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
                   className="relative w-48 h-48 mb-6"
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 >
-                  {/* Glow ring - pulses when recording */}
+                  {/* Glow ring - pulses when connected (live conversation) */}
                   <motion.div
-                    className={`absolute inset-0 rounded-full ${voiceStatus === 'recording' ? 'animate-pulse' : ''}`}
+                    className={`absolute inset-0 rounded-full ${voiceStatus === 'connected' ? 'animate-pulse' : ''}`}
                     style={{
-                      background: `radial-gradient(circle, ${activeAvatar.color}${voiceStatus === 'recording' ? '50' : '30'} 0%, transparent 70%)`,
-                      transform: voiceStatus === 'recording' ? 'scale(1.8)' : 'scale(1.5)'
+                      background: `radial-gradient(circle, ${activeAvatar.color}${voiceStatus === 'connected' ? '50' : '30'} 0%, transparent 70%)`,
+                      transform: voiceStatus === 'connected' ? 'scale(1.8)' : 'scale(1.5)'
                     }}
                   />
                   {activeAvatar.videoPath ? (
@@ -505,7 +512,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
                       alt={activeAvatar.name}
                       className="w-full h-full object-contain"
                       style={{
-                        filter: `drop-shadow(0 0 ${voiceStatus === 'recording' ? '40px' : '30px'} ${activeAvatar.color}60)`
+                        filter: `drop-shadow(0 0 ${voiceStatus === 'connected' ? '40px' : '30px'} ${activeAvatar.color}60)`
                       }}
                     />
                   ) : (
@@ -524,14 +531,30 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
                 {/* Status text */}
                 <div className="text-center mb-6">
                   <p className="text-white/60 text-sm font-bold uppercase tracking-widest">
-                    {voiceStatus === 'idle' && 'Tap to speak'}
-                    {voiceStatus === 'recording' && 'Listening...'}
-                    {voiceStatus === 'processing' && 'Processing...'}
-                    {voiceStatus === 'speaking' && `${activeAvatar.name} is responding...`}
+                    {voiceStatus === 'idle' && 'Tap to start conversation'}
+                    {voiceStatus === 'connecting' && 'Connecting...'}
+                    {voiceStatus === 'connected' && (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                        Live with {activeAvatar.name}
+                      </span>
+                    )}
                   </p>
                 </div>
 
-                {/* Latest AI response (if any) */}
+                {/* Latest AI response (shown during conversation) */}
+                {transcript && voiceStatus === 'connected' && (
+                  <div className="w-full max-w-md text-center animate-in fade-in duration-300">
+                    <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                      {activeAvatar.name}
+                    </p>
+                    <p className="text-white text-base font-bold leading-relaxed">
+                      {transcript}
+                    </p>
+                  </div>
+                )}
+
+                {/* Show last message when idle */}
                 {latestAiMessage && voiceStatus === 'idle' && (
                   <div className="w-full max-w-md text-center animate-in fade-in duration-500">
                     <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
@@ -542,51 +565,41 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
                     </p>
                   </div>
                 )}
-
-                {/* Transcript display */}
-                {transcript && (
-                  <div className="mt-4 px-6 py-3 bg-white/10 rounded-2xl max-w-md">
-                    <p className="text-white/70 text-sm font-bold italic text-center">
-                      "{transcript}"
-                    </p>
-                  </div>
-                )}
               </div>
 
-              {/* Bottom - Recording button */}
+              {/* Bottom - Call button (Connect/Disconnect) */}
               <div className="relative z-10 p-6 pb-8 flex justify-center">
                 <button
-                  onClick={voiceStatus === 'recording' ? stopVoiceRecording : startVoiceRecording}
-                  disabled={voiceStatus === 'processing' || voiceStatus === 'speaking'}
+                  onClick={voiceStatus === 'connected' ? endLiveConversation : startLiveConversation}
+                  disabled={voiceStatus === 'connecting'}
                   className={`w-20 h-20 rounded-full flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                    voiceStatus === 'recording'
+                    voiceStatus === 'connected'
                       ? 'bg-red-500 hover:bg-red-600 scale-110'
                       : 'hover:scale-105 active:scale-95'
                   }`}
-                  style={voiceStatus !== 'recording' ? {
+                  style={voiceStatus !== 'connected' ? {
                     background: `linear-gradient(135deg, ${activeAvatar.color} 0%, ${activeAvatar.color}80 100%)`,
                     boxShadow: `0 0 40px ${activeAvatar.color}50`
                   } : {
                     boxShadow: '0 0 40px rgba(239, 68, 68, 0.5)'
                   }}
                 >
-                  {voiceStatus === 'recording' ? (
-                    // Stop icon
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-                      <rect x="6" y="6" width="12" height="12" rx="2" />
-                    </svg>
-                  ) : voiceStatus === 'processing' || voiceStatus === 'speaking' ? (
+                  {voiceStatus === 'connecting' ? (
                     // Loading spinner
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                       <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                       <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                     </div>
+                  ) : voiceStatus === 'connected' ? (
+                    // Hang up icon (phone)
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                      <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
+                    </svg>
                   ) : (
-                    // Microphone icon
+                    // Phone call icon (start)
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                      <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z" />
                     </svg>
                   )}
                 </button>
@@ -682,11 +695,32 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
   )
 }
 
-export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar }: DiaryViewProps) {
+export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar, onModeChange, onRewriteReady, onOpenAssistantWithRewrite, onSetContentReady }: DiaryViewProps) {
   const [mode, setMode] = useState<DiaryMode>('manual')
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0] | null>(null)
+
+  // Notify parent about mode changes
+  useEffect(() => {
+    onModeChange?.(mode)
+  }, [mode, onModeChange])
+
+  // Handle rewrite triggered by Avatar click - notify Dashboard to open AssistantBubble
+  const handleOpenRewrite = () => {
+    if (!content.trim()) return
+    onOpenAssistantWithRewrite?.(content)
+  }
+
+  // Register rewrite handler with parent
+  useEffect(() => {
+    onRewriteReady?.(handleOpenRewrite)
+  }, [content, onRewriteReady, onOpenAssistantWithRewrite])
+
+  // Register setContent function with parent for receiving rewrite results
+  useEffect(() => {
+    onSetContentReady?.(setContent)
+  }, [onSetContentReady])
 
   const handleSave = (e: React.MouseEvent) => {
     if (!content.trim()) return
@@ -779,8 +813,9 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                 <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Save</button>
               </div>
             </div>
+
           </div>
-          <div className="lg:col-span-4">
+          <div className="lg:col-span-4 relative">
             <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-8">
               <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Previous Logs</h4>
               <div className="diary-stack">

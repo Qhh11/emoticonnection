@@ -421,7 +421,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 d.setDate(today.getDate() + mondayOffset + i)
                 weekDays.push({
                   date: d,
-                  dateStr: d.toISOString().split('T')[0] // YYYY-MM-DD format
+                  dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
                 })
               }
 
@@ -435,7 +435,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 })
               }
 
-              const todayStr = today.toISOString().split('T')[0]
+              const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
               return weekDays.map((day, i) => {
                 const data = dataByDate[day.dateStr]

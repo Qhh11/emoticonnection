@@ -57,6 +57,11 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
   // Track if initial action has been processed
   const [initialActionProcessed, setInitialActionProcessed] = useState(false)
 
+  // Reset processed flag when action changes - allows switching between actions while bubble is open
+  useEffect(() => {
+    setInitialActionProcessed(false)
+  }, [initialAction, initialInputText])
+
   // Helper function for auto rewrite (used in initial action)
   const autoRewrite = async (text: string) => {
     setIsThinking(true)

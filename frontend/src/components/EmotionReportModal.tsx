@@ -145,7 +145,8 @@ const generateFullTimeline = (
     for (let i = 0; i < 7; i++) {
       const date = new Date(start)
       date.setDate(start.getDate() + i)
-      const dateStr = date.toISOString().split('T')[0]
+      // 使用本地日期格式，避免 UTC 时区问题
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
       const existing = dataMap.get(dateStr)
       fullData.push(existing || {
@@ -424,6 +425,8 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                               axisLine={false}
                               tickLine={false}
                               tick={{ fontSize: 10, fill: '#9ca3af' }}
+                              interval={0}
+                              padding={{ left: 10, right: 10 }}
                               tickFormatter={(date) => {
                                 if (period === 'monthly') {
                                   return date // 已经是 W1, W2, W3, W4 格式
