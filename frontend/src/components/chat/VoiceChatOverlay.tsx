@@ -130,12 +130,12 @@ const ControlsRow = styled.div`
   align-items: center;
 `;
 
-const ActionButton = styled.button<{ color?: string }>`
+const ActionButton = styled.button<{ color?: string; $transparent?: boolean }>`
   padding: 0.8rem 1.5rem;
-  border: none;
+  border: ${props => props.$transparent ? `2px solid ${props.color || '#7c4dff'}` : 'none'};
   border-radius: 2rem;
-  background: ${props => props.color || '#7c4dff'};
-  color: white;
+  background: ${props => props.$transparent ? 'transparent' : (props.color || '#7c4dff')};
+  color: ${props => props.$transparent ? (props.color || '#7c4dff') : 'white'};
   font-weight: 700;
   font-size: 0.85rem;
   display: flex;
@@ -143,12 +143,13 @@ const ActionButton = styled.button<{ color?: string }>`
   gap: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: ${props => props.$transparent ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.1)'};
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    filter: brightness(1.1);
+    box-shadow: ${props => props.$transparent ? '0 2px 8px rgba(0, 0, 0, 0.1)' : '0 6px 16px rgba(0, 0, 0, 0.15)'};
+    background: ${props => props.$transparent ? `${props.color || '#7c4dff'}15` : undefined};
+    filter: ${props => props.$transparent ? 'none' : 'brightness(1.1)'};
   }
 
   &:active {
@@ -156,7 +157,9 @@ const ActionButton = styled.button<{ color?: string }>`
   }
 
   &:disabled {
-    background: #ccc;
+    background: ${props => props.$transparent ? 'transparent' : '#ccc'};
+    border-color: ${props => props.$transparent ? '#ccc' : 'transparent'};
+    color: ${props => props.$transparent ? '#ccc' : 'white'};
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -428,7 +431,7 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
                         ⚡ Start Live API Interaction
                     </ActionButton>
                 ) : status === 'listening' ? (
-                    <ActionButton color="#f44336" onClick={stopListening}>
+                    <ActionButton color="#f44336" $transparent onClick={stopListening}>
                         ⏹ Stop Recording
                     </ActionButton>
                 ) : status === 'recorded' ? (
@@ -441,7 +444,7 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
                         </ActionButton>
                     </>
                 ) : (
-                    <ActionButton color="#f44336" onClick={handleClear}>
+                    <ActionButton color="#f44336" $transparent onClick={handleClear}>
                         🛑 End Session
                     </ActionButton>
                 )}

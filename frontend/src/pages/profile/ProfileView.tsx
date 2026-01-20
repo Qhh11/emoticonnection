@@ -4,8 +4,6 @@ import { getAvatarUrl } from '../../config/userAvatars'
 import { SocialStats, Post, User, EmotionReport, getMediaUrl, userApi, CheckInHistoryItem } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
 
-
-
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
   { label: 'Bored', color: '#4B4E91', text: '#ffffff' },
@@ -18,23 +16,6 @@ const MOOD_DATA = [
   { label: 'Awkward', color: '#D278A3', text: '#ffffff' },
   { label: 'Envy', color: '#2BA8A4', text: '#ffffff' },
 ]
-
-// Emotion color mapping for bar chart (matches EmotionReportModal)
-const EMOTION_COLORS: Record<string, string> = {
-  'joy': '#F9D849',
-  'sadness': '#3266B1',
-  'anger': '#D32F2F',
-  'anxiety': '#E67E22',
-  'bored': '#4B4E91',
-  'fear': '#9381BA',
-  'disgust': '#66B04C',
-  'embarrassment': '#D278A3',
-  'envy': '#2BA8A4',
-}
-
-const getEmotionColor = (emotion: string): string => {
-  return EMOTION_COLORS[emotion.toLowerCase()] || '#808080'
-}
 
 // 根据分数获取颜色（与 EmotionReportModal 保持一致）
 const getScoreColor = (score: number): string => {
@@ -210,7 +191,7 @@ const getTrendLabel = (direction: string): string => {
   return 'Stable'
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
 
@@ -335,6 +316,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
         </div>
 
         <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-center gap-10">
+          {/* User Profile Avatar */}
           <div className="relative group">
             <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] bg-gray-50 flex items-center justify-center shadow-inner border-4 border-white group-hover:scale-105 transition-transform duration-700 overflow-hidden">
               <img src={getAvatarUrl(avatar)} alt="" className="w-full h-full object-cover" />

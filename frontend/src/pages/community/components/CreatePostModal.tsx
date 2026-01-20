@@ -3,7 +3,7 @@
  * 标题 + 内容 + 图片上传 + Vibe Picker + 匿名选项
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import VibePicker from './VibePicker'
 
@@ -12,6 +12,9 @@ interface CreatePostModalProps {
   onClose: () => void
   onSubmit: (data: CreatePostData) => Promise<void>
   userId: string
+  onRequestPolish?: (content: string) => void  // Callback to request polish from avatar
+  polishedContent?: string | null  // Polished content from avatar assistant
+  onPolishedContentConsumed?: () => void  // Callback when polished content is consumed
 }
 
 export interface CreatePostData {
@@ -27,6 +30,9 @@ export default function CreatePostModal({
   onClose,
   onSubmit,
   userId,
+  onRequestPolish,
+  polishedContent,
+  onPolishedContentConsumed,
 }: CreatePostModalProps) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -38,6 +44,14 @@ export default function CreatePostModal({
   const [error, setError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Update content when polished content is received
+  useEffect(() => {
+    if (polishedContent) {
+      setContent(polishedContent)
+      onPolishedContentConsumed?.()
+    }
+  }, [polishedContent, onPolishedContentConsumed])
 
   if (!isOpen) return null
 
@@ -161,16 +175,28 @@ export default function CreatePostModal({
             <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
               Content
             </label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              maxLength={500}
-              placeholder="Share your story..."
-              rows={4}
-              className="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-transparent
-                focus:border-black focus:bg-white outline-none transition-all resize-none
-                text-sm font-medium placeholder:text-gray-400"
-            />
+            <div className="relative">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                maxLength={500}
+                placeholder="Share your story..."
+                rows={4}
+                className="w-full px-4 py-3 pr-20 bg-gray-50 rounded-xl border-2 border-transparent
+                  focus:border-black focus:bg-white outline-none transition-all resize-none
+                  text-sm font-medium placeholder:text-gray-400"
+              />
+              {/* Polish Button */}
+              {onRequestPolish && content.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onRequestPolish(content)}
+                  className="absolute right-3 bottom-3 px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all"
+                >
+                  ✨ Polish
+                </button>
+              )}
+            </div>
             <div className="text-right mt-1">
               <span className="text-[10px] text-gray-400">{content.length}/500</span>
             </div>

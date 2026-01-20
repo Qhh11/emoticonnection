@@ -19,6 +19,11 @@ interface CommunityViewProps {
   onPostCreated?: () => void
   onPointsChanged?: () => void
   onViewProfile?: (userId: string) => void
+  onPostDetailChange?: (isOpen: boolean, postContent?: string, postEmotion?: string, hasImage?: boolean) => void  // Callback when post detail modal opens/closes
+  onCreatePostChange?: (isOpen: boolean) => void  // Callback when create post modal opens/closes
+  onRequestPolish?: (content: string) => void  // Callback to request polish from avatar
+  polishedContent?: string | null  // Polished content from avatar assistant
+  onPolishedContentConsumed?: () => void  // Callback when polished content is consumed
 }
 
 export default function CommunityView({
@@ -28,6 +33,11 @@ export default function CommunityView({
   onPostCreated,
   onPointsChanged,
   onViewProfile,
+  onPostDetailChange,
+  onCreatePostChange,
+  onRequestPolish,
+  polishedContent,
+  onPolishedContentConsumed,
 }: CommunityViewProps) {
   // Tab 状态
   const [activeTab, setActiveTab] = useState<'following' | 'exploring'>('exploring')
@@ -179,6 +189,26 @@ export default function CommunityView({
   // 帖子卡片点击
   const handlePostClick = (post: Post) => {
     setSelectedPost(post)
+    const hasImage = !!(post.media_urls && post.media_urls.length > 0)
+    onPostDetailChange?.(true, post.content, post.emotion || post.ai_emotion || undefined, hasImage)
+  }
+
+  // 关闭帖子详情
+  const handleClosePostDetail = () => {
+    setSelectedPost(null)
+    onPostDetailChange?.(false)
+  }
+
+  // 打开创建帖子弹窗
+  const handleOpenCreateModal = () => {
+    setIsCreateModalOpen(true)
+    onCreatePostChange?.(true)
+  }
+
+  // 关闭创建帖子弹窗
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false)
+    onCreatePostChange?.(false)
   }
 
   return (
@@ -187,7 +217,7 @@ export default function CommunityView({
       <CommunityHeader
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        onCreatePost={() => setIsCreateModalOpen(true)}
+        onCreatePost={handleOpenCreateModal}
       />
 
       {/* Error */}
@@ -214,16 +244,19 @@ export default function CommunityView({
       {/* Create Post Modal */}
       <CreatePostModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={handleCloseCreateModal}
         onSubmit={handleCreatePost}
         userId={userId || ''}
+        onRequestPolish={onRequestPolish}
+        polishedContent={polishedContent}
+        onPolishedContentConsumed={onPolishedContentConsumed}
       />
 
       {/* Post Detail Modal */}
       <PostDetailModal
         post={selectedPost}
         isOpen={!!selectedPost}
-        onClose={() => setSelectedPost(null)}
+        onClose={handleClosePostDetail}
         onLike={handleLike}
         userId={userId}
         onViewProfile={onViewProfile}

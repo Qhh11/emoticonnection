@@ -7,6 +7,7 @@ import FollowListModal from '../components/FollowListModal'
 import EmotionReportModal, { markUserActivity, getCachedReport, setCachedReport } from '../components/EmotionReportModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D, AVATARS_3D } from '../config/avatars'
+import avatarDialogue from '../config/avatarDialogue.json'
 import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatars'
 import CommunityView from './community/CommunityView'
 import PostDetailModal from './community/components/PostDetailModal'
@@ -140,11 +141,25 @@ export default function Dashboard() {
     inputText?: string
   }>({ action: null })
 
+  // Profile dialogue state (for floating avatar welcome/catchphrase on profile page)
+  const [profileDialogueText, setProfileDialogueText] = useState<string | null>(null)
+  const profileDialogueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Emotion Report Modal state
   const [showEmotionReport, setShowEmotionReport] = useState(false)
 
   // Weekly emotion report for Profile card preview
   const [weeklyReport, setWeeklyReport] = useState<EmotionReport | null>(null)
+
+  // Community post detail modal state (for avatar animation and AI reading)
+  const [communityPostDetailOpen, setCommunityPostDetailOpen] = useState(false)
+  const [communityPostContent, setCommunityPostContent] = useState<string | null>(null)
+  const [communityPostEmotion, setCommunityPostEmotion] = useState<string | null>(null)
+  const [communityPostHasImage, setCommunityPostHasImage] = useState(false)
+
+  // Community create post modal state (for polish feature)
+  const [communityCreatePostOpen, setCommunityCreatePostOpen] = useState(false)
+  const [communityPolishedContent, setCommunityPolishedContent] = useState<string | null>(null)
 
   // Load user data from AuthUser on mount or when AuthUser changes
   useEffect(() => {
@@ -189,6 +204,68 @@ export default function Dashboard() {
       setShowDiaryPolishHint(false)
     }
   }, [activeTab, diaryMode])
+
+  // Show welcome dialogue when entering profile tab with avatar selected
+  useEffect(() => {
+    if (activeTab === 'profile' && selectedAvatar) {
+      const dialogue = avatarDialogue[selectedAvatar.name.toUpperCase() as keyof typeof avatarDialogue]
+      if (dialogue) {
+        if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+        setProfileDialogueText(dialogue.welcome)
+        profileDialogueTimerRef.current = setTimeout(() => {
+          setProfileDialogueText(null)
+        }, 4000)
+      }
+    } else {
+      setProfileDialogueText(null)
+    }
+    return () => {
+      if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+    }
+  }, [activeTab, selectedAvatar])
+
+  // AI Reading Companion - when viewing community post detail
+  useEffect(() => {
+    if (communityPostDetailOpen && selectedAvatar && user?._id) {
+      // Show loading message
+      setProfileDialogueText("Let me take a look...")
+
+      // Build context-aware prompt
+      let promptContext = ''
+      if (communityPostHasImage && communityPostContent) {
+        promptContext = `This is an image post with caption: "${communityPostContent.slice(0, 200)}". The vibe is ${communityPostEmotion || 'unknown'}.`
+      } else if (communityPostHasImage) {
+        promptContext = `This is an image post with ${communityPostEmotion ? `a "${communityPostEmotion}" vibe` : 'no caption'}.`
+      } else if (communityPostContent) {
+        promptContext = `This is a text post: "${communityPostContent.slice(0, 300)}". The vibe is ${communityPostEmotion || 'unknown'}.`
+      } else {
+        promptContext = `This is a post with ${communityPostEmotion ? `a "${communityPostEmotion}" vibe` : 'unknown content'}.`
+      }
+
+      // Call AI API for reading companion reaction
+      aiChatApi.chat({
+        user_id: user._id,
+        message: `Please give a brief, personality-appropriate reaction (1-2 sentences) to this community post. ${promptContext}`,
+        avatar_id: selectedAvatar.id
+      }).then(response => {
+        setProfileDialogueText(response.response)
+        // Auto-hide after 7 seconds
+        if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+        profileDialogueTimerRef.current = setTimeout(() => {
+          if (communityPostDetailOpen) {
+            setProfileDialogueText(null)
+          }
+        }, 7000)
+      }).catch(() => {
+        setProfileDialogueText("Hmm, interesting post...")
+        if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+        profileDialogueTimerRef.current = setTimeout(() => setProfileDialogueText(null), 3000)
+      })
+    } else if (!communityPostDetailOpen && activeTab === 'community') {
+      // Clear dialogue when modal closes on community tab
+      setProfileDialogueText(null)
+    }
+  }, [communityPostDetailOpen, communityPostContent, communityPostEmotion, communityPostHasImage, selectedAvatar, user?._id, activeTab])
 
   // 刷新社交统计的函数
   const refreshSocialStats = () => {
@@ -400,11 +477,24 @@ export default function Dashboard() {
 
   // Handle Avatar click based on current tab - toggle bubble
   const handleAvatarClick = () => {
-    if (activeTab === 'soulsync' && hasActiveSession) {
+    if (activeTab === 'profile' && selectedAvatar) {
+      // Show catchphrase on profile page
+      const dialogue = avatarDialogue[selectedAvatar.name.toUpperCase() as keyof typeof avatarDialogue]
+      if (dialogue) {
+        if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+        setProfileDialogueText(dialogue.catchphrase)
+        profileDialogueTimerRef.current = setTimeout(() => {
+          setProfileDialogueText(null)
+        }, 3000)
+      }
+    } else if (activeTab === 'soulsync' && hasActiveSession) {
       setShowAssistantBubble(prev => !prev)
     } else if (activeTab === 'diary' && diaryMode === 'manual') {
       // Trigger rewrite in DiaryView manual mode
       diaryRewriteRef.current?.()
+    } else if (activeTab === 'community' && communityCreatePostOpen) {
+      // Toggle assistant bubble for community post polish
+      setShowAssistantBubble(prev => !prev)
     }
   }
 
@@ -531,7 +621,31 @@ export default function Dashboard() {
           />
         )
       case 'community':
-        return <CommunityView onInteract={triggerCheckIn} userId={user?._id} userNickname={user?.nickname || user?.username} onPostCreated={refreshUserPosts} onPointsChanged={refreshPoints} onViewProfile={setViewingUserId} />
+        return (
+          <CommunityView
+            onInteract={triggerCheckIn}
+            userId={user?._id}
+            userNickname={user?.nickname || user?.username}
+            onPostCreated={refreshUserPosts}
+            onPointsChanged={refreshPoints}
+            onViewProfile={setViewingUserId}
+            onPostDetailChange={(isOpen, content, emotion, hasImage) => {
+              setCommunityPostDetailOpen(isOpen)
+              setCommunityPostContent(content || null)
+              setCommunityPostEmotion(emotion || null)
+              setCommunityPostHasImage(hasImage || false)
+            }}
+            onCreatePostChange={(isOpen) => {
+              setCommunityCreatePostOpen(isOpen)
+            }}
+            onRequestPolish={(content) => {
+              setAssistantAction({ action: 'rewrite', inputText: content })
+              setShowAssistantBubble(true)
+            }}
+            polishedContent={communityPolishedContent}
+            onPolishedContentConsumed={() => setCommunityPolishedContent(null)}
+          />
+        )
       case 'soulsync':
         return (
           <SoulSyncView
@@ -612,6 +726,9 @@ export default function Dashboard() {
             if (activeTab === 'diary' && diaryMode === 'manual') {
               // Update DiaryView content with rewrite result
               diarySetContentRef.current?.(text)
+            } else if (activeTab === 'community' && communityCreatePostOpen) {
+              // Update CreatePostModal content with polish result
+              setCommunityPolishedContent(text)
             } else {
               // Update SoulSync chat input
               setChatInputFromBubble(text)
@@ -624,6 +741,9 @@ export default function Dashboard() {
           initialAction={assistantAction.action}
           initialInputText={assistantAction.inputText}
           onActionConsumed={() => setAssistantAction({ action: null })}
+          profileDialogueText={activeTab === 'profile' ? profileDialogueText : (activeTab === 'community' && communityPostDetailOpen ? profileDialogueText : null)}
+          animateLookingCloser={activeTab === 'community' && communityPostDetailOpen}
+          showCommunityPolishButton={activeTab === 'community' && communityCreatePostOpen && !showAssistantBubble}
         />
       )}
 

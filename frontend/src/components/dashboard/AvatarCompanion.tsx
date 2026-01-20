@@ -20,9 +20,12 @@ interface AvatarCompanionProps {
   onActionConsumed?: () => void  // Callback when action is consumed
   showPolishHint?: boolean       // Show polish hint tooltip (diary manual mode)
   showPolishButton?: boolean     // Show polish button (diary manual mode)
+  profileDialogueText?: string | null  // Dialogue text to show on profile page
+  animateLookingCloser?: boolean // Animate avatar moving closer when viewing community post
+  showCommunityPolishButton?: boolean // Show polish button when creating community post
 }
 
-export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton, profileDialogueText, animateLookingCloser, showCommunityPolishButton }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from localStorage or use default
     const saved = localStorage.getItem('avatarCompanionPosition')
@@ -116,14 +119,20 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
     return avatar.name
   }
 
+  // Elevate z-index when viewing post detail OR when creating post (to stay above modal backdrop)
+  // Also stay elevated when AssistantBubble is open on community tab
+  const shouldElevate = animateLookingCloser || showCommunityPolishButton || (showAssistantBubble && activeTab === 'community')
+
   return (
     <div
       ref={companionRef}
-      className={`fixed z-[90] transition-transform ${isDragging ? 'cursor-grabbing scale-110' : onClick ? 'cursor-pointer' : 'cursor-grab'} ${isHovered ? 'scale-105' : ''}`}
+      className={`fixed ${shouldElevate ? 'z-[101]' : 'z-[90]'} ${isDragging ? 'cursor-grabbing scale-110' : onClick ? 'cursor-pointer' : 'cursor-grab'} ${isHovered && !animateLookingCloser ? 'scale-105' : ''}`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        userSelect: 'none'
+        userSelect: 'none',
+        transform: animateLookingCloser ? 'translateX(30px) scale(1.15)' : undefined,
+        transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), z-index 0.1s'
       }}
       onMouseDown={handleMouseDown}
       onMouseEnter={() => setIsHovered(true)}
@@ -196,6 +205,14 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
           </div>
         )}
 
+        {/* Profile dialogue bubble - welcome/catchphrase on profile page */}
+        {profileDialogueText && !isDragging && !showAssistantBubble && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-5 py-2.5 bg-white rounded-2xl shadow-xl border border-purple-100 max-w-[320px] min-w-[200px] animate-in fade-in zoom-in-95 duration-300">
+            <p className="text-sm font-bold text-gray-700 text-center">{profileDialogueText}</p>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-white"></div>
+          </div>
+        )}
+
         {/* Control buttons - only show on hover */}
         {isHovered && !isDragging && (
           <div className="absolute -top-2 -right-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
@@ -234,8 +251,18 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
           </div>
         )}
 
+        {/* Polish button - Show when creating community post (same style as diary) */}
+        {showCommunityPolishButton && !isDragging && !showAssistantBubble && (
+          <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
+            <div className="px-3 py-1.5 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg whitespace-nowrap flex items-center space-x-1">
+              <span>✨</span>
+              <span>Polish</span>
+            </div>
+          </div>
+        )}
+
         {/* Drag hint - only show when no VIP hint or Polish button */}
-        {!isDragging && !showVipHint && !showPolishButton && (
+        {!isDragging && !showVipHint && !showPolishButton && !showCommunityPolishButton && (
           <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
             Drag to move
           </div>
