@@ -22,6 +22,7 @@ interface CommunityViewProps {
   onPostDetailChange?: (isOpen: boolean, postContent?: string, postEmotion?: string, hasImage?: boolean) => void  // Callback when post detail modal opens/closes
   onCreatePostChange?: (isOpen: boolean) => void  // Callback when create post modal opens/closes
   onRequestPolish?: (content: string) => void  // Callback to request polish from avatar
+  onPolishReady?: (fn: () => boolean) => void  // Register polish function for Avatar click trigger, returns true if content exists
   polishedContent?: string | null  // Polished content from avatar assistant
   onPolishedContentConsumed?: () => void  // Callback when polished content is consumed
 }
@@ -36,6 +37,7 @@ export default function CommunityView({
   onPostDetailChange,
   onCreatePostChange,
   onRequestPolish,
+  onPolishReady,
   polishedContent,
   onPolishedContentConsumed,
 }: CommunityViewProps) {
@@ -248,6 +250,7 @@ export default function CommunityView({
         onSubmit={handleCreatePost}
         userId={userId || ''}
         onRequestPolish={onRequestPolish}
+        onPolishReady={onPolishReady}
         polishedContent={polishedContent}
         onPolishedContentConsumed={onPolishedContentConsumed}
       />

@@ -3,6 +3,15 @@ import { Avatar3D } from '../../config/avatars'
 import ModelViewer3D from './ModelViewer3D'
 import AssistantBubble from './AssistantBubble'
 
+interface TourMode {
+  currentStep: number
+  totalSteps: number
+  text: string
+  onNext: () => void
+  onBack: () => void
+  onSkip: () => void
+}
+
 interface AvatarCompanionProps {
   avatar: Avatar3D
   onClose: () => void
@@ -23,9 +32,11 @@ interface AvatarCompanionProps {
   profileDialogueText?: string | null  // Dialogue text to show on profile page
   animateLookingCloser?: boolean // Animate avatar moving closer when viewing community post
   showCommunityPolishButton?: boolean // Show polish button when creating community post
+  tourTargetPosition?: { x: number; y: number } | null  // Override position during tour guide
+  tourMode?: TourMode | null     // Tour guide mode with unified bubble
 }
 
-export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton, profileDialogueText, animateLookingCloser, showCommunityPolishButton }: AvatarCompanionProps) {
+export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton, profileDialogueText, animateLookingCloser, showCommunityPolishButton, tourTargetPosition, tourMode }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
     // Load saved position from sessionStorage or use default
     const saved = sessionStorage.getItem('avatarCompanionPosition')
@@ -120,21 +131,26 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
   }
 
   // Elevate z-index when viewing post detail OR when creating post (to stay above modal backdrop)
-  // Also stay elevated when AssistantBubble is open on community tab
-  const shouldElevate = animateLookingCloser || showCommunityPolishButton || (showAssistantBubble && activeTab === 'community')
+  // Also stay elevated when AssistantBubble is open on community tab, or during tour
+  const shouldElevate = animateLookingCloser || showCommunityPolishButton || (showAssistantBubble && activeTab === 'community') || !!tourTargetPosition
+
+  // Use tour target position if provided, otherwise use draggable position
+  const displayPosition = tourTargetPosition || position
 
   return (
     <div
       ref={companionRef}
       className={`fixed ${shouldElevate ? 'z-[101]' : 'z-[90]'} ${isDragging ? 'cursor-grabbing scale-110' : onClick ? 'cursor-pointer' : 'cursor-grab'} ${isHovered && !animateLookingCloser ? 'scale-105' : ''}`}
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        left: `${displayPosition.x}px`,
+        top: `${displayPosition.y}px`,
         userSelect: 'none',
         transform: animateLookingCloser ? 'translateX(30px) scale(1.15)' : undefined,
-        transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), z-index 0.1s'
+        transition: tourTargetPosition
+          ? 'left 0.4s ease-out, top 0.4s ease-out, transform 0.3s ease-out, z-index 0.1s'
+          : 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), z-index 0.1s'
       }}
-      onMouseDown={handleMouseDown}
+      onMouseDown={tourTargetPosition ? undefined : handleMouseDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -206,15 +222,95 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
         )}
 
         {/* Profile dialogue bubble - welcome/catchphrase on profile page */}
-        {profileDialogueText && !isDragging && !showAssistantBubble && (
+        {profileDialogueText && !isDragging && !showAssistantBubble && !tourMode && (
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-5 py-2.5 bg-white rounded-2xl shadow-xl border border-purple-100 max-w-[320px] min-w-[200px] animate-in fade-in zoom-in-95 duration-300">
             <p className="text-sm font-bold text-gray-700 text-center">{profileDialogueText}</p>
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-white"></div>
           </div>
         )}
 
-        {/* Control buttons - only show on hover */}
-        {isHovered && !isDragging && (
+        {/* Tour mode unified bubble - integrated step progress + dialogue + navigation */}
+        {tourMode && !isDragging && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-[320px] animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white/95 backdrop-blur-md rounded-3xl p-5 shadow-2xl border border-white/30">
+              {/* Step progress bar */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex space-x-1.5">
+                  {Array.from({ length: tourMode.totalSteps }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        i + 1 === tourMode.currentStep
+                          ? 'bg-accent w-5'
+                          : i + 1 < tourMode.currentStep
+                            ? 'bg-accent/50 w-3'
+                            : 'bg-gray-200 w-3'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={tourMode.onSkip}
+                  className="text-gray-300 hover:text-gray-500 transition-colors p-1"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Step number indicator */}
+              <div className="mb-2">
+                <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-full text-[10px] font-black uppercase tracking-wider">
+                  Step {tourMode.currentStep}/{tourMode.totalSteps}
+                </span>
+              </div>
+
+              {/* Dialogue text */}
+              <p className="text-sm text-gray-700 leading-relaxed mb-4">{tourMode.text}</p>
+
+              {/* Navigation buttons */}
+              <div className="flex items-center justify-between">
+                <div>
+                  {tourMode.currentStep > 1 ? (
+                    <button
+                      onClick={tourMode.onBack}
+                      className="text-gray-400 hover:text-gray-600 font-bold text-xs transition-colors flex items-center space-x-1"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M15 18l-6-6 6-6" />
+                      </svg>
+                      <span>Back</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={tourMode.onSkip}
+                      className="text-gray-400 hover:text-gray-600 font-medium text-xs transition-colors"
+                    >
+                      Skip tour
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={tourMode.onNext}
+                  className="px-4 py-2 bg-accent text-white rounded-full font-black text-sm shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center space-x-1.5"
+                >
+                  <span>{tourMode.currentStep === tourMode.totalSteps ? 'Got it!' : 'Next'}</span>
+                  {tourMode.currentStep < tourMode.totalSteps && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+            {/* Triangle pointer towards Avatar */}
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-4 h-4 bg-white/95 rotate-45 rounded-sm shadow-lg" />
+          </div>
+        )}
+
+        {/* Control buttons - only show on hover, hide during tour to prevent stuck state */}
+        {isHovered && !isDragging && !tourMode && (
           <div className="absolute -top-2 -right-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
             <button
               onClick={(e) => {

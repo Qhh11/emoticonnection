@@ -13,6 +13,7 @@ interface CreatePostModalProps {
   onSubmit: (data: CreatePostData) => Promise<void>
   userId: string
   onRequestPolish?: (content: string) => void  // Callback to request polish from avatar
+  onPolishReady?: (fn: () => boolean) => void  // Register polish function for Avatar click trigger, returns true if content exists
   polishedContent?: string | null  // Polished content from avatar assistant
   onPolishedContentConsumed?: () => void  // Callback when polished content is consumed
 }
@@ -31,6 +32,7 @@ export default function CreatePostModal({
   onSubmit,
   userId,
   onRequestPolish,
+  onPolishReady,
   polishedContent,
   onPolishedContentConsumed,
 }: CreatePostModalProps) {
@@ -52,6 +54,21 @@ export default function CreatePostModal({
       onPolishedContentConsumed?.()
     }
   }, [polishedContent, onPolishedContentConsumed])
+
+  // Handle polish triggered by Avatar click - same pattern as DiaryView
+  // Returns true if content exists, false if empty (for showing hint)
+  const handlePolish = (): boolean => {
+    if (!content.trim() || !onRequestPolish) return false
+    onRequestPolish(content)
+    return true
+  }
+
+  // Register polish handler with parent (for Avatar click trigger)
+  useEffect(() => {
+    if (isOpen) {
+      onPolishReady?.(handlePolish)
+    }
+  }, [isOpen, content, onPolishReady, onRequestPolish])
 
   if (!isOpen) return null
 

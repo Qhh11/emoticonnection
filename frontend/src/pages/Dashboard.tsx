@@ -8,6 +8,8 @@ import EmotionReportModal, { markUserActivity, getCachedReport, setCachedReport 
 import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D, AVATARS_3D } from '../config/avatars'
 import avatarDialogue from '../config/avatarDialogue.json'
+import matchingTourDialogue from '../config/matchingTourDialogue.json'
+import MatchingTour, { getTourStepText, getTotalTourSteps } from '../components/soulsync/MatchingTour'
 import { USER_AVATARS, DEFAULT_AVATAR, getAvatarUrl } from '../config/userAvatars'
 import CommunityView from './community/CommunityView'
 import PostDetailModal from './community/components/PostDetailModal'
@@ -115,6 +117,22 @@ export default function Dashboard() {
   // Track if user is in a peer chat session (for VIP hint display)
   const [hasActiveSession, setHasActiveSession] = useState(false)
 
+  // Matching Tour state (for first-time users on SoulSync page)
+  const [showMatchingTour, setShowMatchingTour] = useState(false)
+  const [matchingTourStep, setMatchingTourStep] = useState(1)
+  const [hasSeenMatchingGuide, setHasSeenMatchingGuide] = useState(() => {
+    return localStorage.getItem('hasSeenMatchingGuide') === 'true'
+  })
+
+  // Tour Avatar position - moves Avatar to highlight target during tour
+  const [tourTargetPosition, setTourTargetPosition] = useState<{ x: number; y: number } | null>(null)
+
+  // Returning user welcome message display (auto-hide after 5s)
+  const [showSoulSyncWelcome, setShowSoulSyncWelcome] = useState(false)
+
+  // Track if tour was just completed this session (to prevent immediate welcome message)
+  const [justCompletedTour, setJustCompletedTour] = useState(false)
+
   // Track proactive hint from SoulSync (user typing pause)
   const [showProactiveHint, setShowProactiveHint] = useState(false)
 
@@ -129,8 +147,11 @@ export default function Dashboard() {
 
   // Diary mode tracking and rewrite function ref
   const [diaryMode, setDiaryMode] = useState<'ai' | 'voice' | 'manual'>('manual')
-  const diaryRewriteRef = useRef<() => void>()
+  const diaryRewriteRef = useRef<() => boolean>()
   const diarySetContentRef = useRef<(text: string) => void>()
+
+  // Community polish function ref (similar to diary rewrite)
+  const communityPolishRef = useRef<() => boolean>()
 
   // Polish hint state for diary manual mode (5 second reminder)
   const [showDiaryPolishHint, setShowDiaryPolishHint] = useState(false)
@@ -223,6 +244,135 @@ export default function Dashboard() {
       if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
     }
   }, [activeTab, selectedAvatar])
+
+  // Matching Tour - show tour for first-time users on SoulSync tab
+  useEffect(() => {
+    if (activeTab === 'soulsync' && !hasSeenMatchingGuide && !hasActiveSession) {
+      // Delay showing tour to let the page render first
+      const timer = setTimeout(() => {
+        setShowMatchingTour(true)
+        setMatchingTourStep(1)
+      }, 500)
+      return () => clearTimeout(timer)
+    } else if (activeTab !== 'soulsync') {
+      setShowMatchingTour(false)
+    }
+  }, [activeTab, hasSeenMatchingGuide, hasActiveSession])
+
+  // Returning user welcome message - show for 5 seconds on SoulSync tab
+  // Only show on subsequent visits, NOT immediately after completing tour
+  useEffect(() => {
+    if (activeTab === 'soulsync' && hasSeenMatchingGuide && !hasActiveSession && !showMatchingTour && !justCompletedTour) {
+      setShowSoulSyncWelcome(true)
+      const timer = setTimeout(() => {
+        setShowSoulSyncWelcome(false)
+      }, 5000)
+      return () => clearTimeout(timer)
+    } else {
+      setShowSoulSyncWelcome(false)
+    }
+  }, [activeTab, hasSeenMatchingGuide, hasActiveSession, showMatchingTour, justCompletedTour])
+
+  // Get returning user catchphrase for SoulSync based on avatar
+  const getReturningUserCatchphrase = (): string => {
+    if (!selectedAvatar?.name) return matchingTourDialogue.returningUserCatchphrases.SUNNY
+    const avatarName = selectedAvatar.name.toUpperCase() as keyof typeof matchingTourDialogue.returningUserCatchphrases
+    return matchingTourDialogue.returningUserCatchphrases[avatarName] || matchingTourDialogue.returningUserCatchphrases.SUNNY
+  }
+
+  // Matching Tour handlers
+  const handleTourNext = () => {
+    const totalSteps = getTotalTourSteps()
+    if (matchingTourStep < totalSteps) {
+      setMatchingTourStep(prev => prev + 1)
+    } else {
+      // Tour complete
+      localStorage.setItem('hasSeenMatchingGuide', 'true')
+      setHasSeenMatchingGuide(true)
+      setShowMatchingTour(false)
+      setTourTargetPosition(null)  // Return Avatar to original position
+      setJustCompletedTour(true)   // Prevent welcome message from showing immediately
+    }
+  }
+
+  const handleTourBack = () => {
+    if (matchingTourStep > 1) {
+      setMatchingTourStep(prev => prev - 1)
+    }
+  }
+
+  const handleTourSkip = () => {
+    localStorage.setItem('hasSeenMatchingGuide', 'true')
+    setHasSeenMatchingGuide(true)
+    setShowMatchingTour(false)
+    setJustCompletedTour(true)   // Prevent welcome message from showing immediately
+    setTourTargetPosition(null)  // Return Avatar to original position
+  }
+
+  // Tour target ID mapping
+  const TARGET_IDS: Record<number, string> = {
+    1: 'tour-sync-mode',
+    2: 'tour-your-role',
+    3: 'tour-what-you-need',
+    4: 'tour-resonance',
+    5: 'tour-intensity',
+    6: 'tour-topic',
+  }
+
+  // Calculate Avatar position next to tour target element
+  const calculateTourPosition = (targetId: string): { x: number; y: number } | null => {
+    const element = document.getElementById(targetId)
+    if (!element) return null
+
+    const rect = element.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return null
+
+    const avatarWidth = 192  // w-48 = 192px
+    const avatarHeight = 192
+    const bubbleHeight = 220  // Tour bubble height above Avatar
+
+    // Position Avatar to the right of the element, vertically centered
+    let x = rect.right + 20
+    let y = rect.top + rect.height / 2 - avatarHeight / 2
+
+    // Keep within viewport bounds
+    // minY must leave room for the bubble above Avatar
+    const minY = bubbleHeight + 20
+    const maxX = window.innerWidth - avatarWidth - 20
+    const maxY = window.innerHeight - avatarHeight - 20
+
+    x = Math.max(20, Math.min(x, maxX))
+    y = Math.max(minY, Math.min(y, maxY))
+
+    // If element is on the right side, position Avatar to the left instead
+    if (rect.right > window.innerWidth * 0.6) {
+      x = Math.max(20, rect.left - avatarWidth - 20)
+    }
+
+    return { x, y }
+  }
+
+  // Update Avatar position when tour step changes
+  useEffect(() => {
+    if (showMatchingTour) {
+      const targetId = TARGET_IDS[matchingTourStep]
+      if (targetId) {
+        // Simple approach: use requestAnimationFrame + short delay
+        const rafId = requestAnimationFrame(() => {
+          setTimeout(() => {
+            const pos = calculateTourPosition(targetId)
+            if (pos) {
+              setTourTargetPosition(pos)
+            }
+          }, 300)
+        })
+
+        return () => cancelAnimationFrame(rafId)
+      }
+    } else {
+      setTourTargetPosition(null)
+    }
+  }, [showMatchingTour, matchingTourStep])
 
   // AI Reading Companion - when viewing community post detail
   useEffect(() => {
@@ -475,6 +625,15 @@ export default function Dashboard() {
     sessionStorage.removeItem('selectedAvatar')
   }
 
+  // Helper to show empty content hint bubble
+  const showEmptyContentHint = () => {
+    if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+    setProfileDialogueText("Write something first, then I can help you polish it!")
+    profileDialogueTimerRef.current = setTimeout(() => {
+      setProfileDialogueText(null)
+    }, 3000)
+  }
+
   // Handle Avatar click based on current tab - toggle bubble
   const handleAvatarClick = () => {
     if (activeTab === 'profile' && selectedAvatar) {
@@ -491,10 +650,16 @@ export default function Dashboard() {
       setShowAssistantBubble(prev => !prev)
     } else if (activeTab === 'diary' && diaryMode === 'manual') {
       // Trigger rewrite in DiaryView manual mode
-      diaryRewriteRef.current?.()
+      const hasContent = diaryRewriteRef.current?.()
+      if (hasContent === false) {
+        showEmptyContentHint()
+      }
     } else if (activeTab === 'community' && communityCreatePostOpen) {
-      // Toggle assistant bubble for community post polish
-      setShowAssistantBubble(prev => !prev)
+      // Trigger polish in CreatePostModal (same as diary manual mode)
+      const hasContent = communityPolishRef.current?.()
+      if (hasContent === false) {
+        showEmptyContentHint()
+      }
     }
   }
 
@@ -642,6 +807,7 @@ export default function Dashboard() {
               setAssistantAction({ action: 'rewrite', inputText: content })
               setShowAssistantBubble(true)
             }}
+            onPolishReady={(fn) => { communityPolishRef.current = fn }}
             polishedContent={communityPolishedContent}
             onPolishedContentConsumed={() => setCommunityPolishedContent(null)}
           />
@@ -741,10 +907,31 @@ export default function Dashboard() {
           initialAction={assistantAction.action}
           initialInputText={assistantAction.inputText}
           onActionConsumed={() => setAssistantAction({ action: null })}
-          profileDialogueText={activeTab === 'profile' ? profileDialogueText : (activeTab === 'community' && communityPostDetailOpen ? profileDialogueText : null)}
+          profileDialogueText={
+            activeTab === 'profile' ? profileDialogueText
+            : activeTab === 'community' && communityPostDetailOpen ? profileDialogueText
+            : activeTab === 'community' && communityCreatePostOpen ? profileDialogueText
+            : activeTab === 'diary' && diaryMode === 'manual' ? profileDialogueText
+            : activeTab === 'soulsync' && showSoulSyncWelcome ? getReturningUserCatchphrase()
+            : null
+          }
           animateLookingCloser={activeTab === 'community' && communityPostDetailOpen}
           showCommunityPolishButton={activeTab === 'community' && communityCreatePostOpen && !showAssistantBubble}
+          tourTargetPosition={activeTab === 'soulsync' && showMatchingTour ? tourTargetPosition : null}
+          tourMode={activeTab === 'soulsync' && showMatchingTour ? {
+            currentStep: matchingTourStep,
+            totalSteps: getTotalTourSteps(),
+            text: getTourStepText(matchingTourStep),
+            onNext: handleTourNext,
+            onBack: handleTourBack,
+            onSkip: handleTourSkip,
+          } : null}
         />
+      )}
+
+      {/* Matching Tour Spotlight for first-time SoulSync users */}
+      {showMatchingTour && activeTab === 'soulsync' && (
+        <MatchingTour currentStep={matchingTourStep} />
       )}
 
       {/* Emotion Report Modal */}

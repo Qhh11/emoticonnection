@@ -40,7 +40,7 @@ export interface DiaryViewProps {
   onOpenEntryDetail: (entry: DiaryEntry) => void
   avatar?: Avatar3D | null
   onModeChange?: (mode: 'ai' | 'voice' | 'manual') => void
-  onRewriteReady?: (fn: () => void) => void
+  onRewriteReady?: (fn: () => boolean) => void  // Returns true if content exists, false if empty
   onOpenAssistantWithRewrite?: (text: string) => void  // Open AssistantBubble with rewrite action
   onSetContentReady?: (fn: (text: string) => void) => void  // Register setContent function with parent
 }
@@ -701,9 +701,11 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
   }, [mode, onModeChange])
 
   // Handle rewrite triggered by Avatar click - notify Dashboard to open AssistantBubble
-  const handleOpenRewrite = () => {
-    if (!content.trim()) return
+  // Returns true if content exists, false if empty (for showing hint)
+  const handleOpenRewrite = (): boolean => {
+    if (!content.trim()) return false
     onOpenAssistantWithRewrite?.(content)
+    return true
   }
 
   // Register rewrite handler with parent

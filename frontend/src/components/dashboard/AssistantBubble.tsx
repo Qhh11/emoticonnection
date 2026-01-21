@@ -17,6 +17,7 @@ interface AssistantBubbleProps {
   initialInputText?: string      // Initial input text for rewrite action
   onActionConsumed?: () => void  // Callback when action is consumed
   avatarPosition?: { x: number; y: number }  // Avatar position for smart positioning
+  context?: 'chat' | 'diary' | 'community'  // Scene context for filtering features
 }
 
 // 功能按钮配置
@@ -36,7 +37,7 @@ const toneConfigs = {
 
 type ViewType = 'menu' | 'rewrite' | 'response' | 'topic'
 
-export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, avatarPosition }: AssistantBubbleProps) {
+export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, avatarPosition, context }: AssistantBubbleProps) {
   const [view, setView] = useState<ViewType>('menu')
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)

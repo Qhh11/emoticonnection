@@ -123,7 +123,6 @@ export default function SoulSyncView({
   userId,
   userAvatar,
   onViewProfile,
-  avatar: _avatar,
   onSessionChange,
   onProactiveHintChange,
   onPartnerMessageChange,
@@ -134,6 +133,7 @@ export default function SoulSyncView({
 }: SoulSyncViewProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<'matching' | 'social'>('matching')
+
 
   // Matching states
   const [isSearching, setIsSearching] = useState(false)
@@ -177,6 +177,7 @@ export default function SoulSyncView({
 
   // Connect WebSocket when session changes
   const currentRoomIdRef = useRef<string | null>(null)
+
 
   // =======================
   // ✅ Scheme C: Match Lock
@@ -917,7 +918,7 @@ export default function SoulSyncView({
   // MatchingContent - 匹配偏好设置
   const MatchingContent = () => (
     <div className="bg-white p-10 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-10">
-      <div className="space-y-3">
+      <div id="tour-sync-mode" className="space-y-3">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Sync Mode</h4>
         <div className="flex gap-3">
           <button
@@ -942,7 +943,7 @@ export default function SoulSyncView({
       </div>
 
       {/* Role Selector */}
-      <div className="space-y-4">
+      <div id="tour-your-role" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Your Role</h4>
         <div className="grid grid-cols-3 gap-3">
           {ROLE_DATA.map(r => (
@@ -962,7 +963,7 @@ export default function SoulSyncView({
       </div>
 
       {/* Support Need Selector */}
-      <div className="space-y-4">
+      <div id="tour-what-you-need" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">What Do You Need?</h4>
         <div className="flex flex-wrap gap-2">
           {NEED_DATA.map(n => (
@@ -983,7 +984,7 @@ export default function SoulSyncView({
       </div>
 
       {/* Emotion/Resonance Selector */}
-      <div className="space-y-4">
+      <div id="tour-resonance" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Set Your Resonance</h4>
         <div className="flex flex-wrap gap-2">
           {MOOD_DATA.map(m => (
@@ -1007,7 +1008,7 @@ export default function SoulSyncView({
       </div>
 
       {/* Intensity Slider */}
-      <div className="space-y-4">
+      <div id="tour-intensity" className="space-y-4">
         <div className="flex justify-between items-center">
           <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Intensity</h4>
           <span className="text-[11px] font-black uppercase tracking-widest text-gray-400">
@@ -1037,7 +1038,7 @@ export default function SoulSyncView({
       </div>
 
       {/* Topic Selector */}
-      <div className="space-y-4">
+      <div id="tour-topic" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Topic (Optional)</h4>
         <div className="flex flex-wrap gap-2">
           {TOPIC_DATA.map(t => (
@@ -1057,7 +1058,7 @@ export default function SoulSyncView({
         </div>
       </div>
 
-      <div className="pt-4">
+      <div id="tour-find-echoes" className="pt-4">
         <button
           onClick={startMatching}
           disabled={!userId}
