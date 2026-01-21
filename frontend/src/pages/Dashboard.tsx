@@ -783,6 +783,7 @@ export default function Dashboard() {
               setShowAssistantBubble(true)
             }}
             onSetContentReady={(fn) => { diarySetContentRef.current = fn }}
+            userLevel={level}
           />
         )
       case 'community':
@@ -873,7 +874,8 @@ export default function Dashboard() {
       />
 
       {/* Avatar Companion - Floating on dashboard (shown on diary manual mode too for rewrite) */}
-      {selectedAvatar && (activeTab !== 'diary' || diaryMode === 'manual') && (
+      {/* Only show for VIP users (level >= 3) */}
+      {selectedAvatar && level >= 3 && (activeTab !== 'diary' || diaryMode === 'manual') && (
         <AvatarCompanion
           avatar={selectedAvatar}
           onClose={handleCloseCompanion}

@@ -130,7 +130,11 @@ export default function SoulSyncView({
   externalChatInput,
   onExternalChatInputConsumed,
   onOpenAssistantWithAction,
+  userLevel,
 }: SoulSyncViewProps) {
+  // Check if user is VIP (level >= 3) for AI assistant features
+  const isVip = (userLevel ?? 0) >= 3
+
   // Tab state
   const [activeTab, setActiveTab] = useState<'matching' | 'social'>('matching')
 
@@ -1177,29 +1181,62 @@ export default function SoulSyncView({
 
       <div className="p-4 border-t border-black/5 bg-white relative">
         <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide">
-          <button
-            onClick={handleRewrite}
-            disabled={!chatInput.trim()}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            <span>✨</span>
-            <span>Rewrite</span>
-          </button>
-          <button
-            onClick={handleSuggestReply}
-            disabled={session.messages.length === 0}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            <span>💡</span>
-            <span>Suggest Reply</span>
-          </button>
-          <button
-            onClick={handleSuggestTopic}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            <span>🗣️</span>
-            <span>Topic</span>
-          </button>
+          {isVip ? (
+            // VIP users: Full access to AI assistant buttons
+            <>
+              <button
+                onClick={handleRewrite}
+                disabled={!chatInput.trim()}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>✨</span>
+                <span>Rewrite</span>
+              </button>
+              <button
+                onClick={handleSuggestReply}
+                disabled={session.messages.length === 0}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>💡</span>
+                <span>Suggest Reply</span>
+              </button>
+              <button
+                onClick={handleSuggestTopic}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🗣️</span>
+                <span>Topic</span>
+              </button>
+            </>
+          ) : (
+            // Non-VIP users: Locked buttons with VIP L3 indicator
+            <>
+              <button
+                disabled
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🔒</span>
+                <span>Rewrite</span>
+                <span className="text-[8px] opacity-60">(VIP L3)</span>
+              </button>
+              <button
+                disabled
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🔒</span>
+                <span>Suggest Reply</span>
+                <span className="text-[8px] opacity-60">(VIP L3)</span>
+              </button>
+              <button
+                disabled
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🔒</span>
+                <span>Topic</span>
+                <span className="text-[8px] opacity-60">(VIP L3)</span>
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center space-x-3">

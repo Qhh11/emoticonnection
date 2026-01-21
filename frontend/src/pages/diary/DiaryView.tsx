@@ -43,6 +43,7 @@ export interface DiaryViewProps {
   onRewriteReady?: (fn: () => boolean) => void  // Returns true if content exists, false if empty
   onOpenAssistantWithRewrite?: (text: string) => void  // Open AssistantBubble with rewrite action
   onSetContentReady?: (fn: (text: string) => void) => void  // Register setContent function with parent
+  userLevel?: number  // User level for VIP features (level >= 3 for avatar)
 }
 
 interface ChatAIViewProps {
@@ -50,6 +51,7 @@ interface ChatAIViewProps {
   userId?: string
   onRefreshDiaries?: () => void
   avatar?: Avatar3D | null
+  userLevel?: number  // User level for VIP features (level >= 3 for avatar)
 }
 
 interface ChatMessage {
@@ -60,10 +62,15 @@ interface ChatMessage {
 // Voice status type for real-time conversation
 type VoiceStatus = 'idle' | 'connecting' | 'connected'
 
-function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIViewProps) {
+function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel }: ChatAIViewProps) {
+  // Check if user is VIP (level >= 3)
+  const isVip = (userLevel ?? 0) >= 3
+
   // Determine avatar and its greeting once at the start of component lifecycle
-  // Default to AVATARS_3D[0] (Blushy) if no avatar is provided by parent
-  const [activeAvatar, setActiveAvatar] = useState<Avatar3D>(() => initialAvatar || AVATARS_3D[0])
+  // Only VIP users get avatar features, non-VIP users get null (simple interface)
+  const [activeAvatar, setActiveAvatar] = useState<Avatar3D | null>(() =>
+    isVip ? (initialAvatar || AVATARS_3D[0]) : null
+  )
 
   // Text mode messages (separate from voice mode)
   const [textMessages, setTextMessages] = useState<ChatMessage[]>(() => [
@@ -302,7 +309,8 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
   }
 
   // VIP Immersive View - Dark background with Text/Voice mode switching
-  if (activeAvatar) {
+  // Only show VIP interface if user is VIP AND has avatar
+  if (isVip && activeAvatar) {
     return (
       <LayoutGroup>
         <div className="h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
@@ -605,7 +613,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
     )
   }
 
-  // Non-VIP: Regular chat interface
+  // Non-VIP: Regular chat interface with simple voice mode
   return (
     <div className="h-full flex flex-col">
       {/* Regular Header */}
@@ -619,77 +627,177 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar }: ChatAIV
             <p className="text-[12px] font-black uppercase text-gray-300 tracking-widest">Powered by Emotional Intelligence</p>
           </div>
         </div>
-        <button
-          onClick={handleSaveReflection}
-          disabled={isSaving}
-          className={`px-6 py-2 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${saveSuccess
-            ? 'bg-green-500 text-white'
-            : 'bg-accent text-accent-inverse'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save to Journal'}
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[75%]`}>
-              {msg.role === 'ai' && (
-                <span className="text-[10px] font-black uppercase text-gray-400 mb-1 ml-2 tracking-widest">
-                  AI Companion
-                </span>
-              )}
-              <div
-                className={`w-full p-5 rounded-2xl ${msg.role === 'user'
-                  ? 'bg-black text-white rounded-br-sm'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-sm'
-                  }`}
-              >
-                <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="max-w-[75%] p-5 rounded-2xl bg-gray-100">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input - Fixed at bottom, never shrinks */}
-      <div className="flex-shrink-0 p-6 border-t border-black/5 bg-white">
-        <div className="flex items-center space-x-4">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Share your thoughts..."
-            className="flex-1 px-6 py-4 bg-gray-50 rounded-full border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
-          />
-          <button onClick={handleSend} disabled={!input.trim() || isLoading} className="w-12 h-12 bg-accent text-accent-inverse rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
+        <div className="flex items-center space-x-3">
+          {/* Mode switch button */}
+          <button
+            onClick={() => setChatMode(chatMode === 'voice' ? 'text' : 'voice')}
+            className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-all flex items-center space-x-2"
+          >
+            {chatMode === 'voice' ? (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+                </svg>
+                <span className="text-[11px] font-black uppercase tracking-widest">Text</span>
+              </>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                </svg>
+                <span className="text-[11px] font-black uppercase tracking-widest">Voice</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleSaveReflection}
+            disabled={isSaving || textMessages.length < 2}
+            className={`px-6 py-2 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${saveSuccess
+              ? 'bg-green-500 text-white'
+              : 'bg-accent text-accent-inverse'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save'}
           </button>
         </div>
       </div>
+
+      {/* Text Mode */}
+      {chatMode === 'text' && (
+        <>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                  {msg.role === 'ai' && (
+                    <span className="text-[10px] font-black uppercase text-gray-400 mb-1 ml-2 tracking-widest">
+                      AI Companion
+                    </span>
+                  )}
+                  <div
+                    className={`w-full p-5 rounded-2xl ${msg.role === 'user'
+                      ? 'bg-black text-white rounded-br-sm'
+                      : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+                      }`}
+                  >
+                    <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[75%] p-5 rounded-2xl bg-gray-100">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input - Fixed at bottom, never shrinks */}
+          <div className="flex-shrink-0 p-6 border-t border-black/5 bg-white">
+            <div className="flex items-center space-x-4">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Share your thoughts..."
+                className="flex-1 px-6 py-4 bg-gray-50 rounded-full border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+              />
+              <button onClick={handleSend} disabled={!input.trim() || isLoading} className="w-12 h-12 bg-accent text-accent-inverse rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Voice Mode - Simple UI for non-VIP */}
+      {chatMode === 'voice' && (
+        <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white">
+          {/* Status indicator */}
+          <div className="mb-8 text-center">
+            <p className="text-gray-400 text-sm font-bold uppercase tracking-widest mb-2">
+              {voiceStatus === 'idle' && 'Tap to start voice chat'}
+              {voiceStatus === 'connecting' && 'Connecting...'}
+              {voiceStatus === 'connected' && (
+                <span className="flex items-center justify-center gap-2 text-green-500">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  Live conversation
+                </span>
+              )}
+            </p>
+          </div>
+
+          {/* Large microphone button */}
+          <button
+            onClick={voiceStatus === 'connected' ? endLiveConversation : startLiveConversation}
+            disabled={voiceStatus === 'connecting'}
+            className={`w-28 h-28 rounded-full flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl ${
+              voiceStatus === 'connected'
+                ? 'bg-red-500 hover:bg-red-600 scale-110'
+                : 'bg-accent hover:bg-accent/90 hover:scale-105 active:scale-95'
+            }`}
+          >
+            {voiceStatus === 'connecting' ? (
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            ) : voiceStatus === 'connected' ? (
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="white">
+                <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
+              </svg>
+            ) : (
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Transcript display */}
+          {transcript && voiceStatus === 'connected' && (
+            <div className="mt-8 w-full max-w-md text-center animate-in fade-in duration-300 px-6">
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                AI Companion
+              </p>
+              <p className="text-gray-800 text-base font-bold leading-relaxed">
+                {transcript}
+              </p>
+            </div>
+          )}
+
+          {/* Show last message when idle */}
+          {latestAiMessage && voiceStatus === 'idle' && (
+            <div className="mt-8 w-full max-w-md text-center animate-in fade-in duration-500 px-6">
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                AI Companion
+              </p>
+              <p className="text-gray-600 text-base font-bold leading-relaxed">
+                {latestAiMessage}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar, onModeChange, onRewriteReady, onOpenAssistantWithRewrite, onSetContentReady }: DiaryViewProps) {
+export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar, onModeChange, onRewriteReady, onOpenAssistantWithRewrite, onSetContentReady, userLevel }: DiaryViewProps) {
   const [mode, setMode] = useState<DiaryMode>('manual')
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
@@ -837,7 +945,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
         </div>
       ) : mode === 'ai' ? (
         <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
-          <ChatAIView userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} embedded />
+          <ChatAIView userId={userId} onRefreshDiaries={onRefreshDiaries} avatar={avatar} userLevel={userLevel} embedded />
         </div>
       ) : (
         <div className="h-[700px] w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-black/5">
