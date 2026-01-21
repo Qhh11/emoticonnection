@@ -39,7 +39,7 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
   const [options, setOptions] = useState<Record<string, string> | null>(null)
   const [topics, setTopics] = useState<{ emoji: string; text: string }[] | null>(null)
 
-  // Reset state when closing
+  // Reset state and handle click-outside when opening/closing
   useEffect(() => {
     if (!isOpen) {
       setView('menu')
@@ -48,7 +48,27 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
       setOptions(null)
       setTopics(null)
     }
-  }, [isOpen])
+
+    // Global click listener to close bubble when clicking outside
+    const handleGlobalClick = () => {
+      // If the click is outside the bubble, close it
+      // Note: stopPropagation on the bubble container prevents internal clicks from reaching here
+      if (isOpen) {
+        onClose()
+      }
+    }
+
+    if (isOpen) {
+      // Add listener with a slight delay to avoid immediate closure from the click that opens it
+      const timer = setTimeout(() => {
+        window.addEventListener('click', handleGlobalClick)
+      }, 0)
+      return () => {
+        clearTimeout(timer)
+        window.removeEventListener('click', handleGlobalClick)
+      }
+    }
+  }, [isOpen, onClose])
 
   // Rewrite - Real API
   const handleRewrite = async () => {

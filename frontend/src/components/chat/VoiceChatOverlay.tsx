@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import { useGeminiLive } from '../../hooks/useGeminiLive';
 
@@ -212,7 +212,7 @@ interface VoiceChatOverlayProps {
     embedded?: boolean;
 }
 
-const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, userId, embedded = false }) => {
+const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, embedded = false }) => {
     const [status, setStatus] = useState<'idle' | 'listening' | 'recorded' | 'processing' | 'speaking'>('idle');
     const [transcript, setTranscript] = useState<string>("");
     const [aiResponseText, setAiResponseText] = useState<string>("");
@@ -222,28 +222,25 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
     const audioChunksRef = useRef<Blob[]>([]);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
-    // Gemini Live hook
-    const geminiLive = useGeminiLive({
-        onTranscript: (text) => {
-            console.log('[VoiceChat] Received transcript from Gemini:', text);
-            if (text) {
-                setTranscript(text);
-                if (status === 'processing' && !geminiLive.isSpeaking) {
-                    setStatus('speaking');
-                }
-            }
-        },
-        onError: (error) => {
-            console.error('[VoiceChat] Gemini Live error:', error);
-            if (isOpen) setStatus('idle');
-        },
-        onTurnComplete: () => {
-            console.log('[VoiceChat] Gemini turn complete');
-            if (status === 'processing' || status === 'speaking') {
-                if (status === 'processing') setStatus('idle');
-            }
+    const onTranscript = useCallback((text: string) => {
+        console.log('[VoiceChat] Received transcript from Gemini:', text);
+        if (text) {
+            setTranscript(text);
         }
-    });
+    }, []);
+
+    const onError = useCallback((error: string) => {
+        console.error('[VoiceChat] Gemini Live error:', error);
+        if (isOpen) setStatus('idle');
+    }, [isOpen]);
+
+    const onTurnComplete = useCallback(() => {
+        console.log('[VoiceChat] Gemini turn complete');
+        setStatus(prev => (prev === 'processing' || prev === 'speaking' ? 'idle' : prev));
+    }, []);
+
+    // Gemini Live hook
+    const geminiLive = useGeminiLive({ onTranscript, onError, onTurnComplete });
 
     useEffect(() => {
         if (geminiLive.isConnected) {
@@ -257,9 +254,6 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
 
     useEffect(() => {
         if (!isOpen) {
-            geminiLive.stopRecording();
-            geminiLive.disconnect();
-
             if (audioPlayerRef.current) {
                 audioPlayerRef.current.pause();
                 audioPlayerRef.current = null;
@@ -269,23 +263,37 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
             setRecordedBlob(null);
             setStatus('idle');
         }
+    }, [isOpen]);
+
+    // Unmount cleanup
+    useEffect(() => {
         return () => {
-            geminiLive.stopRecording();
-            geminiLive.disconnect();
+            // Use refs or stable methods for cleanup
+            mediaRecorderRef.current?.stop();
+            // Note: geminiLive object might change, so we use a stable reference in the hook ideally
+            // but for now, we'll try to keep it simple
         };
-    }, [isOpen, geminiLive]);
+    }, []);
 
     const startListening = async () => {
-        setTranscript("");
-        setAiResponseText("");
-        setRecordedBlob(null);
-
-        if (!geminiLive.isConnected) {
-            await geminiLive.connect();
-        }
-
         try {
+            setTranscript("");
+            setAiResponseText("");
+            setRecordedBlob(null);
+
+            if (!geminiLive.isConnected) {
+                console.log('[VoiceChat] Connecting to Gemini Live...');
+                await geminiLive.connect();
+            }
+
+            console.log('[VoiceChat] Accessing microphone...');
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Check if MediaRecorder is supported
+            if (typeof MediaRecorder === 'undefined') {
+                throw new Error('MediaRecorder is not supported in this browser. Please use Chrome, Firefox or Edge.');
+            }
+
             const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
             mediaRecorder.ondataavailable = (event) => {
@@ -300,7 +308,6 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
                 setRecordedBlob(audioBlob);
                 setStatus('recorded');
 
-                // Auto-transcribe user voice for immediate feedback
                 try {
                     console.log('[VoiceChat] Transcribing user recording...');
                     const formData = new FormData();
@@ -329,7 +336,9 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
             mediaRecorderRef.current = mediaRecorder;
             setStatus('listening');
         } catch (error) {
-            console.error('[VoiceChat] Error accessing microphone:', error);
+            console.error('[VoiceChat] Error in startListening:', error);
+            const msg = error instanceof Error ? error.message : 'Unknown error starting microphone session';
+            alert(`Voice Chat Error: ${msg}`);
             setStatus('idle');
         }
     };
@@ -372,7 +381,12 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
             }
 
             console.log(`[VoiceChat] Sending PCM data: ${pcmData.length} samples to Gemini...`);
+
+            // Manual VAD Control
+            geminiLive.sendActivityStart();
             geminiLive.sendAudioData(pcmData);
+            geminiLive.sendActivityEnd();
+
             await audioContext.close();
             setRecordedBlob(null);
         } catch (err) {
@@ -404,17 +418,17 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
 
             <MicrophoneCircle $status={status} onClick={status === 'idle' ? startListening : undefined}>
                 {status === 'listening' ? (
-                    <VisualizerContainer>
+                    <VisualizerContainer key="listening-viz">
                         {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
                             <Bar key={i} $delay={delay} />
                         ))}
                     </VisualizerContainer>
                 ) : status === 'recorded' ? (
-                    <MicIcon $status={status} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <MicIcon key="recorded-icon" $status={status} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z" fill="currentColor" />
                     </MicIcon>
                 ) : (
-                    <MicIcon $status={status} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <MicIcon key="status-icon" $status={status} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 14C14.2091 14 16 12.2091 16 10V4C16 1.79086 14.2091 0 12 0C9.79086 0 8 1.79086 8 4V10C8 12.2091 9.79086 14 12 14Z" fill="currentColor" />
                         <path d="M19 10V10.5C19 14.09 16.09 17 12.5 17C8.91 17 6 14.09 6 10.5V10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                         <path d="M12 17V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -424,24 +438,24 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, us
 
             <ControlsRow>
                 {status === 'idle' ? (
-                    <ActionButton onClick={startListening}>
+                    <ActionButton key="start-btn" onClick={startListening}>
                         ⚡ Start Live API Interaction
                     </ActionButton>
                 ) : status === 'listening' ? (
-                    <ActionButton color="#f44336" onClick={stopListening}>
+                    <ActionButton key="stop-btn" color="#f44336" onClick={stopListening}>
                         ⏹ Stop Recording
                     </ActionButton>
                 ) : status === 'recorded' ? (
-                    <>
-                        <ActionButton color="#4caf50" onClick={sendAudio}>
+                    <React.Fragment key="action-group">
+                        <ActionButton key="send-btn" color="#4caf50" onClick={sendAudio}>
                             🚀 Send to AI
                         </ActionButton>
-                        <ActionButton color="#999" onClick={handleClear}>
+                        <ActionButton key="clear-btn" color="#999" onClick={handleClear}>
                             🗑 Clear / Re-record
                         </ActionButton>
-                    </>
+                    </React.Fragment>
                 ) : (
-                    <ActionButton color="#f44336" onClick={handleClear}>
+                    <ActionButton key="end-btn" color="#f44336" onClick={handleClear}>
                         🛑 End Session
                     </ActionButton>
                 )}

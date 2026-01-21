@@ -70,27 +70,49 @@ class AudioService:
                 if ext == "webm": mime_type = "audio/webm"
                 if ext == "mp3": mime_type = "audio/mp3"
 
-                # Upload the audio file using Gemini's File API
                 print(f"📤 Uploading audio file to Gemini: {file_path}")
-                uploaded_file = genai.upload_file(path=file_path, mime_type=mime_type)
                 
-                # Using Gemini 1.5 Flash for audio transcription
-                response = self.gemini_model.generate_content([
-                    uploaded_file,
-                    "Transcribe this audio to text exactly. Only return the transcribed text, nothing else."
-                ])
+                # Check if we are using the native audio preview model
+                is_native_model = "native-audio-preview" in self.gemini_model.model_name
                 
-                # Clean up the uploaded file from Gemini servers
-                try:
-                    uploaded_file.delete()
-                except:
-                    pass  # Ignore cleanup errors
-                
-                return response.text
+                if is_native_model:
+                    # Use new google-genai SDK for v1alpha support
+                    from google import genai
+                    from google.genai import types
+                    
+                    api_key = os.getenv("GEMINI_API_KEY")
+                    client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
+                    
+                    with open(file_path, "rb") as f:
+                        audio_data = f.read()
+                        
+                    response = client.models.generate_content(
+                        model=self.gemini_model.model_name,
+                        contents=[
+                            types.Part.from_bytes(data=audio_data, mime_type=mime_type),
+                            types.Part.from_text(text="Transcribe this audio to text exactly. Only return the transcribed text, nothing else.")
+                        ]
+                    )
+                    return response.text
+                else:
+                    # Use standard google.generativeai SDK for other models
+                    uploaded_file = genai.upload_file(path=file_path, mime_type=mime_type)
+                    
+                    response = self.gemini_model.generate_content([
+                        uploaded_file,
+                        "Transcribe this audio to text exactly. Only return the transcribed text, nothing else."
+                    ])
+                    
+                    try:
+                        uploaded_file.delete()
+                    except:
+                        pass
+                    
+                    return response.text
+
             except Exception as e:
                 print(f"❌ Gemini STT Error: {e}")
-                raise
-        
+                raise        
         raise Exception("No available STT provider (OpenAI or Gemini)")
 
     async def generate_speech(self, text: str, voice: str = "nova") -> str:

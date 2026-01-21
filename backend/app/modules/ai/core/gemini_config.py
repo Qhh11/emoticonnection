@@ -19,7 +19,7 @@ class GeminiModels:
     CHAT = "gemini-2.5-flash-lite-preview-09-2025"
     
     # 音频转文字模型 - 用于语音识别
-    AUDIO_STT = "gemini-2.5-flash-preview-tts"
+    AUDIO_STT = "gemini-2.5-flash-native-audio-preview-12-2025"
     
     # 情绪分析模型
     EMOTION = "gemini-2.5-flash-lite"
@@ -34,7 +34,7 @@ class GeminiModels:
     NATIVE_AUDIO = "gemini-2.5-flash-native-audio-preview-12-2025"
     
     # 助手功能模型 (Rewrite, Reply, Topic)
-    HELPER = "gemini-3-flash-preview"
+    HELPER = "gemini-2.5-flash-lite"
 
 
 class GeminiClient:

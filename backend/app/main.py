@@ -16,11 +16,22 @@ from pathlib import Path
 database_path = Path(__file__).resolve().parent.parent.parent / "database"
 sys.path.insert(0, str(database_path))
 
+# --- Python 3.9 Compatibility Shim ---
+if sys.version_info < (3, 10):
+    try:
+        import importlib.metadata
+        import importlib_metadata
+        if not hasattr(importlib.metadata, "packages_distributions"):
+            importlib.metadata.packages_distributions = importlib_metadata.packages_distributions
+    except ImportError:
+        pass
+# -------------------------------------
+
 from config.mongodb_config import connect_to_mongodb, close_mongodb_connection  # type: ignore
 
 # Import API routes from modular structure
 from app.modules.chat.api import chat_http, chat_ws, match, media
-from app.modules.ai.api import ai_chat, emotion, diary, ai_ws, ai_helper
+from app.modules.ai.api import ai_chat, emotion, diary, ai_helper, live_ws
 from app.modules.post.api import post_http
 from app.modules.auth.api import auth
 from app.modules.social.api import following
@@ -88,7 +99,7 @@ app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
 app.include_router(ai_helper.router, prefix="/api/ai-helper", tags=["ai-helper"])
 app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
 app.include_router(diary.router, prefix="/api/diary", tags=["diary"])
-app.include_router(ai_ws.router) # WebSocket router (no prefix or handled internally)
+app.include_router(live_ws.router) # New Gemini Live WebSocket
 # Post/Feed routes
 app.include_router(post_http.router, prefix="/api")
 # Auth routes

@@ -28,90 +28,73 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         return window.btoa(binary);
     };
 
-    // Connect to Gemini Live API
+    // Connect to Backend WebSocket Proxy
     const connect = useCallback(async () => {
         if (wsRef.current?.readyState === WebSocket.OPEN) return;
         setStatus('connecting');
 
         try {
-            // 1. Fetch API Key from backend
-            const keyResponse = await fetch('/api/auth/gemini-key');
-            if (!keyResponse.ok) throw new Error('Failed to fetch API key');
-            const { api_key } = await keyResponse.json();
+            // Determine WebSocket URL (handling dev/prod)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            // In dev, frontend is 5173, backend 8000. Assuming Vite proxy is set up for /ws
+            // IF NO PROXY: Use explicit localhost:8000
+            // Let's assume proxy or same origin for robustness. 
+            // If direct access needed: `ws://localhost:8000/ws/gemini-live`
+            const host = "localhost:8000"; // Hardcoding for local dev as per usual setup
+            const url = `${protocol}//${host}/ws/gemini-live`;
 
-            // 2. Connect directly to Google
-            const googleUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${api_key}`;
-
-            console.log('[GeminiLive] Connecting to:', googleUrl.split('?')[0]);
+            console.log('[GeminiLive] Connecting to Backend:', url);
 
             return new Promise<void>((resolve, reject) => {
-                const ws = new WebSocket(googleUrl);
+                const ws = new WebSocket(url);
                 wsRef.current = ws;
+                ws.binaryType = 'arraybuffer'; // Critical for receiving raw audio
 
-                // Connection timeout
                 const timeout = setTimeout(() => {
                     if (ws.readyState !== WebSocket.OPEN) {
                         ws.close();
-                        reject(new Error('Connection timeout - Google Gemini Live API unreachable'));
+                        reject(new Error('Connection timeout'));
                     }
                 }, 10000);
 
                 ws.onopen = () => {
                     clearTimeout(timeout);
-                    console.log('[GeminiLive] Connected directly to Google');
+                    console.log('[GeminiLive] Connected to Backend');
                     setIsConnected(true);
                     setStatus('connected');
-
-                    // 3. Send setup message
-                    const setupMessage = {
-                        setup: {
-                            model: "models/gemini-2.5-flash-native-audio-preview-12-2025",
-                            generation_config: {
-                                response_modalities: ["AUDIO"]
-                            }
-                        }
-                    };
-                    ws.send(JSON.stringify(setupMessage));
                     resolve();
                 };
 
                 ws.onmessage = async (event) => {
-                    try {
-                        const message = JSON.parse(event.data);
-                        if (message.serverContent) {
-                            const { modelTurn, turnComplete, interupt } = message.serverContent;
-
-                            if (modelTurn?.parts) {
-                                for (const part of modelTurn.parts) {
-                                    if (part.inlineData?.mimeType?.startsWith('audio/')) {
-                                        const binaryData = atob(part.inlineData.data);
-                                        const chunk = new Int16Array(binaryData.length / 2);
-                                        const view = new DataView(new Uint8Array(Array.from(binaryData, c => c.charCodeAt(0))).buffer);
-
-                                        for (let i = 0; i < chunk.length; i++) {
-                                            chunk[i] = view.getInt16(i * 2, true); // Little-endian
-                                        }
-
-                                        playbackQueueRef.current.push(chunk);
-                                        if (!isPlayingRef.current) playAudioQueue();
-                                    }
-                                    if (part.text) {
-                                        console.log('[GeminiLive] AI Text:', part.text);
-                                        onTranscript?.(part.text);
-                                    }
-                                }
-                            }
-
-                            if (turnComplete) {
-                                onTurnComplete?.();
-                            }
-
-                            if (interupt) {
-                                playbackQueueRef.current = [];
-                            }
+                    // Handle Binary Audio
+                    if (event.data instanceof ArrayBuffer) {
+                        try {
+                            const pcmData = new Int16Array(event.data);
+                            playbackQueueRef.current.push(pcmData);
+                            if (!isPlayingRef.current) playAudioQueue();
+                        } catch (e) {
+                            console.error("Error processing audio bytes:", e);
                         }
-                    } catch (e) {
-                        console.error('[GeminiLive] Failed to parse message:', e);
+                        return;
+                    }
+
+                    // Handle Text/JSON
+                    if (typeof event.data === 'string') {
+                        try {
+                            const message = JSON.parse(event.data);
+                            if (message.text) {
+                                console.log('[GeminiLive] AI Transcript:', message.text);
+                                onTranscript?.(message.text);
+                            }
+                            if (message.type === 'interrupted') {
+                                console.log('[GeminiLive] Interrupted');
+                                playbackQueueRef.current = [];
+                                isPlayingRef.current = false;
+                                setIsSpeaking(false);
+                            }
+                        } catch (e) {
+                            console.error("Error parsing JSON:", e);
+                        }
                     }
                 };
 
@@ -119,13 +102,11 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
                     clearTimeout(timeout);
                     console.error('[GeminiLive] WebSocket error:', error);
                     setStatus('error');
-                    setIsConnected(false);
-                    reject(new Error('WebSocket connection failed'));
-                    onError?.('WebSocket connection failed');
+                    onError?.('Connection failed');
                 };
 
-                ws.onclose = (event) => {
-                    console.log('[GeminiLive] Disconnected from Google', event.code, event.reason);
+                ws.onclose = () => {
+                    console.log('[GeminiLive] Disconnected');
                     setIsConnected(false);
                     setStatus('disconnected');
                 };
@@ -134,13 +115,10 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         } catch (error) {
             console.error('[GeminiLive] Connection error:', error);
             setStatus('error');
-            const msg = error instanceof Error ? error.message : 'Connection failed';
-            onError?.(msg);
             throw error;
         }
-    }, [onTranscript, onError, onTurnComplete]);
+    }, [onTranscript, onError]);
 
-    // Disconnect
     const disconnect = useCallback(() => {
         if (wsRef.current) {
             wsRef.current.close();
@@ -148,7 +126,6 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         }
     }, []);
 
-    // Audio Playback
     const playAudioQueue = useCallback(async () => {
         if (playbackQueueRef.current.length === 0) {
             isPlayingRef.current = false;
@@ -164,8 +141,9 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         }
 
         const ctx = audioContextRef.current;
-        const chunk = playbackQueueRef.current.shift()!;
+        if (ctx.state === 'suspended') await ctx.resume();
 
+        const chunk = playbackQueueRef.current.shift()!;
         const audioBuffer = ctx.createBuffer(1, chunk.length, 24000);
         const channelData = audioBuffer.getChannelData(0);
 
@@ -184,7 +162,6 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         source.start();
     }, []);
 
-    // Control functions
     const startRecording = useCallback(async () => {
         try {
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -200,62 +177,24 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
 
             processor.port.onmessage = (event) => {
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    const base64Data = arrayBufferToBase64(event.data);
-                    const realtimeInput = {
-                        realtime_input: {
-                            media_chunks: [{
-                                mime_type: "audio/pcm;rate=16000",
-                                data: base64Data
-                            }]
-                        }
-                    };
-                    wsRef.current.send(JSON.stringify(realtimeInput));
+                    // Send RAW BYTES (Float32Array converted to Int16 usually, or raw from worklet)
+                    // The worklet typically sends Float32 or Int16. 
+                    // Let's assume the worklet sends Int16 array buffer ready for transport
+                    // If event.data is Int16Array or ArrayBuffer:
+                    wsRef.current.send(event.data);
                 }
             };
 
             source.connect(processor);
             setIsRecording(true);
-            console.log('[GeminiLive] Recording started (streaming directly to Google)');
         } catch (error) {
             console.error('[GeminiLive] Failed to start recording:', error);
-            onError?.(error instanceof Error ? error.message : 'Failed to start recording');
+            onError?.('Failed to start recording');
         }
     }, [connect, onError]);
 
     const stopRecording = useCallback(() => {
         setIsRecording(false);
-        console.log('[GeminiLive] Recording stopped');
-    }, []);
-
-    const sendAudioData = useCallback((data: ArrayBuffer | Int16Array) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            const buffer = data instanceof ArrayBuffer ? data : data.buffer;
-            const pcmData = new Int16Array(buffer);
-            const chunkSize = 4000;
-
-            for (let i = 0; i < pcmData.length; i += chunkSize) {
-                const chunk = pcmData.slice(i, i + chunkSize);
-                const base64Data = arrayBufferToBase64(chunk.buffer);
-                const realtimeInput = {
-                    realtime_input: {
-                        media_chunks: [{
-                            mime_type: "audio/pcm;rate=16000",
-                            data: base64Data
-                        }]
-                    }
-                };
-                wsRef.current.send(JSON.stringify(realtimeInput));
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        return () => {
-            if (wsRef.current) {
-                wsRef.current.close();
-                wsRef.current = null;
-            }
-        };
     }, []);
 
     return useMemo(() => ({
@@ -266,19 +205,6 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
         connect,
         disconnect,
         startRecording,
-        stopRecording,
-        sendAudioData,
-        // Expose the raw readyState for immediate checks (bypass React state lag)
-        getReadyState: () => wsRef.current?.readyState
-    }), [
-        isConnected,
-        isRecording,
-        isSpeaking,
-        status,
-        connect,
-        disconnect,
-        startRecording,
-        stopRecording,
-        sendAudioData
-    ]);
+        stopRecording
+    }), [isConnected, isRecording, isSpeaking, status, connect, disconnect, startRecording, stopRecording]);
 };
