@@ -129,18 +129,6 @@ export default function Login() {
               emoticonnection is the world's first platform designed around genuine human emotions. Shared feelings, synchronized smiles.
             </p>
 
-            <div className="flex items-center space-x-6">
-              <Link to="/signup">
-                <button className="px-10 py-5 bg-[#1a1a1a] text-white font-black rounded-3xl shadow-lg hover:-translate-y-1.5 hover:scale-[1.02] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out text-lg active:scale-95">
-                  Sign up
-                </button>
-              </Link>
-              <Link to="/">
-                <button className="px-10 py-5 bg-white text-[#1a1a1a] font-black rounded-3xl shadow-lg border-2 border-gray-200 hover:-translate-y-1.5 hover:scale-[1.02] hover:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out text-lg active:scale-95">
-                  Home
-                </button>
-              </Link>
-            </div>
           </div>
 
           {/* Right Side - Login Form Card */}
@@ -227,7 +215,7 @@ export default function Login() {
       </div>
 
       {/* Simple Footer */}
-      <div className="relative z-10 py-12 text-center text-gray-400 text-sm bg-white mt-24">
+      <div className="relative z-10 py-12 text-center text-gray-400 text-sm bg-white mt-48">
         <p className="font-medium tracking-wide">© 2024 emoticonnection. Feel the world.</p>
       </div>
     </div>
