@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { userApi, socialApi, postApi, Post } from '../services/api'
+import { userApi, socialApi, postApi, Post, getMediaUrl } from '../services/api'
 import { getAvatarUrl } from '../config/userAvatars'
+import PostDetailModal from '../pages/community/components/PostDetailModal'
 
 interface UserProfile {
   _id: string
@@ -25,18 +26,6 @@ interface UserProfileModalProps {
   onClose: () => void
 }
 
-// Mood color mapping
-const MOOD_COLORS: Record<string, { bg: string; text: string }> = {
-  joy: { bg: '#F9D849', text: '#121212' },
-  happy: { bg: '#F9D849', text: '#121212' },
-  sad: { bg: '#3266B1', text: '#ffffff' },
-  angry: { bg: '#D32F2F', text: '#ffffff' },
-  anxious: { bg: '#E67E22', text: '#ffffff' },
-  fear: { bg: '#9381BA', text: '#ffffff' },
-  neutral: { bg: '#4B4E91', text: '#ffffff' },
-  frustrated: { bg: '#D32F2F', text: '#ffffff' },
-}
-
 export default function UserProfileModal({ userId, currentUserId, isOpen, onClose }: UserProfileModalProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [stats, setStats] = useState<SocialStats | null>(null)
@@ -44,6 +33,7 @@ export default function UserProfileModal({ userId, currentUserId, isOpen, onClos
   const [isFollowing, setIsFollowing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [followLoading, setFollowLoading] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null)
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -103,15 +93,30 @@ export default function UserProfileModal({ userId, currentUserId, isOpen, onClos
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
+  const getEmotionColor = (emotion: string | null): string => {
+    const colors: Record<string, string> = {
+      'Joy': '#F9D849',
+      'Sad': '#3266B1',
+      'Angry': '#D32F2F',
+      'Fear': '#9381BA',
+      'Disgust': '#66B04C',
+      'Anxious': '#E67E22',
+      'Bored': '#4B4E91',
+      'Awkward': '#D278A3',
+      'Envy': '#2BA8A4'
+    }
+    return colors[emotion || ''] || '#4B4E91'
+  }
+
   if (!isOpen) return null
 
-  return createPortal(
+  return <>{[createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300"
+        className="w-full max-w-2xl max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300"
         onClick={e => e.stopPropagation()}
       >
         {isLoading ? (
@@ -191,44 +196,49 @@ export default function UserProfileModal({ userId, currentUserId, isOpen, onClos
               )}
             </div>
 
-            {/* User's Posts */}
+            {/* User's Posts - Overlapping card style */}
             {posts.length > 0 && (
-              <div className="px-8 pb-8">
-                <h3 className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4">
+              <div className="pb-8">
+                <h3 className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-8">
                   Their Moments
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {posts.slice(0, 6).map(post => {
-                    const emotion = (post.emotion || post.ai_emotion || 'neutral').toLowerCase()
-                    const colors = MOOD_COLORS[emotion] || MOOD_COLORS.neutral
-
-                    return (
-                      <div
-                        key={post.id}
-                        className="p-4 rounded-2xl"
-                        style={{ backgroundColor: colors.bg }}
-                      >
-                        <p
-                          className="text-sm font-bold line-clamp-3"
-                          style={{ color: colors.text }}
-                        >
-                          {post.content}
-                        </p>
-                        <p
-                          className="mt-2 text-xs opacity-70"
-                          style={{ color: colors.text }}
-                        >
-                          {formatDate(post.created_at)}
-                        </p>
-                      </div>
-                    )
-                  })}
+                <div className="card-stack overflow-x-auto pb-4 px-8">
+                  {posts.map((post) => (
+                    <div
+                      key={post.id}
+                      onClick={() => setSelectedPost(post)}
+                      className="card-pullable w-64 h-80 rounded-2xl overflow-hidden cursor-pointer shadow-lg flex-shrink-0"
+                      style={{ backgroundColor: getEmotionColor(post.emotion || post.ai_emotion) }}
+                    >
+                      {/* Post with image */}
+                      {post.media_urls && post.media_urls.length > 0 ? (
+                        <div className="relative w-full h-full">
+                          <img
+                            src={getMediaUrl(post.media_urls[0])}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                          <div className="absolute bottom-0 left-0 right-0 p-4">
+                            <p className="text-white text-sm font-bold line-clamp-3">{post.content}</p>
+                            <p className="text-white/60 text-xs mt-2">{formatDate(post.created_at)}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Text-only post */
+                        <div className="p-6 h-full flex flex-col justify-between">
+                          <p className="text-white text-sm font-bold line-clamp-8">{post.content}</p>
+                          <div className="flex justify-between items-center">
+                            <span className="text-white/60 text-xs">{formatDate(post.created_at)}</span>
+                            {(post.emotion || post.ai_emotion) && (
+                              <span className="text-white/80 text-xs capitalize">{post.emotion || post.ai_emotion}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                {posts.length > 6 && (
-                  <p className="text-center text-gray-400 text-sm font-bold mt-4">
-                    +{posts.length - 6} more posts
-                  </p>
-                )}
               </div>
             )}
 
@@ -247,5 +257,25 @@ export default function UserProfileModal({ userId, currentUserId, isOpen, onClos
       </div>
     </div>,
     document.body
+  ),
+
+  // PostDetailModal - separate portal for post detail view
+  selectedPost && createPortal(
+    <PostDetailModal
+      post={selectedPost}
+      isOpen={!!selectedPost}
+      onClose={() => setSelectedPost(null)}
+      onLike={(postId) => {
+        setPosts(prev => prev.map(p =>
+          p.id === postId
+            ? { ...p, is_liked: !p.is_liked, like_count: p.is_liked ? p.like_count - 1 : p.like_count + 1 }
+            : p
+        ))
+      }}
+      userId={currentUserId}
+      onViewProfile={() => {}}
+    />,
+    document.body
   )
+  ].filter(Boolean)}</>
 }

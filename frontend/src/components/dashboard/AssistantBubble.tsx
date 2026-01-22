@@ -13,6 +13,11 @@ interface AssistantBubbleProps {
   onSelectText: (text: string) => void
   partnerLastMessage?: string
   chatHistory?: any[]
+  initialAction?: 'rewrite' | 'response' | 'topic' | null  // Initial action from chat toolbar
+  initialInputText?: string      // Initial input text for rewrite action
+  onActionConsumed?: () => void  // Callback when action is consumed
+  avatarPosition?: { x: number; y: number }  // Avatar position for smart positioning
+  context?: 'chat' | 'diary' | 'community'  // Scene context for filtering features
 }
 
 // 功能按钮配置
@@ -32,7 +37,7 @@ const toneConfigs = {
 
 type ViewType = 'menu' | 'rewrite' | 'response' | 'topic'
 
-export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory }: AssistantBubbleProps) {
+export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, avatarPosition, context }: AssistantBubbleProps) {
   const [view, setView] = useState<ViewType>('menu')
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
@@ -69,6 +74,126 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
       }
     }
   }, [isOpen, onClose])
+
+  // Track if initial action has been processed
+  const [initialActionProcessed, setInitialActionProcessed] = useState(false)
+
+  // Reset processed flag when action changes - allows switching between actions while bubble is open
+  useEffect(() => {
+    setInitialActionProcessed(false)
+  }, [initialAction, initialInputText])
+
+  // Helper function for auto rewrite (used in initial action)
+  const autoRewrite = async (text: string) => {
+    setIsThinking(true)
+    try {
+      const res = await aiHelperApi.rewrite({
+        text,
+        styles: ['gentle', 'cool', 'humorous', 'direct']
+      })
+      try {
+        const cleanJson = res.rewritten_text.replace(/```json/g, '').replace(/```/g, '').trim()
+        const results = JSON.parse(cleanJson)
+        setOptions(results)
+      } catch (e) {
+        console.error('Failed to parse rewrite JSON:', e, res.rewritten_text)
+        setOptions({ direct: res.rewritten_text })
+      }
+    } catch (err) {
+      console.error('Rewrite failed:', err)
+    } finally {
+      setIsThinking(false)
+    }
+  }
+
+  // Helper function for auto response (used in initial action)
+  const autoResponse = async () => {
+    let historyToUse = chatHistory || []
+    if (historyToUse.length === 0 && partnerLastMessage) {
+      historyToUse = [{ role: 'user', text: partnerLastMessage }]
+    }
+    if (historyToUse.length === 0) return
+
+    setIsThinking(true)
+    try {
+      const history = historyToUse.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [m.text]
+      }))
+      const res = await aiHelperApi.suggestReply({
+        history,
+        styles: ['gentle', 'cool', 'humorous', 'direct']
+      })
+      try {
+        const cleanJson = res.suggestions.replace(/```json/g, '').replace(/```/g, '').trim()
+        const results = JSON.parse(cleanJson)
+        setOptions(results)
+      } catch (e) {
+        console.error('Failed to parse reply JSON:', e, res.suggestions)
+        setOptions({ direct: res.suggestions })
+      }
+    } catch (err) {
+      console.error('Suggest reply failed:', err)
+    } finally {
+      setIsThinking(false)
+    }
+  }
+
+  // Helper function for auto topics (used in initial action)
+  const autoTopics = async () => {
+    const historyToUse = chatHistory || []
+    setIsThinking(true)
+    try {
+      const history = historyToUse.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [m.text]
+      }))
+      const res = await aiHelperApi.suggestTopic({ history })
+      const rawTopics = res.suggestions.split('\n')
+        .map(t => t.replace(/^\d+\.\s*/, '').replace(/^- \s*/, '').trim())
+        .filter(t => t.length > 0)
+        .slice(0, 4)
+      const emojis = ['🎬', '🍕', '🌙', '🎮', '💡', '🎵', '✈️', '📚', '🎨', '🌮', '🧘']
+      const topicObjects = rawTopics.map(text => ({
+        emoji: emojis[Math.floor(Math.random() * emojis.length)],
+        text
+      }))
+      setTopics(topicObjects)
+    } catch (err) {
+      console.error('Suggest topics failed:', err)
+    } finally {
+      setIsThinking(false)
+    }
+  }
+
+  // Handle initial action from chat toolbar buttons
+  useEffect(() => {
+    if (isOpen && initialAction && !initialActionProcessed) {
+      setView(initialAction)
+      setInitialActionProcessed(true)
+      setOptions(null)
+      setTopics(null)
+
+      // Auto-trigger the corresponding action
+      setTimeout(() => {
+        if (initialAction === 'rewrite' && initialInputText) {
+          setInput(initialInputText)
+          autoRewrite(initialInputText)
+        } else if (initialAction === 'response') {
+          autoResponse()
+        } else if (initialAction === 'topic') {
+          autoTopics()
+        }
+      }, 100)
+
+      onActionConsumed?.()
+    }
+
+    // Reset processed flag when closed
+    if (!isOpen) {
+      setInitialActionProcessed(false)
+    }
+  }, [isOpen, initialAction, initialInputText, initialActionProcessed, onActionConsumed, chatHistory, partnerLastMessage])
 
   // Rewrite - Real API
   const handleRewrite = async () => {
@@ -192,6 +317,27 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
     setInput('')
   }
 
+  // Smart bubble position calculation - prefer left side to avoid blocking chat content
+  const getBubblePosition = (): 'left' | 'right' => {
+    if (!avatarPosition) return 'left'  // Default to left side
+
+    const bubbleWidth = 288  // w-72 = 18rem = 288px
+    const margin = 24  // mr-6 = 24px
+
+    // Check available space on left side
+    const spaceOnLeft = avatarPosition.x - margin
+
+    // Prefer left side: only use right if left has no space
+    if (spaceOnLeft >= bubbleWidth) {
+      return 'left'
+    }
+    // Fallback to right only when left side has no space
+    return 'right'
+  }
+
+  const bubblePosition = getBubblePosition()
+
+
   // Thinking indicator
   const ThinkingDots = () => (
     <div className="flex justify-center gap-1 py-4">
@@ -205,12 +351,13 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.5, y: 20 }}
+          initial={{ opacity: 0, scale: 0.8, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.5, y: 20 }}
+          exit={{ opacity: 0, scale: 0.8, y: 10 }}
           transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-          style={{ originX: 0.5, originY: 1 }}
-          className="absolute -top-4 left-1/2 -translate-x-1/2 -translate-y-full z-[100] w-72"
+          className={`absolute bottom-full mb-4 z-[100] w-72 ${
+            bubblePosition === 'left' ? 'right-0' : 'left-0'
+          }`}
         >
           {/* Bubble body */}
           <div
@@ -220,6 +367,15 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center shadow-md transition-all z-10"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
 
             <AnimatePresence mode="wait">
               {/* Menu View */}
@@ -405,8 +561,12 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
               )}
             </AnimatePresence>
 
-            {/* Bubble pointer */}
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white/95 rotate-45 border-r border-b border-white/50" />
+            {/* Bubble pointer - points down towards Avatar */}
+            <div
+              className={`absolute -bottom-2 w-4 h-4 bg-white/95 rotate-45 border-r border-b border-white/50 ${
+                bubblePosition === 'left' ? 'right-8' : 'left-8'
+              }`}
+            />
           </div>
         </motion.div>
       )}

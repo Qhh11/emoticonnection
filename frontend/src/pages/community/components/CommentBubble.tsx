@@ -4,6 +4,7 @@
  */
 
 import { Comment } from '../../../services/api'
+import { getAvatarUrl } from '../../../config/userAvatars'
 
 interface CommentBubbleProps {
   comment: Comment
@@ -37,7 +38,7 @@ export default function CommentBubble({ comment, isOwn, onViewProfile }: Comment
       <button
         onClick={() => !comment.is_anonymous && onViewProfile?.(comment.author_id)}
         className={`
-          w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center
+          w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden
           text-sm font-black uppercase
           ${comment.is_anonymous ? 'cursor-default' : 'cursor-pointer hover:ring-2 ring-black/10'}
           transition-all
@@ -47,7 +48,13 @@ export default function CommentBubble({ comment, isOwn, onViewProfile }: Comment
         }}
         disabled={comment.is_anonymous}
       >
-        {comment.is_anonymous ? '?' : authorName.charAt(0)}
+        {comment.is_anonymous ? '?' : (
+          comment.author_avatar ? (
+            <img src={getAvatarUrl(comment.author_avatar)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            authorName.charAt(0)
+          )
+        )}
       </button>
 
       {/* Bubble */}

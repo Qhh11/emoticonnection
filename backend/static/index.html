@@ -215,9 +215,9 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const userId = localStorage.getItem('chat_user_id');
-            const username = localStorage.getItem('chat_username');
-            const nickname = localStorage.getItem('chat_nickname');
+            const userId = sessionStorage.getItem('chat_user_id');
+            const username = sessionStorage.getItem('chat_username');
+            const nickname = sessionStorage.getItem('chat_nickname');
 
             console.log("Checking Auth:", { userId, username, nickname }); // Debug
 
@@ -233,9 +233,9 @@
 
         function logout() {
             if (confirm('Are you sure you want to log out?')) {
-                localStorage.removeItem('chat_user_id');
-                localStorage.removeItem('chat_username');
-                localStorage.removeItem('chat_nickname');
+                sessionStorage.removeItem('chat_user_id');
+                sessionStorage.removeItem('chat_username');
+                sessionStorage.removeItem('chat_nickname');
                 window.location.href = 'login.html';
             }
         }

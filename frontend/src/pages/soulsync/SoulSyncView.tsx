@@ -1,15 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { matchApi, chatApi, socialApi, userApi, aiHelperApi, createChatWebSocket, UserRoom, ChatMessage as ApiChatMessage, FollowUser, EmotionType, SupportRole, SupportNeed, TopicTag } from '../../services/api'
+import {
+  matchApi,
+  chatApi,
+  socialApi,
+  userApi,
+  createChatWebSocket,
+  UserRoom,
+  ChatMessage as ApiChatMessage,
+  FollowUser,
+  EmotionType,
+  SupportRole,
+  SupportNeed,
+  TopicTag,
+} from '../../services/api'
+import { markUserActivity } from '../../components/EmotionReportModal'
+
+import { Avatar3D } from '../../config/avatars'
+import EmotionGradientBar from '../../components/chat/EmotionGradientBar'
+import { getAvatarUrl } from '../../config/userAvatars'
+import OnlineIndicator from './components/OnlineIndicator'
+
+import { MatchLock } from './matchLock'
 
 // Extended FollowUser with online status
 interface FriendWithOnlineStatus extends FollowUser {
   isOnline: boolean
 }
-import { Avatar3D } from '../../config/avatars'
-import EmotionGradientBar from '../../components/chat/EmotionGradientBar'
-import { getAvatarUrl } from '../../config/userAvatars'
-import OnlineIndicator from './components/OnlineIndicator'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA: { label: string; color: string; text: string; value: EmotionType }[] = [
@@ -51,7 +68,6 @@ const TOPIC_DATA: { value: TopicTag; label: string; emoji: string }[] = [
   { value: 'loneliness', label: 'Loneliness', emoji: '🏠' },
   { value: 'self_esteem', label: 'Self Esteem', emoji: '🪞' },
 ]
-
 
 interface EmotionAnalysis {
   primary_emotion: string
@@ -95,19 +111,43 @@ interface SoulSyncViewProps {
   userLevel?: number
   onSessionChange?: (hasSession: boolean) => void
   onProactiveHintChange?: (show: boolean) => void
-  onPartnerMessageChange?: (message: string) => void  // For AssistantBubble
-  onSessionUpdate?: (session: PeerSession | null) => void // For Avatar Context
-  externalChatInput?: string | null  // Text from AssistantBubble
-  onExternalChatInputConsumed?: () => void  // Clear external input after consuming
+  onPartnerMessageChange?: (message: string) => void
+  onSessionUpdate?: (session: PeerSession | null) => void
+  externalChatInput?: string | null
+  onExternalChatInputConsumed?: () => void
+  onOpenAssistantWithAction?: (action: 'rewrite' | 'response' | 'topic', inputText?: string) => void
 }
 
-export default function SoulSyncView({ onInteract, userId, userAvatar, onViewProfile, avatar: _avatar, onSessionChange, onProactiveHintChange, onPartnerMessageChange, onSessionUpdate, externalChatInput, onExternalChatInputConsumed }: SoulSyncViewProps) {
+export default function SoulSyncView({
+  onInteract,
+  userId,
+  userAvatar,
+  onViewProfile,
+  onSessionChange,
+  onProactiveHintChange,
+  onPartnerMessageChange,
+  onSessionUpdate,
+  externalChatInput,
+  onExternalChatInputConsumed,
+  onOpenAssistantWithAction,
+  userLevel,
+}: SoulSyncViewProps) {
+  // Check if user is VIP (level >= 3) for AI assistant features
+  const isVip = (userLevel ?? 0) >= 3
+
   // Tab state
   const [activeTab, setActiveTab] = useState<'matching' | 'social'>('matching')
 
+
   // Matching states
   const [isSearching, setIsSearching] = useState(false)
-  const [matchedPartner, setMatchedPartner] = useState<{ roomId: string; partnerId: string; isAnonymous: boolean; matchScore?: number; matchReason?: string } | null>(null)
+  const [matchedPartner, setMatchedPartner] = useState<{
+    roomId: string
+    partnerId: string
+    isAnonymous: boolean
+    matchScore?: number
+    matchReason?: string
+  } | null>(null)
   const [sessions, setSessions] = useState<PeerSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0]>(MOOD_DATA[2])
@@ -115,11 +155,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   const [chatInput, setChatInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const pollTimerRef = useRef<number | null>(null)
-
-  // AI Helper State
-  const [isAiLoading, setIsAiLoading] = useState(false)
-  const [replySuggestions, setReplySuggestions] = useState<string[]>([])
-  const [topicSuggestions, setTopicSuggestions] = useState<string[]>([])
 
   // V2 Matching preferences
   const [selectedRole, setSelectedRole] = useState<SupportRole>('either')
@@ -131,6 +166,68 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   const [queuePosition, setQueuePosition] = useState<number | null>(null)
   const [estimatedWait, setEstimatedWait] = useState<string | null>(null)
   const [safetyTips, setSafetyTips] = useState<string[]>([])
+
+  // Mutual friends with online status
+  const [mutualFriends, setMutualFriends] = useState<FriendWithOnlineStatus[]>([])
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false)
+
+  // Social view category
+  const [socialCategory, setSocialCategory] = useState<'chats' | 'friends'>('chats')
+
+  // WebSocket ref
+  const wsRef = useRef<WebSocket | null>(null)
+  const presenceWsRef = useRef<WebSocket | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Connect WebSocket when session changes
+  const currentRoomIdRef = useRef<string | null>(null)
+
+
+  // =======================
+  // ✅ Scheme C: Match Lock
+  // =======================
+  const matchLockRef = useRef<MatchLock | null>(null)
+
+  // Init lock once
+  useEffect(() => {
+    matchLockRef.current = new MatchLock({
+      onLockLost: () => {
+        console.warn('[MatchLock] Lost lock to another tab. Stopping search.')
+        // 尝试取消后端队列（不阻塞）
+        matchApi.cancelMatch().catch(() => {})
+        // 立刻退出 UI（核心：避免两个窗口都 stuck 在 searching）
+        setIsSearching(false)
+        setMatchedPartner(null)
+        setQueuePosition(null)
+        setEstimatedWait(null)
+        setSafetyTips([])
+      },
+    })
+
+    return () => {
+      const lock = matchLockRef.current
+      lock?.stopHeartbeat()
+      lock?.releaseIfOwned()
+      lock?.dispose()
+      matchLockRef.current = null
+    }
+  }, [])
+
+  // Keep lock alive while searching
+  useEffect(() => {
+    const lock = matchLockRef.current
+    if (!lock) return
+
+    if (isSearching) {
+      lock.startHeartbeat()
+    } else {
+      lock.stopHeartbeat()
+    }
+
+    return () => {
+      lock.stopHeartbeat()
+    }
+  }, [isSearching])
 
   // Get partner's last message - exposed for AssistantBubble
   const getPartnerLastMessage = useCallback((): string => {
@@ -165,18 +262,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     }
   }, [externalChatInput, onExternalChatInputConsumed])
 
-  // Mutual friends with online status
-  const [mutualFriends, setMutualFriends] = useState<FriendWithOnlineStatus[]>([])
-  const [isLoadingFriends, setIsLoadingFriends] = useState(false)
-
-  // Social view category
-  const [socialCategory, setSocialCategory] = useState<'chats' | 'friends'>('chats')
-
-  // WebSocket ref
-  const wsRef = useRef<WebSocket | null>(null)
-  const presenceWsRef = useRef<WebSocket | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
   // Proactive hint - show tooltip after 8s of typing pause
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
@@ -199,14 +284,13 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       loadUserRooms()
       loadMutualFriends()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
   // Presence WebSocket for real-time friend status updates
   useEffect(() => {
     if (!userId) return
 
-    // Connect to presence WebSocket
-    // 动态获取 WebSocket URL，与 createChatWebSocket 保持一致
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsHost = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.host}`
     const presenceWs = new WebSocket(`${wsHost}/ws/presence/${userId}`)
@@ -226,15 +310,13 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
           console.log('[Presence WS] Friend status update:', statusUserId, status)
 
           // Update sessions
-          setSessions(prev => prev.map(s =>
-            s.partnerId === statusUserId ? { ...s, isOnline } : s
-          ))
+          setSessions(prev =>
+            prev.map(s => (s.partnerId === statusUserId ? { ...s, isOnline } : s))
+          )
 
           // Update mutual friends list
           setMutualFriends(prev => {
-            const updated = prev.map(f =>
-              f.id === statusUserId ? { ...f, isOnline } : f
-            )
+            const updated = prev.map(f => (f.id === statusUserId ? { ...f, isOnline } : f))
             return updated.sort((a, b) => {
               if (a.isOnline && !b.isOnline) return -1
               if (!a.isOnline && b.isOnline) return 1
@@ -257,7 +339,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
 
     presenceWsRef.current = presenceWs
 
-    // Ping to keep connection alive
     const pingInterval = setInterval(() => {
       if (presenceWs.readyState === WebSocket.OPEN) {
         presenceWs.send('ping')
@@ -278,22 +359,19 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     if (!userId) return
     setIsLoadingFriends(true)
     try {
-      // Get mutual friends and online users in parallel
       const [following, onlineUsers] = await Promise.all([
         socialApi.getFollowing(userId),
-        chatApi.getOnlineUsers()
+        chatApi.getOnlineUsers(),
       ])
 
       const mutuals = following.filter(user => user.is_mutual)
 
-      // Add online status and sort (online users first)
       const mutualsWithStatus: FriendWithOnlineStatus[] = mutuals
         .map(user => ({
           ...user,
-          isOnline: onlineUsers.includes(user.id)
+          isOnline: onlineUsers.includes(user.id),
         }))
         .sort((a, b) => {
-          // Online users first
           if (a.isOnline && !b.isOnline) return -1
           if (!a.isOnline && b.isOnline) return 1
           return 0
@@ -307,6 +385,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     }
   }
 
+  // Match status polling
   useEffect(() => {
     if (!isSearching) {
       if (pollTimerRef.current) {
@@ -316,7 +395,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       return
     }
 
-    ; (async () => {
+    ;(async () => {
       try {
         const status = await matchApi.getStatus()
         if (status.matched && status.room_id) {
@@ -325,9 +404,8 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             partnerId: status.matched_user_id || 'unknown',
             isAnonymous: status.is_anonymous ?? isAnonymousMatch,
             matchScore: status.match_score,
-            matchReason: status.match_reason
+            matchReason: status.match_reason,
           })
-          // Don't set isSearching to false here - keep the modal open to show match result
           return
         }
 
@@ -349,9 +427,8 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             partnerId: status.matched_user_id || 'unknown',
             isAnonymous: status.is_anonymous ?? isAnonymousMatch,
             matchScore: status.match_score,
-            matchReason: status.match_reason
+            matchReason: status.match_reason,
           })
-          // Don't set isSearching to false here - keep the modal open to show match result
         } else if (status.in_queue) {
           setQueuePosition(status.queue_position || null)
           setEstimatedWait(status.estimated_wait || null)
@@ -374,49 +451,19 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [sessions])
 
-  // Connect WebSocket when session changes
-  // Use ref to track current room to avoid reconnecting on sessions update
-  const currentRoomIdRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    const targetSession = sessions.find(s => s.id === currentSessionId)
-    const newRoomId = targetSession?.roomId || null
-
-    // Only connect if room actually changed
-    if (newRoomId && newRoomId !== currentRoomIdRef.current && userId) {
-      currentRoomIdRef.current = newRoomId
-      connectWebSocket(newRoomId)
-    } else if (!newRoomId && wsRef.current) {
-      // Disconnect if no session selected
-      currentRoomIdRef.current = null
-      wsRef.current.close()
-      wsRef.current = null
-    }
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId, userId])
-
   // Notify parent when session state changes
   useEffect(() => {
-    onSessionChange?.(!!currentSessionId)
-  }, [currentSessionId, onSessionChange])
+    onSessionChange?.(activeTab === 'social' && !!currentSessionId)
+  }, [currentSessionId, activeTab, onSessionChange])
 
   const loadUserRooms = async () => {
     if (!userId) return
     try {
-      // Get rooms and online users in parallel
       const [rooms, onlineUsers] = await Promise.all([
         chatApi.getUserRooms(userId),
-        chatApi.getOnlineUsers()
+        chatApi.getOnlineUsers(),
       ])
 
-      // Only show matching rooms in Synchronized Echoes (regardless of anonymous status)
       const matchingRooms = rooms.filter((room: UserRoom) => room.source === 'matching')
 
       const sessionsFromRooms: PeerSession[] = matchingRooms.map((room: UserRoom) => ({
@@ -430,7 +477,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         lastMessage: room.last_message || 'Start chatting...',
         moodColor: '#9381BA',
         messages: [],
-        isOnline: onlineUsers.includes(room.other_user_id)
+        isOnline: onlineUsers.includes(room.other_user_id),
       }))
       setSessions(sessionsFromRooms)
     } catch (err) {
@@ -441,11 +488,9 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   // Start or open chat with a friend
   const startChatWithFriend = async (friend: FriendWithOnlineStatus) => {
     if (!userId) return
-
     try {
       const room = await chatApi.createRoom(userId, friend.id, false)
 
-      // Check if session already exists
       const existingSession = sessions.find(s => s.roomId === room.id)
       if (existingSession) {
         setCurrentSessionId(existingSession.id)
@@ -465,10 +510,9 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         lastMessage: 'Start chatting...',
         moodColor: '#4B4E91',
         messages: [],
-        isOnline: friend.isOnline
+        isOnline: friend.isOnline,
       }
 
-      // Add to sessions array (not separate state)
       setSessions(prev => [newSession, ...prev])
       setCurrentSessionId(newSession.id)
       setSocialCategory('friends')
@@ -488,112 +532,145 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         timestamp: new Date(m.created_at).getTime(),
         emotion: m.emotion || 'Neutral',
         emotion_color: m.emotion_color || '#4B4E91',
-        emotionAnalysis: m.emotion_analysis || undefined
+        emotionAnalysis: m.emotion_analysis || undefined,
       }))
 
-      setSessions(prev => prev.map(s =>
-        s.roomId === roomId ? { ...s, messages: chatMessages } : s
-      ))
+      setSessions(prev => prev.map(s => (s.roomId === roomId ? { ...s, messages: chatMessages } : s)))
     } catch (err) {
       console.error('Failed to load messages:', err)
     }
   }
 
-  const connectWebSocket = useCallback((roomId: string) => {
-    if (wsRef.current) {
-      wsRef.current.close()
-    }
+  const connectWebSocket = useCallback(
+    (roomId: string) => {
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
 
-    const ws = createChatWebSocket(roomId, userId)
+      const ws = createChatWebSocket(roomId, userId)
 
-    ws.onopen = () => {
-      console.log('WebSocket connected to room:', roomId)
-      loadRoomMessages(roomId)
-    }
+      ws.onopen = () => {
+        console.log('WebSocket connected to room:', roomId)
+        loadRoomMessages(roomId)
+      }
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        console.log('[WS] Received message:', data)
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          console.log('[WS] Received message:', data)
 
-        // Handle user status updates
-        if (data.event_type === 'user_status') {
-          const { user_id: statusUserId, status } = data.data
-          const isOnline = status === 'online'
-          console.log('[WS] User status update:', statusUserId, status)
-          // Update sessions
-          setSessions(prev => prev.map(s =>
-            s.partnerId === statusUserId
-              ? { ...s, isOnline }
-              : s
-          ))
-          // Update mutual friends list
-          setMutualFriends(prev => {
-            const updated = prev.map(f =>
-              f.id === statusUserId ? { ...f, isOnline } : f
+          if (data.event_type === 'user_status') {
+            const { user_id: statusUserId, status } = data.data
+            const isOnline = status === 'online'
+            console.log('[WS] User status update:', statusUserId, status)
+
+            setSessions(prev =>
+              prev.map(s => (s.partnerId === statusUserId ? { ...s, isOnline } : s))
             )
-            // Re-sort: online users first
-            return updated.sort((a, b) => {
-              if (a.isOnline && !b.isOnline) return -1
-              if (!a.isOnline && b.isOnline) return 1
-              return 0
+
+            setMutualFriends(prev => {
+              const updated = prev.map(f => (f.id === statusUserId ? { ...f, isOnline } : f))
+              return updated.sort((a, b) => {
+                if (a.isOnline && !b.isOnline) return -1
+                if (!a.isOnline && b.isOnline) return 1
+                return 0
+              })
             })
-          })
-          return
-        }
-
-        if (data.type === 'peer_disconnected') {
-          const sysMsg: ChatMessage = {
-            id: `sys-${Date.now()}`,
-            role: 'peer',
-            text: '⚠️ The other user disconnected.',
-            timestamp: Date.now(),
-            emotion: 'Neutral',
-            emotion_color: '#808080'
+            return
           }
-          setSessions(prev => prev.map(s =>
-            s.roomId === roomId ? { ...s, messages: [...s.messages, sysMsg], isOnline: false } : s
-          ))
-          return
-        }
 
-        if (data.sender_id === userId) {
-          return
-        }
+          if (data.type === 'peer_disconnected') {
+            const sysMsg: ChatMessage = {
+              id: `sys-${Date.now()}`,
+              role: 'peer',
+              text: '⚠️ The other user disconnected.',
+              timestamp: Date.now(),
+              emotion: 'Neutral',
+              emotion_color: '#808080',
+            }
+            setSessions(prev =>
+              prev.map(s =>
+                s.roomId === roomId ? { ...s, messages: [...s.messages, sysMsg], isOnline: false } : s
+              )
+            )
+            return
+          }
 
-        const newMessage: ChatMessage = {
-          id: data.id || Date.now().toString(),
-          role: 'peer',
-          text: data.content,
-          timestamp: new Date(data.created_at || Date.now()).getTime(),
-          emotion: data.emotion || 'Neutral',
-          emotion_color: data.emotion_color || '#4B4E91',
-          emotionAnalysis: data.emotion_analysis || undefined
-        }
+          if (data.sender_id === userId) {
+            return
+          }
 
-        setSessions(prev => prev.map(s =>
-          s.roomId === roomId
-            ? { ...s, messages: [...s.messages, newMessage], lastMessage: data.content }
-            : s
-        ))
-      } catch (err) {
-        console.error('Failed to parse WebSocket message:', err)
+          const newMessage: ChatMessage = {
+            id: data.id || Date.now().toString(),
+            role: 'peer',
+            text: data.content,
+            timestamp: new Date(data.created_at || Date.now()).getTime(),
+            emotion: data.emotion || 'Neutral',
+            emotion_color: data.emotion_color || '#4B4E91',
+            emotionAnalysis: data.emotion_analysis || undefined,
+          }
+
+          setSessions(prev =>
+            prev.map(s =>
+              s.roomId === roomId
+                ? { ...s, messages: [...s.messages, newMessage], lastMessage: data.content }
+                : s
+            )
+          )
+        } catch (err) {
+          console.error('Failed to parse WebSocket message:', err)
+        }
+      }
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected')
+      }
+
+      wsRef.current = ws
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId]
+  )
+
+  useEffect(() => {
+    const targetSession = sessions.find(s => s.id === currentSessionId)
+    const newRoomId = targetSession?.roomId || null
+
+    if (newRoomId && newRoomId !== currentRoomIdRef.current && userId) {
+      currentRoomIdRef.current = newRoomId
+      connectWebSocket(newRoomId)
+    } else if (!newRoomId && wsRef.current) {
+      currentRoomIdRef.current = null
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId, userId])
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected')
-    }
-
-    wsRef.current = ws
-  }, [userId])
-
+  // ✅ startMatching with lock acquire
   const startMatching = async (e: React.MouseEvent) => {
     onInteract(e)
+
+    const lock = matchLockRef.current
+    if (!lock) return
+
+    const ok = lock.acquire()
+    if (!ok) {
+      alert('You are already matching in another tab/window.')
+      return
+    }
+
     setIsSearching(true)
     setIsLoading(true)
     setSafetyTips([])
@@ -608,7 +685,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         support_need: selectedNeed,
         topic: selectedTopic,
         mode: isAnonymousMatch ? 'human_anonymous' : 'human_non_anonymous',
-        risk_level: 'safe'
+        risk_level: 'safe',
       })
 
       if (response.matched && response.room_id) {
@@ -617,18 +694,12 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
           partnerId: response.matched_user_id || 'unknown',
           isAnonymous: response.is_anonymous,
           matchScore: response.match_score,
-          matchReason: response.match_reason
+          matchReason: response.match_reason,
         })
       } else {
-        if (response.queue_position) {
-          setQueuePosition(response.queue_position)
-        }
-        if (response.estimated_wait) {
-          setEstimatedWait(response.estimated_wait)
-        }
-        if (response.safety_tips) {
-          setSafetyTips(response.safety_tips)
-        }
+        if (response.queue_position) setQueuePosition(response.queue_position)
+        if (response.estimated_wait) setEstimatedWait(response.estimated_wait)
+        if (response.safety_tips) setSafetyTips(response.safety_tips)
       }
     } catch (err) {
       console.error('Match failed:', err)
@@ -639,13 +710,18 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     }
   }
 
-
+  // ✅ cancel releases lock
   const cancelMatching = async () => {
     try {
       await matchApi.cancelMatch()
     } catch (err) {
       console.error('Cancel match failed:', err)
     }
+
+    const lock = matchLockRef.current
+    lock?.stopHeartbeat()
+    lock?.releaseIfOwned()
+
     setIsSearching(false)
     setMatchedPartner(null)
     setQueuePosition(null)
@@ -653,21 +729,25 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     setSafetyTips([])
   }
 
+  // ✅ confirm releases lock
   const confirmMatch = async () => {
     if (!matchedPartner || !userId) return
 
     const roomId = matchedPartner.roomId
-
     const existing = sessions.find(s => s.roomId === roomId)
+
     if (existing) {
       setCurrentSessionId(existing.id)
       setMatchedPartner(null)
       setIsSearching(false)
       setActiveTab('social')
+
+      const lock = matchLockRef.current
+      lock?.stopHeartbeat()
+      lock?.releaseIfOwned()
       return
     }
 
-    // For non-anonymous matches, fetch the partner's real info
     let partnerName = 'Anonymous'
     let partnerAvatar = '🎭'
     if (!matchedPartner.isAnonymous && matchedPartner.partnerId && matchedPartner.partnerId !== 'unknown') {
@@ -691,7 +771,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       lastMessage: 'Connection established',
       moodColor: selectedMood.color,
       messages: [],
-      isOnline: true
+      isOnline: true,
     }
 
     setSessions(prev => [newSession, ...prev])
@@ -699,8 +779,11 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     setMatchedPartner(null)
     setIsSearching(false)
     setActiveTab('social')
-  }
 
+    const lock = matchLockRef.current
+    lock?.stopHeartbeat()
+    lock?.releaseIfOwned()
+  }
 
   const sendPeerMessage = () => {
     if (!chatInput.trim() || !currentSessionId || !userId) return
@@ -717,29 +800,36 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       text: messageContent,
       timestamp: Date.now(),
       emotion: 'Neutral',
-      emotion_color: '#808080'
+      emotion_color: '#808080',
     }
 
-    setSessions(prev => prev.map(s =>
-      s.id === currentSessionId
-        ? { ...s, messages: [...s.messages, newMsg], lastMessage: messageContent }
-        : s
-    ))
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === currentSessionId
+          ? { ...s, messages: [...s.messages, newMsg], lastMessage: messageContent }
+          : s
+      )
+    )
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        sender_id: userId,
-        message_type: 'text',
-        content: messageContent
-      }))
+      wsRef.current.send(
+        JSON.stringify({
+          sender_id: userId,
+          message_type: 'text',
+          content: messageContent,
+        })
+      )
     } else {
-      chatApi.sendMessage(targetSession.roomId, {
-        sender_id: userId,
-        message_type: 'text',
-        content: messageContent
-      }).catch(err => console.error('Failed to send message:', err))
+      chatApi
+        .sendMessage(targetSession.roomId, {
+          sender_id: userId,
+          message_type: 'text',
+          content: messageContent,
+        })
+        .catch(err => console.error('Failed to send message:', err))
     }
 
+    markUserActivity(userId)
     setChatInput('')
   }
 
@@ -748,26 +838,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       e.preventDefault()
       sendPeerMessage()
     }
-  }
-
-  const getEmotionColor = (emotion: string): string => {
-    if (!emotion) return '#808080'
-    const e = emotion.toLowerCase()
-    const emotionToLabel: Record<string, string> = {
-      'joy': 'Joy', 'happy': 'Joy',
-      'sad': 'Sad', 'sadness': 'Sad',
-      'angry': 'Angry', 'anger': 'Angry',
-      'anxious': 'Anxious', 'anxiety': 'Anxious',
-      'bored': 'Bored',
-      'fear': 'Fear',
-      'disgust': 'Disgust',
-      'awkward': 'Awkward', 'embarrassment': 'Awkward',
-      'envy': 'Envy',
-      'neutral': 'Bored'
-    }
-    const label = emotionToLabel[e]
-    const mood = MOOD_DATA.find(m => m.label === label)
-    return mood?.color || '#808080'
   }
 
   // Find current session
@@ -792,19 +862,20 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
                   {isLoading ? 'Searching Pulse' : 'In Queue...'}
                 </h3>
                 <p className="text-white/80 font-black uppercase text-[13px] tracking-[0.3em]">
-                  {selectedRole === 'seeker' ? '🙋 Seeking Support' : selectedRole === 'supporter' ? '🤗 Ready to Help' : '💬 Open to Both'} • {selectedMood.label}
+                  {selectedRole === 'seeker'
+                    ? '🙋 Seeking Support'
+                    : selectedRole === 'supporter'
+                      ? '🤗 Ready to Help'
+                      : '💬 Open to Both'}{' '}
+                  • {selectedMood.label}
                 </p>
                 {(queuePosition || estimatedWait) && (
                   <div className="mt-4 space-y-2">
                     {queuePosition && (
-                      <p className="text-white/60 text-sm font-bold">
-                        Queue Position: #{queuePosition}
-                      </p>
+                      <p className="text-white/60 text-sm font-bold">Queue Position: #{queuePosition}</p>
                     )}
                     {estimatedWait && (
-                      <p className="text-white/60 text-sm font-bold">
-                        Estimated Wait: {estimatedWait}
-                      </p>
+                      <p className="text-white/60 text-sm font-bold">Estimated Wait: {estimatedWait}</p>
                     )}
                   </div>
                 )}
@@ -812,12 +883,17 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
                   <div className="mt-6 p-4 bg-white/10 rounded-2xl text-left max-w-md">
                     <p className="text-white/80 text-xs font-black uppercase tracking-widest mb-2">Safety Tips</p>
                     {safetyTips.map((tip, i) => (
-                      <p key={i} className="text-white/70 text-sm mb-1">• {tip}</p>
+                      <p key={i} className="text-white/70 text-sm mb-1">
+                        • {tip}
+                      </p>
                     ))}
                   </div>
                 )}
               </div>
-              <button onClick={cancelMatching} className="px-8 py-3 bg-white text-gray-800 rounded-full text-[13px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all shadow-xl">
+              <button
+                onClick={cancelMatching}
+                className="px-8 py-3 bg-white text-gray-800 rounded-full text-[13px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all shadow-xl"
+              >
                 Cancel
               </button>
             </>
@@ -829,7 +905,10 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
                   <span className="text-[12px] font-black uppercase tracking-widest">Match Found!</span>
                 </div>
               </div>
-              <button onClick={confirmMatch} className="px-12 py-5 bg-black text-white rounded-[1.5rem] text-sm font-black uppercase tracking-wide shadow-xl hover:scale-105 active:scale-95 transition-all">
+              <button
+                onClick={confirmMatch}
+                className="px-12 py-5 bg-black text-white rounded-[1.5rem] text-sm font-black uppercase tracking-wide shadow-xl hover:scale-105 active:scale-95 transition-all"
+              >
                 Confirm Connection
               </button>
             </div>
@@ -843,19 +922,23 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
   // MatchingContent - 匹配偏好设置
   const MatchingContent = () => (
     <div className="bg-white p-10 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-10">
-      <div className="space-y-3">
+      <div id="tour-sync-mode" className="space-y-3">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Sync Mode</h4>
         <div className="flex gap-3">
           <button
             onClick={() => setIsAnonymousMatch(true)}
-            className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${isAnonymousMatch ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+            className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${
+              isAnonymousMatch ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-black/5 hover:border-black/10'
+            }`}
           >
             <span className="text-xl">🎭</span>
             <span className="text-[11px] font-black uppercase tracking-widest">Anonymous</span>
           </button>
           <button
             onClick={() => setIsAnonymousMatch(false)}
-            className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${!isAnonymousMatch ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+            className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-center space-x-2 ${
+              !isAnonymousMatch ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-black/5 hover:border-black/10'
+            }`}
           >
             <span className="text-xl">👤</span>
             <span className="text-[11px] font-black uppercase tracking-widest">Public</span>
@@ -864,14 +947,16 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       </div>
 
       {/* Role Selector */}
-      <div className="space-y-4">
+      <div id="tour-your-role" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Your Role</h4>
         <div className="grid grid-cols-3 gap-3">
           {ROLE_DATA.map(r => (
             <button
               key={r.value}
               onClick={() => setSelectedRole(r.value)}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 ${selectedRole === r.value ? 'border-accent bg-accent/5 shadow-inner' : 'border-black/5 hover:border-black/10'}`}
+              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 ${
+                selectedRole === r.value ? 'border-accent bg-accent/5 shadow-inner' : 'border-black/5 hover:border-black/10'
+              }`}
             >
               <span className="text-2xl">{r.emoji}</span>
               <span className="text-[11px] font-black uppercase tracking-widest">{r.label}</span>
@@ -882,14 +967,18 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       </div>
 
       {/* Support Need Selector */}
-      <div className="space-y-4">
+      <div id="tour-what-you-need" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">What Do You Need?</h4>
         <div className="flex flex-wrap gap-2">
           {NEED_DATA.map(n => (
             <button
               key={n.value}
               onClick={() => setSelectedNeed(n.value)}
-              className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedNeed === n.value ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-500 hover:border-black/10'}`}
+              className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${
+                selectedNeed === n.value
+                  ? 'border-accent bg-accent text-white shadow-lg'
+                  : 'border-black/5 bg-gray-50 text-gray-500 hover:border-black/10'
+              }`}
             >
               <span>{n.emoji}</span>
               <span className="text-[12px] font-black uppercase tracking-widest">{n.label}</span>
@@ -899,16 +988,23 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       </div>
 
       {/* Emotion/Resonance Selector */}
-      <div className="space-y-4">
+      <div id="tour-resonance" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Set Your Resonance</h4>
         <div className="flex flex-wrap gap-2">
           {MOOD_DATA.map(m => (
             <button
               key={m.label}
               onClick={() => setSelectedMood(m)}
-              className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${selectedMood.label === m.label ? 'border-accent bg-accent text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+              className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 ${
+                selectedMood.label === m.label
+                  ? 'border-accent bg-accent text-white shadow-lg'
+                  : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'
+              }`}
             >
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: selectedMood.label === m.label ? '#ffffff' : m.color }}></div>
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: selectedMood.label === m.label ? '#ffffff' : m.color }}
+              ></div>
               <span className="text-[12px] font-black uppercase tracking-widest">{m.label}</span>
             </button>
           ))}
@@ -916,11 +1012,19 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       </div>
 
       {/* Intensity Slider */}
-      <div className="space-y-4">
+      <div id="tour-intensity" className="space-y-4">
         <div className="flex justify-between items-center">
           <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Intensity</h4>
           <span className="text-[11px] font-black uppercase tracking-widest text-gray-400">
-            {selectedIntensity === 1 ? 'Very Low' : selectedIntensity === 2 ? 'Low' : selectedIntensity === 3 ? 'Moderate' : selectedIntensity === 4 ? 'High' : 'Very High'}
+            {selectedIntensity === 1
+              ? 'Very Low'
+              : selectedIntensity === 2
+                ? 'Low'
+                : selectedIntensity === 3
+                  ? 'Moderate'
+                  : selectedIntensity === 4
+                    ? 'High'
+                    : 'Very High'}
           </span>
         </div>
         <div className="flex items-center space-x-2">
@@ -928,22 +1032,28 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             <button
               key={level}
               onClick={() => setSelectedIntensity(level)}
-              className={`flex-1 h-10 rounded-xl transition-all ${selectedIntensity >= level ? 'bg-accent shadow-inner' : 'bg-gray-100 hover:bg-gray-200'}`}
-              style={{ opacity: selectedIntensity >= level ? 0.4 + (level * 0.15) : 1 }}
+              className={`flex-1 h-10 rounded-xl transition-all ${
+                selectedIntensity >= level ? 'bg-accent shadow-inner' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{ opacity: selectedIntensity >= level ? 0.4 + level * 0.15 : 1 }}
             />
           ))}
         </div>
       </div>
 
       {/* Topic Selector */}
-      <div className="space-y-4">
+      <div id="tour-topic" className="space-y-4">
         <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Topic (Optional)</h4>
         <div className="flex flex-wrap gap-2">
           {TOPIC_DATA.map(t => (
             <button
               key={t.value}
               onClick={() => setSelectedTopic(t.value)}
-              className={`inline-flex items-center space-x-1.5 px-3 py-2 rounded-full border transition-all active:scale-95 text-[11px] ${selectedTopic === t.value ? 'border-accent bg-accent/10 text-accent shadow-sm' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+              className={`inline-flex items-center space-x-1.5 px-3 py-2 rounded-full border transition-all active:scale-95 text-[11px] ${
+                selectedTopic === t.value
+                  ? 'border-accent bg-accent/10 text-accent shadow-sm'
+                  : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'
+              }`}
             >
               <span>{t.emoji}</span>
               <span className="font-black uppercase tracking-wider">{t.label}</span>
@@ -952,7 +1062,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         </div>
       </div>
 
-      <div className="pt-4">
+      <div id="tour-find-echoes" className="pt-4">
         <button
           onClick={startMatching}
           disabled={!userId}
@@ -965,100 +1075,31 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     </div>
   )
 
-
-  // AI Handlers
-  const handleRewrite = async () => {
-    if (!chatInput.trim() || isAiLoading) return
-    setIsAiLoading(true)
-    try {
-      const response = await aiHelperApi.rewrite({ text: chatInput })
-      if (response && response.rewritten_text) {
-        setChatInput(response.rewritten_text)
-      }
-    } catch (err) {
-      console.error('Rewrite failed:', err)
-    } finally {
-      setIsAiLoading(false)
-    }
+  // AI Handlers - Now delegate to Avatar AssistantBubble
+  const handleRewrite = () => {
+    if (!chatInput.trim()) return
+    onOpenAssistantWithAction?.('rewrite', chatInput)
   }
 
-  const handleSuggestReply = async () => {
-    if (!currentSessionId || isAiLoading) return
+  const handleSuggestReply = () => {
+    if (!currentSessionId) return
     const session = sessions.find(s => s.id === currentSessionId)
     if (!session || session.messages.length === 0) return
-
-    setIsAiLoading(true)
-    try {
-      // Format history
-      const history = session.messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [m.text]
-      }))
-
-      const response = await aiHelperApi.suggestReply({ history })
-      if (response && response.suggestions) {
-        // Simple parsing: split by newlines and remove numbering
-        const rawSuggestions = response.suggestions.split('\n')
-        const cleanSuggestions = rawSuggestions
-          .map(s => s.replace(/^\d+\.\s*/, '').trim())
-          .filter(s => s.length > 0)
-          .slice(0, 3) // Take top 3
-        setReplySuggestions(cleanSuggestions)
-        setTopicSuggestions([]) // Clear others
-      }
-    } catch (err) {
-      console.error('Suggest reply failed:', err)
-    } finally {
-      setIsAiLoading(false)
-    }
+    onOpenAssistantWithAction?.('response')
   }
 
-  const handleSuggestTopic = async () => {
-    if (!currentSessionId || isAiLoading) return
-    const session = sessions.find(s => s.id === currentSessionId)
-    if (!session) return
-
-    setIsAiLoading(true)
-    try {
-      // Format history
-      const history = session.messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [m.text]
-      }))
-
-      const response = await aiHelperApi.suggestTopic({ history })
-      if (response && response.suggestions) {
-        // Simple parsing
-        const rawSuggestions = response.suggestions.split('\n')
-        const cleanSuggestions = rawSuggestions
-          .map(s => s.replace(/^\d+\.\s*/, '').replace(/^- \s*/, '').trim())
-          .filter(s => s.length > 0)
-          .slice(0, 3)
-        setTopicSuggestions(cleanSuggestions)
-        setReplySuggestions([]) // Clear others
-      }
-    } catch (err) {
-      console.error('Suggest topic failed:', err)
-    } finally {
-      setIsAiLoading(false)
-    }
+  const handleSuggestTopic = () => {
+    onOpenAssistantWithAction?.('topic')
   }
 
-  const applySuggestion = (text: string) => {
-    setChatInput(text)
-    setReplySuggestions([])
-    setTopicSuggestions([])
-  }
-
-
-  // 渲染聊天详情内联（避免组件重新创建导致 input 失焦）
   const renderChatDetail = (session: PeerSession) => (
     <div className="flex-1 flex flex-col h-full">
-      {/* Header */}
       <header className="p-4 border-b border-black/5 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div
-            className={`w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center ${session.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'} ${!session.isAnonymous ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
+            className={`w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center ${
+              session.isAnonymous ? 'bg-purple-50' : 'bg-blue-50'
+            } ${!session.isAnonymous ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
             onClick={() => !session.isAnonymous && onViewProfile?.(session.partnerId)}
           >
             {session.partnerAvatar && session.partnerAvatar.length > 2 ? (
@@ -1101,7 +1142,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         </div>
       </header>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
         {session.messages.length === 0 ? (
           <div className="text-center py-16">
@@ -1111,7 +1151,13 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
           session.messages.map(m => (
             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className="space-y-2 max-w-[70%]">
-                <div className={`p-4 rounded-[1.5rem] font-bold text-sm leading-relaxed shadow-lg ${m.role === 'user' ? 'bg-black text-white rounded-br-none' : 'bg-gray-50 text-gray-800 rounded-bl-none border border-black/5'}`}>
+                <div
+                  className={`p-4 rounded-[1.5rem] font-bold text-sm leading-relaxed shadow-lg ${
+                    m.role === 'user'
+                      ? 'bg-black text-white rounded-br-none'
+                      : 'bg-gray-50 text-gray-800 rounded-bl-none border border-black/5'
+                  }`}
+                >
                   {m.text}
                 </div>
                 {m.role === 'peer' && m.emotionAnalysis && (
@@ -1133,62 +1179,64 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
       <div className="p-4 border-t border-black/5 bg-white relative">
-        {/* Suggestions Overlay */}
-        {(replySuggestions.length > 0 || topicSuggestions.length > 0) && (
-          <div className="absolute bottom-full left-4 right-4 mb-2 flex flex-col gap-2">
-            <div className="flex justify-between items-center px-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                {replySuggestions.length > 0 ? 'Suggested Replies' : 'Conversation Starters'}
-              </span>
-              <button
-                onClick={() => { setReplySuggestions([]); setTopicSuggestions([]) }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[...replySuggestions, ...topicSuggestions].map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => applySuggestion(s)}
-                  className="px-4 py-2 bg-white/90 backdrop-blur border border-accent/20 rounded-xl shadow-lg hover:bg-accent/5 hover:scale-[1.02] transition-all text-sm font-medium text-gray-700 text-left max-w-full truncate"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* AI Toolbar */}
         <div className="flex gap-2 mb-3 overflow-x-auto scrollbar-hide">
-          <button
-            onClick={handleRewrite}
-            disabled={!chatInput.trim() || isAiLoading}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            <span className={isAiLoading ? "animate-spin" : ""}>✨</span>
-            <span>Rewrite</span>
-          </button>
-          <button
-            onClick={handleSuggestReply}
-            disabled={isAiLoading || session.messages.length === 0}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            <span className={isAiLoading ? "animate-spin" : ""}>💡</span>
-            <span>Suggest Reply</span>
-          </button>
-          <button
-            onClick={handleSuggestTopic}
-            disabled={isAiLoading}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-          >
-            <span className={isAiLoading ? "animate-spin" : ""}>🗣️</span>
-            <span>Topic</span>
-          </button>
+          {isVip ? (
+            // VIP users: Full access to AI assistant buttons
+            <>
+              <button
+                onClick={handleRewrite}
+                disabled={!chatInput.trim()}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>✨</span>
+                <span>Rewrite</span>
+              </button>
+              <button
+                onClick={handleSuggestReply}
+                disabled={session.messages.length === 0}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>💡</span>
+                <span>Suggest Reply</span>
+              </button>
+              <button
+                onClick={handleSuggestTopic}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🗣️</span>
+                <span>Topic</span>
+              </button>
+            </>
+          ) : (
+            // Non-VIP users: Locked buttons with VIP L3 indicator
+            <>
+              <button
+                disabled
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🔒</span>
+                <span>Rewrite</span>
+                <span className="text-[8px] opacity-60">(VIP L3)</span>
+              </button>
+              <button
+                disabled
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🔒</span>
+                <span>Suggest Reply</span>
+                <span className="text-[8px] opacity-60">(VIP L3)</span>
+              </button>
+              <button
+                disabled
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg md:rounded-full text-[10px] font-black uppercase tracking-wider cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                <span>🔒</span>
+                <span>Topic</span>
+                <span className="text-[8px] opacity-60">(VIP L3)</span>
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center space-x-3">
@@ -1199,21 +1247,27 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             placeholder="Transmit into the sync..."
             className="flex-1 h-14 bg-gray-50 rounded-[1.2rem] px-6 border-none focus:ring-2 focus:ring-black text-sm font-bold transition-all placeholder:text-gray-300"
           />
-          <button onClick={sendPeerMessage} disabled={!chatInput.trim()} className="w-14 h-14 bg-black text-white rounded-[1.2rem] flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+          <button
+            onClick={sendPeerMessage}
+            disabled={!chatInput.trim()}
+            className="w-14 h-14 bg-black text-white rounded-[1.2rem] flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
           </button>
         </div>
       </div>
     </div>
   )
 
-  // 渲染会话列表项内联
   const renderConversationItem = (session: PeerSession, isActive: boolean) => (
     <button
       key={session.id}
       onClick={() => setCurrentSessionId(session.id)}
-      className={`w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-all text-left border-b border-black/5
-        ${isActive ? 'bg-accent/5 border-l-4 border-l-accent' : ''}`}
+      className={`w-full p-4 flex items-center gap-3 hover:bg-gray-50 transition-all text-left border-b border-black/5 ${
+        isActive ? 'bg-accent/5 border-l-4 border-l-accent' : ''
+      }`}
     >
       <div className="relative flex-shrink-0">
         <div className="w-12 h-12 rounded-xl overflow-hidden">
@@ -1229,9 +1283,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <p className="font-black text-sm truncate">
-            {session.isAnonymous ? '🎭 Anonymous' : `@${session.partnerName}`}
-          </p>
+          <p className="font-black text-sm truncate">{session.isAnonymous ? '🎭 Anonymous' : `@${session.partnerName}`}</p>
           {!session.isAnonymous && (
             <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 text-[8px] font-black uppercase rounded">
               Friend
@@ -1243,7 +1295,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
     </button>
   )
 
-  // 渲染好友列表项内联
   const renderFriendItem = (friend: FriendWithOnlineStatus) => (
     <button
       key={friend.id}
@@ -1265,9 +1316,7 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="font-black text-sm truncate">@{friend.username}</p>
-          {friend.isOnline && (
-            <span className="text-[10px] font-bold text-green-500 uppercase">Online</span>
-          )}
+          {friend.isOnline && <span className="text-[10px] font-bold text-green-500 uppercase">Online</span>}
         </div>
         <p className="text-xs text-gray-400 truncate">{friend.nickname || 'Send a message'}</p>
       </div>
@@ -1276,26 +1325,26 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header with Tabs */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="space-y-3">
           <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">SoulSync</h2>
           <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Direct emotional synchronization</p>
         </div>
 
-        {/* Tab Switcher */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl">
           <button
             onClick={() => setActiveTab('matching')}
-            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all
-              ${activeTab === 'matching' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-accent'}`}
+            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+              activeTab === 'matching' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-accent'
+            }`}
           >
             Matching
           </button>
           <button
             onClick={() => setActiveTab('social')}
-            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all relative
-              ${activeTab === 'social' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-accent'}`}
+            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all relative ${
+              activeTab === 'social' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-accent'
+            }`}
           >
             Social
             {sessions.length > 0 && activeTab !== 'social' && (
@@ -1307,15 +1356,11 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
         </div>
       </header>
 
-      {/* Content */}
       {activeTab === 'matching' ? (
         <MatchingContent />
       ) : (
-        /* Social 三栏布局 - 直接内联渲染避免组件重建导致 input 失焦 */
         <div className="h-[700px] bg-white rounded-[3rem] shadow-xl overflow-hidden border border-black/5 flex">
-          {/* 左侧栏 - 类别导航 */}
           <div className="w-20 bg-gray-50 border-r border-black/5 flex flex-col items-center py-6 space-y-4">
-            {/* 当前用户头像 */}
             <div className="w-14 h-14 rounded-2xl overflow-hidden bg-accent/10 flex items-center justify-center">
               {userAvatar ? (
                 <img src={getAvatarUrl(userAvatar)} alt="" className="w-full h-full object-cover" />
@@ -1325,24 +1370,26 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             </div>
             <div className="w-8 h-[1px] bg-gray-200" />
 
-            {/* 类别按钮 */}
             <button
               onClick={() => setSocialCategory('chats')}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${socialCategory === 'chats' ? 'bg-accent text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                socialCategory === 'chats' ? 'bg-accent text-white' : 'hover:bg-gray-100 text-gray-400'
+              }`}
               title="Chats"
             >
               <span className="text-xl">💬</span>
             </button>
             <button
               onClick={() => setSocialCategory('friends')}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${socialCategory === 'friends' ? 'bg-accent text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                socialCategory === 'friends' ? 'bg-accent text-white' : 'hover:bg-gray-100 text-gray-400'
+              }`}
               title="Friends"
             >
               <span className="text-xl">👥</span>
             </button>
           </div>
 
-          {/* 中间栏 - 会话/好友列表 */}
           <div className="w-80 border-r border-black/5 flex flex-col">
             <div className="p-4 border-b border-black/5">
               <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
@@ -1376,7 +1423,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
             </div>
           </div>
 
-          {/* 右侧栏 - 聊天详情 */}
           <div className="flex-1 flex flex-col">
             {currentSession ? (
               renderChatDetail(currentSession)
@@ -1396,8 +1442,6 @@ export default function SoulSyncView({ onInteract, userId, userAvatar, onViewPro
           </div>
         </div>
       )}
-
-      {/* Avatar Assistant Modal - REMOVED, now using AssistantBubble in AvatarCompanion */}
     </div>
   )
 }

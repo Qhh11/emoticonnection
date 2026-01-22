@@ -1,10 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Avatar3D } from '../../config/avatars'
 import { getAvatarUrl } from '../../config/userAvatars'
-import { SocialStats, Post, User, EmotionReport, getMediaUrl } from '../../services/api'
+import { SocialStats, Post, User, EmotionReport, getMediaUrl, userApi, CheckInHistoryItem } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
-
-
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
 const MOOD_DATA = [
@@ -19,21 +17,22 @@ const MOOD_DATA = [
   { label: 'Envy', color: '#2BA8A4', text: '#ffffff' },
 ]
 
-// Emotion color mapping for bar chart (matches EmotionReportModal)
-const EMOTION_COLORS: Record<string, string> = {
-  'joy': '#F9D849',
-  'sadness': '#3266B1',
-  'anger': '#D32F2F',
-  'anxiety': '#E67E22',
-  'bored': '#4B4E91',
-  'fear': '#9381BA',
-  'disgust': '#66B04C',
-  'embarrassment': '#D278A3',
-  'envy': '#2BA8A4',
+// 根据分数获取颜色（与 EmotionReportModal 保持一致）
+const getScoreColor = (score: number): string => {
+  if (score >= 0.6) return '#FF9500'   // 橙色 - Great
+  if (score >= 0.2) return '#F9D849'   // 黄色 - Good
+  if (score >= -0.2) return '#66B04C'  // 绿色 - Okay
+  if (score >= -0.6) return '#3266B1'  // 蓝色 - Low
+  return '#D32F2F'                      // 红色 - Bad
 }
 
-const getEmotionColor = (emotion: string): string => {
-  return EMOTION_COLORS[emotion.toLowerCase()] || '#808080'
+// 根据分数获取标签
+const getScoreLabel = (score: number): string => {
+  if (score >= 0.6) return 'Great'
+  if (score >= 0.2) return 'Good'
+  if (score >= -0.2) return 'Okay'
+  if (score >= -0.6) return 'Low'
+  return 'Bad'
 }
 
 export interface Theme {
@@ -192,7 +191,7 @@ const getTrendLabel = (direction: string): string => {
   return 'Stable'
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
 
@@ -200,37 +199,85 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
   const effectiveCheckIn = todayCheckIn || checkedInMood
   const [showThemeSelector, setShowThemeSelector] = useState(false)
 
-  // Generate current month calendar
-  const [calendarData] = useState(() => {
+  // Calendar state with check-in history
+  type CalendarDate = {
+    day: number
+    isToday: boolean
+    isPast: boolean
+    mood: typeof MOOD_DATA[0] | null
+  }
+
+  const [calendarData, setCalendarData] = useState<{ monthYear: string; dates: CalendarDate[]; startDayOffset: number }>(() => {
     const today = new Date()
     const year = today.getFullYear()
     const month = today.getMonth()
     const currentDay = today.getDate()
-
-    // Get month name
     const monthName = today.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-
-    // Get number of days in current month
     const daysInMonth = new Date(year, month + 1, 0).getDate()
 
-    const dates = []
-    for (let day = 1; day <= daysInMonth; day++) {
-      const isToday = day === currentDay
-      const isPast = day < currentDay
+    // 计算本月第一天是星期几 (0=Sunday, 1=Monday, ...)
+    const firstDayOfMonth = new Date(year, month, 1).getDay()
+    // 转换为 Mon=0, Tue=1, ... Sun=6 格式
+    const startDayOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1
 
+    const dates: CalendarDate[] = []
+    for (let day = 1; day <= daysInMonth; day++) {
       dates.push({
         day,
-        isToday,
-        isPast,
-        mood: null as typeof MOOD_DATA[0] | null // Explicit type cast to avoid 'never' inference
+        isToday: day === currentDay,
+        isPast: day < currentDay,
+        mood: null
       })
     }
 
-    return {
-      monthYear: `${monthName} ${year}`,
-      dates
-    }
+    return { monthYear: `${monthName} ${year}`, dates, startDayOffset }
   })
+
+  // Fetch check-in history and populate calendar
+  useEffect(() => {
+    if (!user?._id) return
+
+    const fetchCheckInHistory = async () => {
+      try {
+        const history = await userApi.getCheckInHistory(user._id, 31)
+
+        // Create a map of date -> mood
+        const today = new Date()
+        const year = today.getFullYear()
+        const month = today.getMonth()
+
+        const checkInMap = new Map<number, typeof MOOD_DATA[0]>()
+
+        history.forEach((item: CheckInHistoryItem) => {
+          const itemDate = new Date(item.date)
+          // Only consider check-ins from current month
+          if (itemDate.getFullYear() === year && itemDate.getMonth() === month) {
+            const day = itemDate.getDate()
+            // Find matching mood data
+            const moodData = MOOD_DATA.find(m =>
+              m.label.toLowerCase() === item.mood.toLowerCase()
+            )
+            if (moodData) {
+              checkInMap.set(day, moodData)
+            }
+          }
+        })
+
+        // Update calendar with check-in data
+        setCalendarData(prev => ({
+          ...prev,
+          dates: prev.dates.map(dateInfo => ({
+            ...dateInfo,
+            mood: checkInMap.get(dateInfo.day) || null
+          }))
+        }))
+      } catch (err) {
+        console.error('Failed to fetch check-in history:', err)
+      }
+    }
+
+    fetchCheckInHistory()
+  }, [user?._id])
 
   const currentMonth = calendarData.monthYear
   const calendarDates = calendarData.dates
@@ -269,6 +316,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
         </div>
 
         <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-center gap-10">
+          {/* User Profile Avatar */}
           <div className="relative group">
             <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] bg-gray-50 flex items-center justify-center shadow-inner border-4 border-white group-hover:scale-105 transition-transform duration-700 overflow-hidden">
               <img src={getAvatarUrl(avatar)} alt="" className="w-full h-full object-cover" />
@@ -355,7 +403,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 d.setDate(today.getDate() + mondayOffset + i)
                 weekDays.push({
                   date: d,
-                  dateStr: d.toISOString().split('T')[0] // YYYY-MM-DD format
+                  dateStr: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
                 })
               }
 
@@ -369,7 +417,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 })
               }
 
-              const todayStr = today.toISOString().split('T')[0]
+              const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
               return weekDays.map((day, i) => {
                 const data = dataByDate[day.dateStr]
@@ -377,9 +425,9 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                 const isFuture = day.date > today
 
                 if (data) {
-                  // Has data: show emotion color + height based on score
+                  // Has data: show score color + height based on score
                   const height = Math.max(20, ((data.avg_score + 1) / 2) * 100)
-                  const barColor = getEmotionColor(data.dominant_emotion)
+                  const barColor = getScoreColor(data.avg_score)
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1">
                       <div
@@ -389,7 +437,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
                           minHeight: '20px',
                           backgroundColor: barColor
                         }}
-                        title={`${data.dominant_emotion}: ${data.avg_score.toFixed(2)}`}
+                        title={`${getScoreLabel(data.avg_score)}: ${data.avg_score.toFixed(2)}`}
                       />
                     </div>
                   )
@@ -454,7 +502,21 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
             </div>
           )}
 
-          <div className="grid grid-cols-7 gap-2 z-10 max-h-[300px] overflow-y-auto scrollbar-hide">
+          {/* 星期表头 */}
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => (
+              <div key={i} className="text-center text-[10px] font-black uppercase tracking-wider text-gray-400">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2 z-10 max-h-[260px] overflow-y-auto scrollbar-hide">
+            {/* 空白占位 - 对齐到正确的星期几 */}
+            {Array.from({ length: calendarData.startDayOffset }).map((_, i) => (
+              <div key={`empty-${i}`} className="aspect-square" />
+            ))}
+
             {calendarDates.map((dateInfo, i) => {
               // Today - show check-in button
               if (dateInfo.isToday) {
@@ -532,7 +594,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
         <h4 className="text-3xl font-black tracking-tighter uppercase px-4">My Journals</h4>
         {diaryEntries.length > 0 ? (
           <div className="diary-stack px-4">
-            {diaryEntries.slice(0, 4).map((entry, i) => (
+            {diaryEntries.map((entry, i) => (
               <DiaryStackItem
                 key={i}
                 title={entry.title}

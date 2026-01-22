@@ -1,0 +1,51 @@
+{
+  "tourSteps": [
+    {
+      "step": 1,
+      "target": "syncMode",
+      "title": "SYNC MODE",
+      "text": "Hi! Let's start by picking your visibility. Anonymous for a mysterious start, or Public to let your unique Avatar shine!"
+    },
+    {
+      "step": 2,
+      "target": "yourRole",
+      "title": "YOUR ROLE",
+      "text": "Who are you today? A Seeker looking for support, or a Supporter ready to listen? Tell me your heart's current role."
+    },
+    {
+      "step": 3,
+      "target": "whatYouNeed",
+      "title": "WHAT DO YOU NEED?",
+      "text": "What do you need most right now? A quick Vent, some Advice, or just a quiet Companion? I'll help filter the right vibes."
+    },
+    {
+      "step": 4,
+      "target": "resonance",
+      "title": "SET YOUR RESONANCE",
+      "text": "Choose the Emotional Frequency you're on. Whether it's Joy or Awkward, we'll find someone truly on your wavelength."
+    },
+    {
+      "step": 5,
+      "target": "intensity",
+      "title": "INTENSITY",
+      "text": "How deep should we go? Adjust the Intensity—from a light-hearted chat to a deep, soulful conversation. You're in control."
+    },
+    {
+      "step": 6,
+      "target": "topic",
+      "title": "TOPIC",
+      "text": "Lastly, pick a Topic if you have something specific. If not, 'General' is perfect for a serendipitous encounter!"
+    }
+  ],
+  "returningUserCatchphrases": {
+    "BLUSHY": "Oh... you're back. Don't feel rushed, let's just find someone who makes you feel comfortable.",
+    "BLUEY": "Welcome back. Let's look for a soul that understands the quiet moments as much as you do.",
+    "GRUMPY": "Back again? Good. Let's find someone who's worth your time and won't give you any nonsense.",
+    "SCAREDY": "You're here! I was just getting a bit anxious... let's find a safe and kind person to talk to.",
+    "SNOOZY": "Hey... no need to overthink the settings. Let's just find a chill vibe and take it easy.",
+    "SUNNY": "Yay! You're back! I've got a great feeling about today—let's find you an amazing match!",
+    "ZIPPY": "Ready for action? Let's calibrate your resonance and get you connected immediately!",
+    "YUCKY": "Welcome back. Remember, your energy is a gift—only match with those who truly deserve it.",
+    "SPARKLE": "Back to the search? Let's find a connection that helps us reflect and grow together."
+  }
+}

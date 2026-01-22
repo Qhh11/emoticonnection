@@ -151,7 +151,7 @@
   }
 
   function authHeaders(extra = {}) {
-    const token = localStorage.getItem("access_token");
+    const token = sessionStorage.getItem("access_token");
     return {
       ...extra,
       ...(token ? { "Authorization": `Bearer ${token}` } : {})
@@ -159,8 +159,8 @@
   }
 
   function getCurrentUser() {
-    const id = localStorage.getItem("chat_user_id");
-    const name = localStorage.getItem("chat_username");
+    const id = sessionStorage.getItem("chat_user_id");
+    const name = sessionStorage.getItem("chat_username");
     return { id, name };
   }
 
@@ -168,7 +168,7 @@
     const { id, name } = getCurrentUser();
     document.getElementById("whoami").textContent = (id && name) ? `${name} (${id})` : "-";
 
-    const token = localStorage.getItem("access_token");
+    const token = sessionStorage.getItem("access_token");
     document.getElementById("tokenState").textContent = token ? "✅ present" : "❌ none";
     document.getElementById("tokenState").className = token ? "ok" : "err";
   }
@@ -194,7 +194,7 @@
 
   // --- MATCH APIs (token required) ---
   async function fetchStatus() {
-    const token = localStorage.getItem("access_token");
+    const token = sessionStorage.getItem("access_token");
     if (!token) throw new Error("Not logged in");
 
     // ✅ 后端统一：GET /api/match/status （不带 user_id）
@@ -218,7 +218,7 @@
   }
 
   async function doFindMatch() {
-    const token = localStorage.getItem("access_token");
+    const token = sessionStorage.getItem("access_token");
     if (!token) { alert("Please login first"); return; }
 
     // ✅ 不再传 user_id，让后端从 JWT 里取 me["id"]
@@ -272,7 +272,7 @@
   }
 
   async function doCancel() {
-    const token = localStorage.getItem("access_token");
+    const token = sessionStorage.getItem("access_token");
     if (!token) return;
 
     // ✅ 后端统一：POST /api/match/cancel （不带 user_id）
@@ -314,14 +314,14 @@
 
       // ✅ 这里假设后端 /auth/login 返回: { user_id, username(or nickname), access_token }
       // 你的 auth.py 目前返回的是 user_id + nickname，没有 access_token 的话，你需要后端补 token
-      localStorage.setItem("chat_user_id", data.user_id);
-      localStorage.setItem("chat_username", data.username || data.nickname || "user");
-      if (data.access_token) localStorage.setItem("access_token", data.access_token);
+      sessionStorage.setItem("chat_user_id", data.user_id);
+      sessionStorage.setItem("chat_username", data.username || data.nickname || "user");
+      if (data.access_token) sessionStorage.setItem("access_token", data.access_token);
 
       renderWhoami();
       msg.textContent = "Login OK";
       msg.className = "ok";
-      log(`Login OK as ${localStorage.getItem("chat_username")} (${data.user_id})`, "ok");
+      log(`Login OK as ${sessionStorage.getItem("chat_username")} (${data.user_id})`, "ok");
 
       // 可选：登录后自动拉一下 status，验证 token 是否能用
       try {
@@ -340,9 +340,9 @@
 
   document.getElementById("btnLogout").onclick = () => {
     stopPolling();
-    localStorage.removeItem("chat_user_id");
-    localStorage.removeItem("chat_username");
-    localStorage.removeItem("access_token");
+    sessionStorage.removeItem("chat_user_id");
+    sessionStorage.removeItem("chat_username");
+    sessionStorage.removeItem("access_token");
     renderWhoami();
     log("Logged out", "muted");
   };

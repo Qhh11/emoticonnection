@@ -12,15 +12,25 @@ def load_weaviate_manager():
         project_root = current_file.parents[5]  # backend 的父目录是 emoticonnection
         genai_app_path = project_root / "genai" / "app"
         
-        # 方法2: 如果方法1失败，尝试 WSL 路径
+        # 验证路径是否存在
         if not genai_app_path.exists():
-            wsl_path = Path("/mnt/c/Users/10857/Desktop/emoticonnection/genai/app")
-            if wsl_path.exists():
-                genai_app_path = wsl_path
-        
+            # 尝试回退查找 (如果目录结构不同)
+            # 查找 contains .env or .git 的父级
+            for parent in current_file.parents:
+                if (parent / "genai").exists():
+                    genai_app_path = parent / "genai" / "app"
+                    project_root = parent
+                    break
+
         if not genai_app_path.exists():
-            print(f"⚠️  genai/app path not found: {genai_app_path}")
-            return None
+            print(f"⚠️  genai/app path not found at: {genai_app_path}")
+            # Try one more guess - sibling to backend?
+            possible_path = Path.cwd().parent / "genai" / "app"
+            if possible_path.exists():
+                genai_app_path = possible_path
+                project_root = Path.cwd().parent
+            else:
+                return None
         
         # 加载项目根目录的 .env 文件
         env_path = project_root / ".env"

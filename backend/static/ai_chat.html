@@ -406,8 +406,8 @@
 
         // Generate persistent user ID for testing
         // Check Authentication
-        const userId = localStorage.getItem('chat_user_id');
-        const username = localStorage.getItem('chat_username');
+        const userId = sessionStorage.getItem('chat_user_id');
+        const username = sessionStorage.getItem('chat_username');
 
         if (!userId) {
             window.location.href = 'login.html';

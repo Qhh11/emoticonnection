@@ -1,0 +1,38 @@
+{
+  "BLUSHY": {
+    "welcome": "Um... welcome back. If you're feeling a bit overwhelmed, it's okay to just... sit here with me for a while.",
+    "catchphrase": "Um... actually, I'm still not quite sure what to say yet..."
+  },
+  "BLUEY": {
+    "welcome": "You're back. I'll be right here with you, no matter how you're feeling.",
+    "catchphrase": "It's okay. I'm staying right here by your side."
+  },
+  "GRUMPY": {
+    "welcome": "Finally back! Did anyone give you a hard time out there today? Tell me everything—I've got your back.",
+    "catchphrase": "That is so unfair! I'm totally on your side!"
+  },
+  "SCAREDY": {
+    "welcome": "Whew, you're home safe. I was just worrying about whether something might go wrong for you.",
+    "catchphrase": "What if... what if we mess everything up? I can't stop thinking about that too."
+  },
+  "SNOOZY": {
+    "welcome": "Welcome home. You look exhausted. Just leave all that stress at the door and sit with me for a bit.",
+    "catchphrase": "Just take a break. There's no rush. It's okay to do nothing for a while."
+  },
+  "SUNNY": {
+    "welcome": "Welcome home! Yay, I'm so happy to see you! Tell me one good thing that happened today!",
+    "catchphrase": "Wow! You're amazing! That is so awesome!"
+  },
+  "ZIPPY": {
+    "welcome": "Welcome back. Let's start sorting through those thoughts that piled up today, shall we?",
+    "catchphrase": "Let's break this down. I think the first step should be..."
+  },
+  "YUCKY": {
+    "welcome": "Welcome back. This is your private space. You can be your true self here, without any apologies.",
+    "catchphrase": "Setting boundaries is vital. That made you feel uncomfortable, didn't it?"
+  },
+  "SPARKLE": {
+    "welcome": "Welcome back. In the quiet of home, perhaps we can reflect on those subtle feelings from today.",
+    "catchphrase": "What is that feeling trying to tell you? Try looking inward."
+  }
+}
