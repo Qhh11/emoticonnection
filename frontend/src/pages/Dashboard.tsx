@@ -804,10 +804,10 @@ export default function Dashboard() {
             onCreatePostChange={(isOpen) => {
               setCommunityCreatePostOpen(isOpen)
             }}
-            onRequestPolish={(content) => {
+            onRequestPolish={level >= 3 ? (content) => {
               setAssistantAction({ action: 'rewrite', inputText: content })
               setShowAssistantBubble(true)
-            }}
+            } : undefined}
             onPolishReady={(fn) => { communityPolishRef.current = fn }}
             polishedContent={communityPolishedContent}
             onPolishedContentConsumed={() => setCommunityPolishedContent(null)}
