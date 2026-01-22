@@ -4,7 +4,7 @@ Collections: chat_sessions, chat_messages
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ChatSession(BaseModel):
@@ -41,8 +41,7 @@ class ChatSession(BaseModel):
     is_favorited: bool = Field(default=False)
     is_blocked: bool = Field(default=False)
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ChatMessage(BaseModel):

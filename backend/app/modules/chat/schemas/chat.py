@@ -9,7 +9,7 @@ This file defines all data structures for chat functionality:
 from datetime import datetime
 from typing import Union, Optional, List, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 
 
 class EmotionType(str, Enum):
@@ -131,7 +131,7 @@ class MessageCreate(BaseModel):
         "media_url": "/static/uploads/abc123.jpg"
     }
     """
-    sender_id: str = Field(..., description="Sender user ID", example=1)
+    sender_id: str = Field(..., description="Sender user ID", json_schema_extra={"example": 1})
     message_type: MessageType = Field(
         default=MessageType.TEXT,
         description="Type of message: text, emoji, image, or video"
@@ -141,7 +141,7 @@ class MessageCreate(BaseModel):
         description="Message content (text/emoji) or media URL (image/video)",
         min_length=1,
         max_length=5000,
-        example="Hello, how are you?"
+        json_schema_extra={"example": "Hello, how are you?"}
     )
     media_url: Optional[str] = Field(
         default=None,
@@ -178,14 +178,14 @@ class MessageOut(BaseModel):
         "created_at": "2025-01-25T10:31:00Z"
     }
     """
-    id: str = Field(..., description="Unique message ID (MongoDB ObjectId)", example="507f1f77bcf86cd799439014")
-    room_id: str = Field(..., description="Room ID this message belongs to (MongoDB ObjectId)", example="507f1f77bcf86cd799439012")
-    sender_id: str = Field(..., description="Sender user ID", example=1)
+    id: str = Field(..., description="Unique message ID (MongoDB ObjectId)", json_schema_extra={"example": "507f1f77bcf86cd799439014"})
+    room_id: str = Field(..., description="Room ID this message belongs to (MongoDB ObjectId)", json_schema_extra={"example": "507f1f77bcf86cd799439012"})
+    sender_id: str = Field(..., description="Sender user ID", json_schema_extra={"example": 1})
     message_type: MessageType = Field(
         default=MessageType.TEXT,
         description="Type of message: text, emoji, image, or video"
     )
-    content: str = Field(..., description="Message content", example="Hello, how are you?")
+    content: str = Field(..., description="Message content", json_schema_extra={"example": "Hello, how are you?"})
     media_url: Optional[str] = Field(
         default=None,
         description="URL to uploaded media file (for image/video messages)"
@@ -200,11 +200,13 @@ class MessageOut(BaseModel):
     )
     created_at: datetime = Field(..., description="Message creation time (ISO 8601 format)")
 
-    class Config:
-        """Pydantic configuration for JSON encoding"""
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    @field_serializer('created_at')
+    def serialize_dates(self, dt: datetime, _info):
+        return dt.isoformat()
 
 # models - Matching
 class MatchRequest(BaseModel):

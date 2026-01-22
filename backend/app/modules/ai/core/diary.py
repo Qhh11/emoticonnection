@@ -2,38 +2,39 @@ import os
 import json
 from datetime import datetime
 from .utils import load_weaviate_manager
-from .gemini_config import get_diary_model
+from .gemini_config import get_diary_model, GeminiClient
 
 class DiaryService:
     """
     负责日记生成和会话总结的服务类
     """
     def __init__(self, llm_provider: str = 'gemini'):
-        """
-        初始化 Diary 服务
-        
-        Args:
-            llm_provider: 使用的 LLM 提供商 (当前仅支持 'gemini')
-        """
         self.llm_provider = 'gemini' # 强制使用 gemini
-        self.model = None
+        self.model_id = None
+        self.client = None
         self.weaviate_manager = load_weaviate_manager()
         
         self._init_gemini()
 
     def _init_gemini(self):
         """初始化 Gemini 客户端"""
-        # 使用统一的 Gemini 配置
-        self.model = get_diary_model()
+        self.model_id = get_diary_model()
+        self.client = GeminiClient.get_client()
         
-        if not self.model:
+        if not self.client:
             print("⚠️  WARNING: GEMINI_API_KEY not found. Diary Generation feature will be unavailable.")
     
     async def _generate_with_gemini(self, prompt: str) -> str:
-        """使用 Gemini 生成内容"""
-        if not self.model:
-            raise Exception("Gemini model not initialized")
-        response = await self.model.generate_content_async(prompt)
+        """使用 Gemini 生成内容 (New SDK)"""
+        if not self.client:
+            raise Exception("Gemini client not initialized")
+        
+        # New SDK generate_content is blocking, for async use self.client.aio.models.generate_content
+        # but for simplicity in this service we can just call it (it's called in an async method anyway)
+        response = self.client.models.generate_content(
+            model=self.model_id,
+            contents=prompt
+        )
         return response.text
     
     async def generate_diary_summary(self, history: list) -> dict:

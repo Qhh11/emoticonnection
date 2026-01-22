@@ -208,6 +208,46 @@ const TranscriptBox = styled.div`
   font-weight: 500;
 `;
 
+const ConversationScroll = styled.div`
+  width: 100%;
+  max-width: 700px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+  mask-image: linear-gradient(to bottom, transparent, black 5%, black 95%, transparent);
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+`;
+
+const MessageRow = styled.div<{ $isUser: boolean }>`
+  display: flex;
+  justify-content: ${props => props.$isUser ? 'flex-end' : 'flex-start'};
+  width: 100%;
+`;
+
+const Bubble = styled.div<{ $isUser: boolean }>`
+  max-width: 80%;
+  padding: 0.8rem 1.2rem;
+  border-radius: ${props => props.$isUser ? '1.5rem 1.5rem 0 1.5rem' : '1.5rem 1.5rem 1.5rem 0'};
+  background: ${props => props.$isUser ? '#7c4dff' : '#f0f2f5'};
+  color: ${props => props.$isUser ? 'white' : '#333'};
+  font-size: 0.9rem;
+  line-height: 1.5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+`;
+
 interface VoiceChatOverlayProps {
     isOpen: boolean;
     onClose: () => void;
@@ -216,195 +256,72 @@ interface VoiceChatOverlayProps {
 }
 
 const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, embedded = false }) => {
-    const [status, setStatus] = useState<'idle' | 'listening' | 'recorded' | 'processing' | 'speaking'>('idle');
+    const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'speaking'>('idle');
     const [transcript, setTranscript] = useState<string>("");
-    const [aiResponseText, setAiResponseText] = useState<string>("");
-    const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
-    const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     const onTranscript = useCallback((text: string) => {
-        console.log('[VoiceChat] Received transcript from Gemini:', text);
-        if (text) {
-            setTranscript(text);
-        }
+        setTranscript(text);
     }, []);
 
     const onError = useCallback((error: string) => {
-        console.error('[VoiceChat] Gemini Live error:', error);
+        console.error('[VoiceChat] Error:', error);
         if (isOpen) setStatus('idle');
     }, [isOpen]);
 
     const onTurnComplete = useCallback(() => {
-        console.log('[VoiceChat] Gemini turn complete');
-        setStatus(prev => (prev === 'processing' || prev === 'speaking' ? 'idle' : prev));
+        setTranscript("");
     }, []);
 
     // Gemini Live hook
     const geminiLive = useGeminiLive({ onTranscript, onError, onTurnComplete });
 
+    // Sync UI status with hook status
     useEffect(() => {
-        if (geminiLive.isConnected) {
-            if (geminiLive.isSpeaking) {
+        if (geminiLive.status === 'idle') {
+            setStatus('idle');
+        } else if (geminiLive.status === 'connecting') {
+            setStatus('processing');
+        } else if (geminiLive.status === 'connected') {
+            if (geminiLive.isRecording) {
+                setStatus('listening');
+            } else if (geminiLive.isSpeaking) {
                 setStatus('speaking');
-            } else if (status === 'speaking' && !geminiLive.isSpeaking) {
+            } else {
                 setStatus('idle');
             }
+        } else if (geminiLive.status === 'error') {
+            setStatus('idle');
         }
-    }, [geminiLive.isConnected, geminiLive.isSpeaking, status]);
+    }, [geminiLive.status, geminiLive.isRecording, geminiLive.isSpeaking]);
 
     useEffect(() => {
         if (!isOpen) {
-            if (audioPlayerRef.current) {
-                audioPlayerRef.current.pause();
-                audioPlayerRef.current = null;
-            }
             setTranscript("");
-            setAiResponseText("");
-            setRecordedBlob(null);
             setStatus('idle');
+            geminiLive.disconnect();
         }
-    }, [isOpen]);
+    }, [isOpen, geminiLive]);
 
-    // Unmount cleanup
+    // Auto-scroll to bottom
     useEffect(() => {
-        return () => {
-            // Use refs or stable methods for cleanup
-            mediaRecorderRef.current?.stop();
-            // Note: geminiLive object might change, so we use a stable reference in the hook ideally
-            // but for now, we'll try to keep it simple
-        };
-    }, []);
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [geminiLive.conversation, transcript]);
 
-    const startListening = async () => {
-        try {
+    const handleToggleInteraction = async () => {
+        if (geminiLive.isRecording) {
+            geminiLive.stopStreaming();
+        } else {
             setTranscript("");
-            setAiResponseText("");
-            setRecordedBlob(null);
-
-            if (!geminiLive.isConnected) {
-                console.log('[VoiceChat] Connecting to Gemini Live...');
-                await geminiLive.connect();
-            }
-
-            console.log('[VoiceChat] Accessing microphone...');
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            // Check if MediaRecorder is supported
-            if (typeof MediaRecorder === 'undefined') {
-                throw new Error('MediaRecorder is not supported in this browser. Please use Chrome, Firefox or Edge.');
-            }
-
-            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
-                }
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                audioChunksRef.current = [];
-                setRecordedBlob(audioBlob);
-                setStatus('recorded');
-
-                try {
-                    console.log('[VoiceChat] Transcribing user recording...');
-                    const formData = new FormData();
-                    formData.append('file', audioBlob, 'voice.webm');
-
-                    const response = await fetch('/api/ai-chat/transcribe', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.text) {
-                            setTranscript(data.text);
-                        }
-                    }
-                } catch (err) {
-                    console.error('[VoiceChat] Error calling transcribe API:', err);
-                }
-
-                console.log('[VoiceChat] Audio recorded, ready to send.');
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            mediaRecorderRef.current = mediaRecorder;
-            setStatus('listening');
-        } catch (error) {
-            console.error('[VoiceChat] Error in startListening:', error);
-            const msg = error instanceof Error ? error.message : 'Unknown error starting microphone session';
-            alert(`Voice Chat Error: ${msg}`);
-            setStatus('idle');
+            await geminiLive.startStreaming();
         }
     };
 
-    const stopListening = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop();
-        }
-    };
-
-    const sendAudio = async () => {
-        if (recordedBlob) {
-            sendAudioBlob(recordedBlob);
-        }
-    };
-
-    const sendAudioBlob = async (blob: Blob) => {
-        try {
-            // Reconnect if needed
-            if (geminiLive.getReadyState?.() !== WebSocket.OPEN) {
-                console.log('[VoiceChat] Connection lost, attempting to reconnect before sending...');
-                await geminiLive.connect();
-            }
-
-            if (geminiLive.getReadyState?.() !== WebSocket.OPEN) {
-                throw new Error('Could not establish connection to Gemini. Please check your API key and internet.');
-            }
-
-            setStatus('processing');
-
-            const audioContext = new AudioContext({ sampleRate: 16000 });
-            const arrayBuffer = await blob.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-            const channelData = audioBuffer.getChannelData(0); // Mono
-            const pcmData = new Int16Array(channelData.length);
-            for (let i = 0; i < channelData.length; i++) {
-                const s = Math.max(-1, Math.min(1, channelData[i]));
-                pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            }
-
-            console.log(`[VoiceChat] Sending PCM data: ${pcmData.length} samples to Gemini...`);
-
-            // Manual VAD Control
-            geminiLive.sendActivityStart();
-            geminiLive.sendAudioData(pcmData);
-            geminiLive.sendActivityEnd();
-
-            await audioContext.close();
-            setRecordedBlob(null);
-        } catch (err) {
-            console.error('[VoiceChat] Error in sendAudioBlob:', err);
-            setStatus('recorded'); // Stay in recorded state so user can retry
-            alert(err instanceof Error ? err.message : 'FAILED to send audio. Please check connection.');
-        }
-    };
-
-    const handleClear = () => {
-        setRecordedBlob(null);
-        setTranscript("");
-        setAiResponseText("");
-        setStatus('idle');
+    const handleClose = () => {
         geminiLive.disconnect();
+        onClose();
     };
 
     if (!isOpen) return null;
@@ -413,23 +330,24 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, em
         <>
             <StatusText>
                 {status === 'listening' && "🎤 Listening..."}
-                {status === 'processing' && "💭 Processing..."}
+                {status === 'processing' && "💭 Connecting..."}
                 {status === 'speaking' && "🔊 AI is speaking..."}
-                {status === 'recorded' && "✅ Audio Recorded"}
-                {status === 'idle' && "Ready to chat"}
+                {status === 'idle' && (geminiLive.isConnected ? "Ready to chat" : "Click to Start")}
             </StatusText>
 
-            <MicrophoneCircle $status={status} onClick={status === 'idle' ? startListening : undefined}>
+            <MicrophoneCircle $status={status} onClick={handleToggleInteraction}>
                 {status === 'listening' ? (
                     <VisualizerContainer key="listening-viz">
                         {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
                             <Bar key={i} $delay={delay} />
                         ))}
                     </VisualizerContainer>
-                ) : status === 'recorded' ? (
-                    <MicIcon key="recorded-icon" $status={status} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z" fill="currentColor" />
-                    </MicIcon>
+                ) : status === 'speaking' ? (
+                    <VisualizerContainer key="speaking-viz">
+                        {[0, 0.1, 0.2, 0.1, 0].map((delay, i) => (
+                            <Bar key={i} $delay={delay} style={{ background: '#4cffaf' }} />
+                        ))}
+                    </VisualizerContainer>
                 ) : (
                     <MicIcon key="status-icon" $status={status} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 14C14.2091 14 16 12.2091 16 10V4C16 1.79086 14.2091 0 12 0C9.79086 0 8 1.79086 8 4V10C8 12.2091 9.79086 14 12 14Z" fill="currentColor" />
@@ -439,58 +357,38 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, em
                 )}
             </MicrophoneCircle>
 
+            <ConversationScroll ref={scrollRef}>
+                {geminiLive.conversation.map((msg, i) => (
+                    <MessageRow key={i} $isUser={msg.role === 'user'}>
+                        <Bubble $isUser={msg.role === 'user'}>{msg.content}</Bubble>
+                    </MessageRow>
+                ))}
+                {(transcript || status === 'speaking') && (
+                    <MessageRow $isUser={status !== 'speaking'}>
+                        <Bubble $isUser={status !== 'speaking'}>
+                            {transcript || "..."}
+                        </Bubble>
+                    </MessageRow>
+                )}
+            </ConversationScroll>
+
             <ControlsRow>
-                {status === 'idle' ? (
-                    <ActionButton key="start-btn" onClick={startListening}>
-                        ⚡ Start Live API Interaction
+                {!geminiLive.isRecording ? (
+                    <ActionButton key="start-btn" onClick={handleToggleInteraction} disabled={geminiLive.status === 'connecting'}>
+                        {geminiLive.status === 'connecting' ? 'Connecting...' : '⚡ Start Real-time Chat'}
                     </ActionButton>
-                ) : status === 'listening' ? (
-<<<<<<< HEAD
-                    <ActionButton key="stop-btn" color="#f44336" onClick={stopListening}>
-=======
-                    <ActionButton color="#f44336" $transparent onClick={stopListening}>
->>>>>>> e2e77d8589adf907f5a3aa336f4b922612f17eab
-                        ⏹ Stop Recording
-                    </ActionButton>
-                ) : status === 'recorded' ? (
-                    <React.Fragment key="action-group">
-                        <ActionButton key="send-btn" color="#4caf50" onClick={sendAudio}>
-                            🚀 Send to AI
-                        </ActionButton>
-                        <ActionButton key="clear-btn" color="#999" onClick={handleClear}>
-                            🗑 Clear / Re-record
-                        </ActionButton>
-                    </React.Fragment>
                 ) : (
-<<<<<<< HEAD
-                    <ActionButton key="end-btn" color="#f44336" onClick={handleClear}>
-=======
-                    <ActionButton color="#f44336" $transparent onClick={handleClear}>
->>>>>>> e2e77d8589adf907f5a3aa336f4b922612f17eab
+                    <ActionButton key="stop-btn" color="#f44336" onClick={handleToggleInteraction}>
+                        ⏹ Stop Interaction
+                    </ActionButton>
+                )}
+
+                {geminiLive.isConnected && (
+                    <ActionButton key="end-btn" $transparent color="#999" onClick={() => geminiLive.disconnect()}>
                         🛑 End Session
                     </ActionButton>
                 )}
             </ControlsRow>
-
-            {(transcript || aiResponseText || (status === 'recorded' && !transcript)) && (
-                <TranscriptBox>
-                    {status === 'recorded' && !transcript && (
-                        <div style={{ opacity: 0.5, fontStyle: 'italic' }}>
-                            Transcribing your voice...
-                        </div>
-                    )}
-                    {transcript && (
-                        <div style={{ fontStyle: 'italic', opacity: 0.7, marginBottom: '0.5rem' }}>
-                            "{transcript}"
-                        </div>
-                    )}
-                    {aiResponseText && (
-                        <div style={{ color: '#333', fontWeight: 600 }}>
-                            {aiResponseText}
-                        </div>
-                    )}
-                </TranscriptBox>
-            )}
         </>
     );
 
@@ -498,7 +396,7 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, em
         return (
             <ModalContainer $embedded={true}>
                 <Header>
-                    <div style={{ fontWeight: 700, color: '#333' }}>Gemini Live AI</div>
+                    <div style={{ fontWeight: 700, color: '#333' }}>Gemini Real-time Voice</div>
                 </Header>
                 <ContentArea>
                     {renderContent()}
@@ -508,11 +406,11 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, em
     }
 
     return (
-        <Overlay onClick={onClose}>
+        <Overlay onClick={handleClose}>
             <ModalContainer onClick={(e) => e.stopPropagation()}>
                 <Header>
-                    <div style={{ fontWeight: 700, color: '#333' }}>Gemini Live AI</div>
-                    <CloseButton onClick={onClose}>&times;</CloseButton>
+                    <div style={{ fontWeight: 700, color: '#333' }}>Gemini Real-time Voice</div>
+                    <CloseButton onClick={handleClose}>&times;</CloseButton>
                 </Header>
                 <ContentArea>
                     {renderContent()}

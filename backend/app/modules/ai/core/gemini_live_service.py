@@ -7,18 +7,18 @@ from fastapi import WebSocket, WebSocketDisconnect
 from google import genai
 from dotenv import load_dotenv
 
+from app.modules.ai.core.gemini_config import GeminiClient, GeminiModels
+
 # Load env variables
 load_dotenv()
 
 class GeminiLiveService:
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment")
-        
-        # Use v1alpha as per documentation for native audio features
-        self.client = genai.Client(api_key=self.api_key, http_options={"api_version": "v1alpha"})
-        self.model = "gemini-2.5-flash-native-audio-preview-12-2025"
+        self.client = GeminiClient.get_client()
+        if not self.client:
+            raise ValueError("Failed to initialize Gemini Client")
+            
+        self.model = GeminiModels.NATIVE_AUDIO
         
         # Configuration matches the user's request
         self.config = {
@@ -44,53 +44,62 @@ class GeminiLiveService:
         """
         await websocket.accept()
         print("[GeminiLive] WebSocket connection accepted")
+        
+        # Local conversation log for this session
+        conversation_log = []
 
         try:
-            # Connect to Gemini Live
+            # Connect to Gemini Live session
             async with self.client.aio.live.connect(model=self.model, config=self.config) as session:
                 print(f"[GeminiLive] Connected to Gemini session")
 
-                # Task to receive audio/text from Client and send to Gemini
                 async def receive_from_client():
                     try:
                         while True:
-                            # We expect the frontend to send either raw bytes (audio) or JSON (control)
-                            # However, FastAPI's receive() can handle both if we just use receive_message logic,
-                            # or we can enforce a protocol.
-                            # Let's support:
-                            # - Binary Message -> 16kHz PCM Audio
-                            # - Text Message -> JSON (config, interruption, etc.)
+                            # Check if websocket is still connected
+                            if websocket.client_state.value == 3: # 3 is DISCONNECTED
+                                break
+                                
+                            try:
+                                message = await websocket.receive()
+                            except RuntimeError as re:
+                                if "disconnect message has been received" in str(re):
+                                    break
+                                raise
                             
-                            message = await websocket.receive()
-                            
+                            # Binary Message -> 16kHz PCM Audio
                             if "bytes" in message and message["bytes"]:
-                                # Forward audio to Gemini
-                                # print(f"Audio chunk: {len(message['bytes'])}")
                                 await session.send_realtime_input(
                                     audio={"data": message["bytes"], "mime_type": "audio/pcm;rate=16000"}
                                 )
                             
+                            # Text Message -> JSON (text input or control)
                             elif "text" in message and message["text"]:
                                 try:
                                     data = json.loads(message["text"])
-                                    # Handle JSON commands if any
-                                    # For example, manual interruption or text input
                                     if "text" in data:
+                                        text_content = data["text"]
+                                        conversation_log.append({"role": "user", "content": text_content})
                                         await session.send_client_content(
-                                            turns=[{"role": "user", "parts": [{"text": data["text"]}]}],
+                                            turns=[{"role": "user", "parts": [{"text": text_content}]}],
                                             turn_complete=True
                                         )
                                 except json.JSONDecodeError:
-                                    print("[GeminiLive] Invalid JSON from client")
+                                    text_content = message["text"]
+                                    conversation_log.append({"role": "user", "content": text_content})
+                                    await session.send_client_content(
+                                        turns=[{"role": "user", "parts": [{"text": text_content}]}],
+                                        turn_complete=True
+                                    )
 
-                    except WebSocketDisconnect:
-                        print("[GeminiLive] Client disconnected")
+                    except (WebSocketDisconnect, asyncio.CancelledError):
+                        pass
                     except Exception as e:
-                        print(f"[GeminiLive] Error in receive_from_client: {e}")
+                        print(f"[GeminiLive] receive_from_client error: {e}")
 
-                # Task to receive from Gemini and send to Client
                 async def send_to_client():
                     try:
+                        current_ai_turn = ""
                         async for response in session.receive():
                             server_content = response.server_content
                             if server_content is None:
@@ -99,33 +108,64 @@ class GeminiLiveService:
                             # 1. Handle Audio & Text Generation
                             if server_content.model_turn:
                                 for part in server_content.model_turn.parts:
-                                    if part.inline_data:
-                                        # Send Audio Bytes directly
+                                    if part.inline_data and websocket.client_state.value != 3:
                                         await websocket.send_bytes(part.inline_data.data)
                                     
                                     if part.text:
-                                        # Send Text as JSON
-                                        await websocket.send_json({"type": "text", "content": part.text})
+                                        current_ai_turn += part.text
+                                        if websocket.client_state.value != 3:
+                                            await websocket.send_json({"type": "text", "content": part.text})
 
                             # 2. Handle Interruption (VAD)
                             if server_content.interrupted:
                                 print("[GeminiLive] Interrupted by user (VAD)")
-                                await websocket.send_json({"type": "interrupted"})
+                                if current_ai_turn:
+                                    conversation_log.append({"role": "ai", "content": current_ai_turn + " [Interrupted]"})
+                                    current_ai_turn = ""
+                                if websocket.client_state.value != 3:
+                                    await websocket.send_json({"type": "interrupted"})
 
                             # 3. Handle Turn Complete
                             if server_content.turn_complete:
-                                # await websocket.send_json({"type": "turn_complete"})
-                                pass
+                                if current_ai_turn:
+                                    conversation_log.append({"role": "ai", "content": current_ai_turn})
+                                    current_ai_turn = ""
+                                if websocket.client_state.value != 3:
+                                    await websocket.send_json({"type": "turn_complete"})
 
+                    except asyncio.CancelledError:
+                        pass
                     except Exception as e:
-                        print(f"[GeminiLive] Error in send_to_client: {e}")
+                        print(f"[GeminiLive] send_to_client error: {e}")
 
                 # Run both tasks concurrently
-                await asyncio.gather(receive_from_client(), send_to_client())
+                receive_task = asyncio.create_task(receive_from_client())
+                send_task = asyncio.create_task(send_to_client())
+                
+                # Wait for either task to complete
+                done, pending = await asyncio.wait(
+                    [receive_task, send_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                # Cancel the other task
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                
+                if conversation_log:
+                    print(f"[GeminiLive] Session ended. Captured {len(conversation_log)} turns.")
 
         except Exception as e:
-            print(f"[GeminiLive] Connection failed: {e}")
+            # Outer block catches session errors
+            if not isinstance(e, (asyncio.CancelledError, WebSocketDisconnect)):
+                print(f"[GeminiLive] Session exception: {e}")
+        finally:
             try:
-                await websocket.close(code=1011, reason=str(e))
+                if websocket.client_state.value != 3:
+                     await websocket.close(code=1000)
             except:
                 pass

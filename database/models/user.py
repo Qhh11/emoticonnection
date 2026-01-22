@@ -4,7 +4,7 @@ Collection: users
 """
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 
 class MBTIProfile(BaseModel):
@@ -57,9 +57,9 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
     
-    class Config:
-        validate_by_name = True
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "username": "user123",
                 "email": "user@example.com",
@@ -70,3 +70,4 @@ class User(BaseModel):
                 "level": 2
             }
         }
+    )

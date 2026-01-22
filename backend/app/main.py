@@ -46,11 +46,13 @@ async def lifespan(app: FastAPI):
     print("🚀 EmotiConnect Chat API Starting...")
     print("=" * 60)
     print("📝 API Documentation: http://localhost:8000/docs")
-    print("🔌 WebSocket Chat: ws://localhost:8000/ws/rooms/{room_id}")
-    print("💬 HTTP Chat API: http://localhost:8000/api/chat")
-    print("🎯 Matching API: http://localhost:8000/api/match")
+    print("🔌 WebSocket Endpoint: ws://localhost:8000/ws/rooms/{room_id}")
+    print("💬 HTTP API: http://localhost:8000/api/chat")
     print("🤖 AI Chat API: http://localhost:8000/api/ai-chat")
     print("😊 Emotion API: http://localhost:8000/api/emotion")
+    print("📓 Diary API: http://localhost:8000/api/diary")
+    print("🌐 Chat test page:  http://localhost:8000/static/chat_test.html")
+    print("🌐 Match test page:  http://localhost:8000/static/match_test.html")
     print("=" * 60)
 
     yield
@@ -58,6 +60,7 @@ async def lifespan(app: FastAPI):
     # Close MongoDB connection on shutdown
     await close_mongodb_connection()
     print("\n👋 EmotiConnect Chat API Shutting down...")
+    print("❌ MongoDB connection closed")
 
 
 # ============================================================================
@@ -157,50 +160,3 @@ def health_check():
     ENDPOINT: GET /health
     """
     return {"status": "healthy"}
-
-
-# ============================================================================
-# Startup Event
-# ============================================================================
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Runs when the server starts
-
-    Good place for:
-    - Database connection initialization
-    - Loading configuration
-    - Starting background tasks
-    """
-    # Connect to MongoDB
-    await connect_to_mongodb()
-
-    print("=" * 60)
-    print("🚀 EmotiConnect Chat API Starting...")
-    print("=" * 60)
-    print("📝 API Documentation: http://localhost:8000/docs")
-    print("🔌 WebSocket Endpoint: ws://localhost:8000/ws/rooms/{room_id}")
-    print("💬 HTTP API: http://localhost:8000/api/chat")
-    print("🤖 AI Chat API: http://localhost:8000/api/ai-chat")
-    print("😊 Emotion API: http://localhost:8000/api/emotion")
-    print("📓 Diary API: http://localhost:8000/api/diary")
-    print("🌐 Chat test page:  http://localhost:8000/static/chat_test.html")
-    print("🌐 Match test page:  http://localhost:8000/static/match_test.html")
-    print("=" * 60)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Runs when the server stops
-
-    Good place for:
-    - Closing database connections
-    - Cleaning up resources
-    """
-    # Close MongoDB connection
-    await close_mongodb_connection()
-
-    print("\n👋 EmotiConnect Chat API Shutting down...")
-

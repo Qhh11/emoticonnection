@@ -28,6 +28,7 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str 
+    history: List[dict] = [] # Conversation history
     audio_url: Optional[str] = None # TTS audio path
     transcribed_text: Optional[str] = None # If STT was used
 
@@ -138,7 +139,7 @@ async def chat(
             {"role": msg.get("role"), "parts": msg.get("parts")} for msg in history_list
         ]
         
-        response_text = await ai_service.chat_with_ai(
+        response_text, updated_history = await ai_service.chat_with_ai(
             message=final_message, 
             history=history_data, 
             user_id=user_id,
@@ -166,6 +167,7 @@ async def chat(
 
         return ChatResponse(
             response=response_text,
+            history=updated_history,
             audio_url=audio_url,
             transcribed_text=transcribed_text
         )

@@ -4,7 +4,7 @@ Collection: diary_entries
 """
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class EmotionTags(BaseModel):
@@ -48,9 +48,9 @@ class DiaryEntry(BaseModel):
     # 是否已删除
     is_deleted: bool = Field(default=False)
     
-    class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "user_id": "507f1f77bcf86cd799439011",
                 "content": "今天考试没考好，感觉很沮丧...",
@@ -64,3 +64,4 @@ class DiaryEntry(BaseModel):
                 "desired_support_type": "倾听"
             }
         }
+    )

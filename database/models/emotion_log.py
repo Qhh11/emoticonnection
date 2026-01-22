@@ -4,7 +4,7 @@ Collections: emotion_logs, emotion_analytics
 """
 from datetime import datetime
 from typing import Optional, List, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class EmotionLog(BaseModel):
@@ -24,8 +24,7 @@ class EmotionLog(BaseModel):
     # 时间
     recorded_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EmotionAnalytics(BaseModel):
@@ -55,5 +54,4 @@ class EmotionAnalytics(BaseModel):
     # 生成时间
     generated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)

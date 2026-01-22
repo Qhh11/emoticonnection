@@ -7,7 +7,7 @@ Similar to Twitter/Instagram Follow mechanism
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class Following(BaseModel):
@@ -24,15 +24,16 @@ class Following(BaseModel):
     # Optional: Follow source/reason
     source: Optional[str] = Field(None, description="profile/search/recommendation/match")
 
-    class Config:
-        allow_population_by_field_name = True
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "follower_id": "69444eed764be66c80bfdfdf",
                 "following_id": "69444eed764be66c80bfdfe0",
                 "source": "profile"
             }
         }
+    )
 
 
 # ============================================================================

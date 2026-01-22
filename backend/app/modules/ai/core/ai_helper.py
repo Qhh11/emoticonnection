@@ -1,5 +1,5 @@
-from typing import Optional
-from .gemini_config import get_helper_model
+from typing import Optional, List
+from .gemini_config import get_helper_model, GeminiClient
 
 class AIHelperService:
     """
@@ -7,25 +7,32 @@ class AIHelperService:
     Distinct from the main empathetic chat companion.
     """
     def __init__(self):
-        self.model = None
+        self.client = None
+        self.model_id = None
+        self.system_instruction = "You an helpful AI assistant."
         self._init_gemini()
     
     def _init_gemini(self):
-        """Initialize Gemini client with a neutral/helpful instruction"""
-        # We use a general helpful system instruction or none for these utility tasks
-        self.model = get_helper_model("You an helpful AI assistant.")
+        """Initialize Gemini client"""
+        self.model_id = get_helper_model()
+        self.client = GeminiClient.get_client()
         
-        if not self.model:
+        if not self.client:
             print("⚠️  WARNING: GEMINI_API_KEY not found in AIHelperService.")
 
     async def _generate_text(self, prompt: str) -> str:
         """Helper to generate text from Gemini with a single prompt"""
-        if not self.model:
+        if not self.client:
             return "AI service unavailable."
         try:
-            # For utility tasks, we don't need history, just a fresh chat or direct generation
-            chat = self.model.start_chat(history=[])
-            response = await chat.send_message_async(prompt)
+            from google.genai import types
+            response = self.client.models.generate_content(
+                model=self.model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=self.system_instruction
+                )
+            )
             return response.text
         except Exception as e:
             print(f"❌ Gemini Utils Error: {e}")
