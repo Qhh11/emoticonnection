@@ -611,77 +611,42 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                   )}
                 </div>
 
-                {/* Triggers */}
+                {/* Emotion Words */}
                 <div className="bg-gray-50 rounded-2xl p-5">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Main Triggers</h3>
-                  <div className="space-y-3">
-                    {report.triggers.slice(0, 3).map((trigger, i) => {
-                      const icons: Record<string, string> = {
-                        'work': '💼',
-                        'relationships': '💕',
-                        'health': '🏃',
-                        'finance': '💰',
-                        'family': '👨‍👩‍👧',
-                        'social': '🤝',
-                        'academic': '📚',
-                        'personal_growth': '🌱',
-                        'daily_routine': '☀️',
-                        'unexpected_events': '⚡'
-                      }
-                      const icon = icons[trigger.trigger_type.toLowerCase()] || '📌'
-                      return (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className="text-xl">{icon}</span>
-                          <div className="flex-1">
-                            <div className="flex justify-between text-[11px] font-black">
-                              <span className="capitalize">{trigger.trigger_type.replace('_', ' ')}</span>
-                              <span className="text-gray-400">{trigger.frequency}x</span>
-                            </div>
-                            <p className="text-[9px] text-gray-400 truncate">
-                              {trigger.associated_emotions.join(', ')}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {report.triggers.length === 0 && (
-                      <p className="text-[11px] text-gray-400">No trigger data yet</p>
-                    )}
-                  </div>
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Emotion Words</h3>
+                  {(() => {
+                    const words = report.word_cloud?.words || {}
+                    const maxCount = Math.max(...Object.values(words).map(Number), 1)
+                    const wordEntries = Object.entries(words).slice(0, 12)
+                    if (wordEntries.length === 0) {
+                      return <p className="text-[11px] text-gray-400">No emotion words yet</p>
+                    }
+                    return (
+                      <div className="flex flex-wrap gap-1.5">
+                        {wordEntries.map(([word, count]) => {
+                          const bgOpacity = Math.min(1, 0.3 + (Number(count) / maxCount) * 0.7)
+                          return (
+                            <span
+                              key={word}
+                              className="px-2 py-1 rounded-full font-bold relative"
+                              style={{ fontSize: '11px', color: 'var(--accent-text)' }}
+                            >
+                              <span
+                                className="absolute inset-0 rounded-full"
+                                style={{
+                                  backgroundColor: 'var(--accent-color)',
+                                  opacity: bgOpacity
+                                }}
+                              />
+                              <span className="relative">{word}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
-
-              {/* Word Cloud */}
-              {report.word_cloud?.top_emotions && report.word_cloud.top_emotions.length > 0 && (() => {
-                const words = report.word_cloud?.words || {}
-                const maxCount = Math.max(...Object.values(words).map(Number), 1)
-                return (
-                  <div className="bg-gray-50 rounded-2xl p-5">
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">Emotion Words</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(words).slice(0, 15).map(([word, count]) => {
-                        const bgOpacity = Math.min(1, 0.3 + (Number(count) / maxCount) * 0.7)
-                        return (
-                          <span
-                            key={word}
-                            className="px-3 py-1.5 rounded-full font-bold relative"
-                            style={{ fontSize: '14px', color: 'var(--accent-text)' }}
-                          >
-                            <span
-                              className="absolute inset-0 rounded-full"
-                              style={{
-                                backgroundColor: 'var(--accent-color)',
-                                opacity: bgOpacity
-                              }}
-                            />
-                            <span className="relative">{word}</span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
 
               {/* Key Insights */}
               {report.key_insights && report.key_insights.length > 0 && (
