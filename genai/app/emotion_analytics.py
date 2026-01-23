@@ -47,7 +47,6 @@ except ImportError:
 from google.genai import types
 from google import genai
 
-from langchain_core.prompts import PromptTemplate
 import weaviate.classes.query as wq
 from weaviate.classes.query import Filter
 

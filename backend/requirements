@@ -411,9 +411,6 @@ kaldiio==2.18.1
 keyring==23.5.0
 kiwisolver==1.4.5
 kubernetes==12.0.1
-langchain==0.3.25
-langchain-core==0.3.60
-langchain-text-splitters==0.3.8
 langsmith==0.3.42
 launchpadlib==1.10.16
 lazr.restfulclient==0.14.4
