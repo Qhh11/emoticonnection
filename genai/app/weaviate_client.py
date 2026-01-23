@@ -1,6 +1,6 @@
 import os
 import weaviate
-from weaviate.auth import Auth
+from weaviate.classes.init import Auth
 from weaviate.client import WeaviateClient
 from typing import List, Dict, Any, Optional
 from weaviate.classes.query import MetadataQuery 
