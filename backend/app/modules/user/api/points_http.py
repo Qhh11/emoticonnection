@@ -24,7 +24,8 @@ from crud.check_in_crud import (  # type: ignore
     get_check_in_by_date,
     get_check_in_history,
     get_user_points,
-    add_points_to_user
+    add_points_to_user,
+    update_check_in
 )
 
 
@@ -172,3 +173,37 @@ async def get_today_check_in(user_id: str):
         "checked_in": check_in is not None,
         "check_in": check_in
     }
+
+
+@router.put("/{user_id}/check-in", response_model=CheckInResponse)
+async def update_today_check_in(user_id: str, request: CheckInRequest):
+    """
+    Update today's check-in mood (no additional points)
+
+    PUT /api/users/{user_id}/check-in
+
+    Request:
+    {
+        "mood": "Joy"
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "心情已更新",
+        "points": 0,
+        "total_points": 160
+    }
+    """
+    today = date.today().isoformat()
+    result = update_check_in(user_id, request.mood, today)
+
+    # Get current total points
+    user_points = get_user_points(user_id)
+
+    return CheckInResponse(
+        success=result["success"],
+        message=result["message"],
+        points=0,  # No points for update
+        total_points=user_points["points"]
+    )

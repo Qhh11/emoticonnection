@@ -615,6 +615,25 @@ export default function Dashboard() {
     }
   }
 
+  const handleUpdateCheckIn = async (mood: string): Promise<boolean> => {
+    if (!user?._id) return false
+    try {
+      const response = await userApi.updateCheckIn(user._id, { mood })
+      if (response.success) {
+        // Update todayCheckIn state (no points change for update)
+        const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === mood.toLowerCase())
+        if (moodData) {
+          setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text })
+        }
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('Failed to update check-in:', err)
+      return false
+    }
+  }
+
   const handleSelectAvatar = (avatar: Avatar3D) => {
     setSelectedAvatar(avatar)
     sessionStorage.setItem('selectedAvatar', JSON.stringify(avatar))
@@ -749,6 +768,7 @@ export default function Dashboard() {
           level={level}
           avatar={userAvatar}
           onCheckIn={handleCheckIn}
+          onUpdateCheckIn={handleUpdateCheckIn}
           onThemeChange={setCurrentTheme}
           currentTheme={currentTheme}
           onOpenAvatarGallery={() => setShowAvatarGallery(true)}

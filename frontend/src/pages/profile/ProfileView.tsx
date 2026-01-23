@@ -144,6 +144,7 @@ interface ProfileViewProps {
   level: number
   avatar: string
   onCheckIn: (mood: string) => Promise<boolean>
+  onUpdateCheckIn: (mood: string) => Promise<boolean>
   onThemeChange: (theme: Theme) => void
   currentTheme: Theme
   onOpenAvatarGallery: () => void
@@ -191,7 +192,7 @@ const getTrendLabel = (direction: string): string => {
   return 'Stable'
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
 
@@ -283,10 +284,22 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
   const calendarDates = calendarData.dates
 
   const handleCheckIn = async (mood: typeof MOOD_DATA[0]) => {
-    const success = await onCheckIn(mood.label)
+    let success: boolean
+    if (effectiveCheckIn) {
+      // Already checked in today, update mood
+      success = await onUpdateCheckIn(mood.label)
+    } else {
+      // First check-in of the day
+      success = await onCheckIn(mood.label)
+    }
     if (success) {
       setCheckedInMood(mood)
       setShowMoodPicker(false)
+      // Update calendar to reflect new mood
+      setCalendarData(prev => ({
+        ...prev,
+        dates: prev.dates.map(d => d.isToday ? { ...d, mood } : d)
+      }))
     }
   }
 
@@ -518,11 +531,18 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onThemeC
             ))}
 
             {calendarDates.map((dateInfo, i) => {
-              // Today - show check-in button
+              // Today - show check-in button (always clickable to allow mood update)
               if (dateInfo.isToday) {
                 return (
-                  <button key={i} disabled={!!effectiveCheckIn} onClick={() => !effectiveCheckIn && setShowMoodPicker(!showMoodPicker)} className={`w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-500 border-2 text-[12px] ${effectiveCheckIn ? 'border-transparent shadow-lg font-black' : 'bg-transparent border-accent text-accent hover:bg-accent hover:text-white hover:scale-105'}`} style={{ backgroundColor: effectiveCheckIn?.color || 'transparent', color: effectiveCheckIn?.text || 'inherit' }}>
-                    {effectiveCheckIn ? dateInfo.day : <span className="text-lg">+</span>}
+                  <button key={i} onClick={() => setShowMoodPicker(!showMoodPicker)} className={`group w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-500 border-2 text-[12px] ${effectiveCheckIn ? 'border-transparent shadow-lg font-black hover:opacity-90' : 'bg-transparent border-accent text-accent hover:bg-accent hover:text-white hover:scale-105'}`} style={{ backgroundColor: effectiveCheckIn?.color || 'transparent', color: effectiveCheckIn?.text || 'inherit' }}>
+                    {effectiveCheckIn ? (
+                      <>
+                        <span className="group-hover:hidden">{dateInfo.day}</span>
+                        <span className="hidden group-hover:block text-sm">✎</span>
+                      </>
+                    ) : (
+                      <span className="text-lg">+</span>
+                    )}
                   </button>
                 )
               }

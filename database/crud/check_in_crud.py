@@ -180,3 +180,32 @@ def get_user_points(user_id: str) -> Dict[str, Any]:
         "points": user.get("points", 0),
         "level": user.get("level", 1)
     }
+
+
+def update_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
+    """
+    更新当日打卡心情（不增加积分）
+
+    :param user_id: 用户ID
+    :param mood: 新的情绪
+    :param check_date: 打卡日期 (YYYY-MM-DD)
+    :return: 更新结果
+    """
+    existing = get_check_in_by_date(user_id, check_date)
+    if not existing:
+        return {
+            "success": False,
+            "message": "今天还没有打卡"
+        }
+
+    check_ins.update_one(
+        {"user_id": user_id, "date": check_date},
+        {"$set": {"mood": mood, "updated_at": datetime.utcnow()}}
+    )
+
+    updated = get_check_in_by_date(user_id, check_date)
+    return {
+        "success": True,
+        "message": "心情已更新",
+        "check_in": updated
+    }
