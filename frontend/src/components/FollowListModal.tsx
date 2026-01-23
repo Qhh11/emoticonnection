@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { socialApi, FollowUser } from '../services/api'
+import { getAvatarUrl } from '../config/userAvatars'
 
 interface FollowListModalProps {
   userId: string
@@ -131,8 +132,12 @@ export default function FollowListModal({
                     className="flex items-center space-x-4 cursor-pointer flex-1"
                     onClick={() => handleUserClick(user.id)}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-2xl shadow-sm">
-                      👤
+                    <div className="w-12 h-12 rounded-xl bg-gray-50 overflow-hidden shadow-sm">
+                      <img
+                        src={getAvatarUrl(user.avatar)}
+                        alt={user.nickname || user.username}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div>
                       <p className="font-black text-sm uppercase tracking-tight">@{user.username}</p>
