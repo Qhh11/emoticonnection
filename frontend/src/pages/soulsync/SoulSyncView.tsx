@@ -732,8 +732,14 @@ export default function SoulSyncView({
   // ✅ confirm releases lock
   const confirmMatch = async () => {
     if (!matchedPartner || !userId) return
-
     const roomId = matchedPartner.roomId
+
+    try {
+      await matchApi.ackMatch(roomId)
+    } catch (e) {
+      console.warn('ack match failed', e)
+    }
+    if (!matchedPartner || !userId) return
     const existing = sessions.find(s => s.roomId === roomId)
 
     if (existing) {

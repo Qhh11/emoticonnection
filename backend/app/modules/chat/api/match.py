@@ -8,7 +8,7 @@ All endpoints now use the research-based V2 matching algorithm
 from fastapi import APIRouter, Depends
 from typing import List
 from fastapi import Header, HTTPException, Depends
-
+from pydantic import BaseModel
 
 from app.modules.chat.services.matching_service_v2 import (
     MatchRequestV2Internal,
@@ -27,6 +27,8 @@ from app.modules.auth.deps import get_current_user
 
 router = APIRouter(prefix="/match", tags=["matching"])
 
+class AckRequest(BaseModel):
+    room_id: str
 
 # ============================================================================
 # Main Matching APIs
@@ -41,7 +43,14 @@ async def find_match(
     internal = MatchRequestV2Internal(**request.model_dump(), user_id=me["id"])
     return await matcher.find_match(internal)
 
-
+@router.post("/ack")
+async def ack_match(
+    body: AckRequest,
+    matcher: MatchingServiceV2 = Depends(get_matching_service),
+    me = Depends(get_current_user),
+):
+    ok = matcher.ack_match(me["id"], body.room_id)
+    return {"success": ok}
 
 
 @router.post("/cancel")
