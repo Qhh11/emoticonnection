@@ -181,6 +181,12 @@ export const userApi = {
       body: JSON.stringify(data),
     }),
 
+  updateCheckIn: (userId: string, data: CheckInRequest) =>
+    request<CheckInResponse>(`/api/users/${userId}/check-in`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   getCheckInHistory: (userId: string, limit?: number) => {
     const query = limit ? `?limit=${limit}` : ''
     return request<CheckInHistoryItem[]>(`/api/users/${userId}/check-in/history${query}`)
