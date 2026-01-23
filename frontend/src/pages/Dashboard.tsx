@@ -245,9 +245,9 @@ export default function Dashboard() {
     }
   }, [activeTab, selectedAvatar])
 
-  // Matching Tour - show tour for first-time users on SoulSync tab
+  // Matching Tour - show tour for first-time VIP users on SoulSync tab
   useEffect(() => {
-    if (activeTab === 'soulsync' && !hasSeenMatchingGuide && !hasActiveSession) {
+    if (activeTab === 'soulsync' && !hasSeenMatchingGuide && !hasActiveSession && level >= 3) {
       // Delay showing tour to let the page render first
       const timer = setTimeout(() => {
         setShowMatchingTour(true)
@@ -257,7 +257,7 @@ export default function Dashboard() {
     } else if (activeTab !== 'soulsync') {
       setShowMatchingTour(false)
     }
-  }, [activeTab, hasSeenMatchingGuide, hasActiveSession])
+  }, [activeTab, hasSeenMatchingGuide, hasActiveSession, level])
 
   // Returning user welcome message - show for 5 seconds on SoulSync tab
   // Only show on subsequent visits, NOT immediately after completing tour
@@ -931,8 +931,8 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Matching Tour Spotlight for first-time SoulSync users */}
-      {showMatchingTour && activeTab === 'soulsync' && (
+      {/* Matching Tour Spotlight for first-time VIP SoulSync users */}
+      {showMatchingTour && activeTab === 'soulsync' && level >= 3 && (
         <MatchingTour currentStep={matchingTourStep} />
       )}
 
