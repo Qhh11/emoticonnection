@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { aiChatApi, EmotionReport } from '../services/api'
-import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceArea } from 'recharts'
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Tooltip as ChartTooltip,
+  ScriptableContext
+} from 'chart.js'
+import { Line as ChartLine } from 'react-chartjs-2'
+
+// 注册 Chart.js 组件
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, ChartTooltip)
 
 // Emotion color mapping
 const EMOTION_COLORS: Record<string, string> = {
@@ -132,20 +146,26 @@ type TimelineDataPoint = { date: string; avg_score: number | null; dominant_emot
 const generateFullTimeline = (
   dataPoints: { date: string; avg_score: number; dominant_emotion: string }[] | undefined,
   period: 'weekly' | 'monthly',
-  startDate: string
+  startDate: string,
+  endDate: string
 ): TimelineDataPoint[] => {
-  if (!dataPoints || dataPoints.length === 0) return []
+  // 即使没有数据也生成空的时间轴框架
+  const safeDataPoints = dataPoints || []
 
-  const dataMap = new Map(dataPoints.map(p => [p.date, p]))
-  const start = new Date(startDate)
+  // 将 data_points 的日期统一为 YYYY-MM-DD 格式（去掉时间部分）
+  const dataMap = new Map(safeDataPoints.map(p => [p.date.split('T')[0], p]))
 
   if (period === 'weekly') {
-    // 生成 7 天完整时间轴
+    // 从 endDate 倒推生成 7 天（今天 + 过去6天）
     const fullData: TimelineDataPoint[] = []
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(start)
-      date.setDate(start.getDate() + i)
-      // 使用本地日期格式，避免 UTC 时区问题
+
+    // 解析 endDate，只取日期部分避免时区问题
+    const endDateStr = endDate.split('T')[0]  // "2026-01-23"
+    const [year, month, day] = endDateStr.split('-').map(Number)
+
+    for (let i = 6; i >= 0; i--) {
+      // 从 end 往前推 i 天
+      const date = new Date(year, month - 1, day - i)
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
       const existing = dataMap.get(dateStr)
@@ -159,13 +179,26 @@ const generateFullTimeline = (
   }
 
   if (period === 'monthly') {
-    // 按周分组，生成 4 周数据
-    const weeks: typeof dataPoints[] = [[], [], [], []]
-    dataPoints.forEach(p => {
-      const date = new Date(p.date)
-      const daysSinceStart = Math.floor((date.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-      const weekIndex = Math.min(3, Math.max(0, Math.floor(daysSinceStart / 7)))
-      weeks[weekIndex].push(p)
+    // 从 endDate 倒推 4 周
+    const endDateStr = endDate.split('T')[0]
+    const [year, month, day] = endDateStr.split('-').map(Number)
+    const end = new Date(year, month - 1, day)
+
+    // 按周分组，W4 是最近一周（包含今天），W1 是最早一周
+    type DataPoint = { date: string; avg_score: number; dominant_emotion: string }
+    const weeks: DataPoint[][] = [[], [], [], []]
+
+    safeDataPoints.forEach(p => {
+      const pDateStr = p.date.split('T')[0]
+      const [pYear, pMonth, pDay] = pDateStr.split('-').map(Number)
+      const pDate = new Date(pYear, pMonth - 1, pDay)
+
+      // 计算距离 end 的天数
+      const daysFromEnd = Math.floor((end.getTime() - pDate.getTime()) / (1000 * 60 * 60 * 24))
+
+      // W4 = 0-6天前, W3 = 7-13天前, W2 = 14-20天前, W1 = 21-27天前
+      const weekIndex = Math.min(3, Math.max(0, Math.floor(daysFromEnd / 7)))
+      weeks[3 - weekIndex].push(p)  // 反转顺序：W1在前，W4在后
     })
 
     return weeks.map((week, i): TimelineDataPoint => {
@@ -188,7 +221,7 @@ const generateFullTimeline = (
     })
   }
 
-  return dataPoints
+  return safeDataPoints
 }
 
 interface EmotionReportModalProps {
@@ -369,175 +402,135 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                   </div>
                 )
               ) : (
-                // Weekly/Monthly: 曲线图
+                // Weekly/Monthly: 使用 Chart.js 实现两点间渐变
                 (() => {
                   // 生成完整时间轴数据
-                  const chartData = report.emotion_trend?.data_points
-                    ? generateFullTimeline(report.emotion_trend.data_points, period as 'weekly' | 'monthly', report.start_date)
-                    : []
-                  // 过滤出有数据的点用于渐变
-                  const validPoints = chartData.filter(p => p.avg_score !== null)
+                  const chartData = generateFullTimeline(
+                    report.emotion_trend?.data_points,
+                    period as 'weekly' | 'monthly',
+                    report.start_date,
+                    report.end_date
+                  )
 
-                  if (validPoints.length === 0) return null
+                  // 准备 Chart.js 数据
+                  const labels = chartData.map(p => {
+                    if (period === 'monthly') return p.date
+                    return new Date(p.date).toLocaleDateString('en-US', { weekday: 'short' })
+                  })
+
+                  const values = chartData.map(p => p.avg_score)
+
+                  // 获取每个点的颜色
+                  const pointColors = chartData.map(p =>
+                    p.avg_score !== null ? getScoreColor(p.avg_score) : 'transparent'
+                  )
+
+                  // Chart.js 配置
+                  const chartJsData = {
+                    labels,
+                    datasets: [{
+                      data: values,
+                      borderWidth: 4,
+                      pointRadius: 6,
+                      pointBackgroundColor: pointColors,
+                      pointBorderColor: 'white',
+                      pointBorderWidth: 2.5,
+                      pointHoverRadius: 9,
+                      pointHoverBorderWidth: 3,
+                      fill: false,
+                      tension: 0.4,
+                      spanGaps: true,
+                      segment: {
+                        borderColor: (ctx: any) => {
+                          const { p0, p1, p0DataIndex, p1DataIndex } = ctx
+                          const color0 = pointColors[p0DataIndex]
+                          const color1 = pointColors[p1DataIndex]
+
+                          // 如果任一端点没有数据，使用紫色
+                          if (color0 === 'transparent' || color1 === 'transparent') {
+                            return '#4B4E91'
+                          }
+
+                          // 创建从 p0 到 p1 的渐变
+                          const gradient = ctx.chart.ctx.createLinearGradient(
+                            p0.x, p0.y, p1.x, p1.y
+                          )
+                          gradient.addColorStop(0, color0)
+                          gradient.addColorStop(1, color1)
+                          return gradient
+                        }
+                      }
+                    }]
+                  }
+
+                  const chartJsOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        enabled: true,
+                        backgroundColor: 'white',
+                        titleColor: '#9ca3af',
+                        bodyColor: '#1f2937',
+                        borderColor: '#e5e7eb',
+                        borderWidth: 1,
+                        padding: 12,
+                        cornerRadius: 12,
+                        titleFont: { size: 10, weight: 'bold' as const },
+                        bodyFont: { size: 14, weight: 'bold' as const },
+                        callbacks: {
+                          title: (items: any[]) => {
+                            const idx = items[0]?.dataIndex
+                            if (idx === undefined) return ''
+                            const point = chartData[idx]
+                            if (period === 'monthly') return point.date
+                            return new Date(point.date).toLocaleDateString('en-US', {
+                              weekday: 'long', month: 'short', day: 'numeric'
+                            })
+                          },
+                          label: (item: any) => {
+                            const score = item.raw
+                            if (score === null) return ''
+                            return `${getScoreLabel(score)}: ${score >= 0 ? '+' : ''}${score.toFixed(2)}`
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: { display: false },
+                        ticks: {
+                          color: '#9ca3af',
+                          font: { size: 10 }
+                        },
+                        border: { display: false }
+                      },
+                      y: {
+                        min: -1,
+                        max: 1,
+                        grid: { display: false },
+                        ticks: { display: false },
+                        border: { display: false }
+                      }
+                    }
+                  }
 
                   return (
                     <div className="bg-gray-50 rounded-2xl p-5">
                       <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">
                         Mood Trend
                       </h3>
-                      <div className="h-48">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={chartData}>
-                            {/* 渐变定义 */}
-                            <defs>
-                              {/* 纵向渐变 - 填充区域从上到下透明 */}
-                              <linearGradient id="emotionAreaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="#4B4E91" stopOpacity={0.25} />
-                                <stop offset="100%" stopColor="#4B4E91" stopOpacity={0} />
-                              </linearGradient>
-                              {/* 横向渐变 - 使用 userSpaceOnUse 和绝对像素坐标 */}
-                              <linearGradient
-                                id="line-gradient"
-                                gradientUnits="userSpaceOnUse"
-                                x1="0"
-                                y1="0"
-                                x2="500"
-                                y2="0"
-                              >
-                                {validPoints.map((point, index) => {
-                                  const offset = validPoints.length > 1
-                                    ? (index / (validPoints.length - 1)) * 100
-                                    : 0
-                                  return (
-                                    <stop
-                                      key={index}
-                                      offset={`${offset}%`}
-                                      stopColor={getScoreColor(point.avg_score ?? 0)}
-                                      stopOpacity={1}
-                                    />
-                                  )
-                                })}
-                              </linearGradient>
-                            </defs>
-
-                            <XAxis
-                              dataKey="date"
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fontSize: 10, fill: '#9ca3af' }}
-                              interval={0}
-                              padding={{ left: 10, right: 10 }}
-                              tickFormatter={(date) => {
-                                if (period === 'monthly') {
-                                  return date // 已经是 W1, W2, W3, W4 格式
-                                }
-                                return new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
-                              }}
-                            />
-                            <YAxis
-                              domain={[-1, 1]}
-                              axisLine={false}
-                              tickLine={false}
-                              tick={false}
-                              width={0}
-                            />
-
-                            {/* 背景色块 - 5个分数区间 */}
-                            <ReferenceArea y1={0.6} y2={1} fill="#FF9500" fillOpacity={0.15} />
-                            <ReferenceArea y1={0.2} y2={0.6} fill="#F9D849" fillOpacity={0.15} />
-                            <ReferenceArea y1={-0.2} y2={0.2} fill="#66B04C" fillOpacity={0.15} />
-                            <ReferenceArea y1={-0.6} y2={-0.2} fill="#3266B1" fillOpacity={0.15} />
-                            <ReferenceArea y1={-1} y2={-0.6} fill="#D32F2F" fillOpacity={0.15} />
-
-                            {/* 拟物化气泡 Tooltip */}
-                            <Tooltip
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null
-                                const data = payload[0].payload
-                                // 没有数据的点不显示 tooltip
-                                if (data.avg_score === null) return null
-                                const color = getScoreColor(data.avg_score)
-                                return (
-                                  <div
-                                    className="bg-white rounded-2xl p-4 border border-gray-100"
-                                    style={{ boxShadow: `0 8px 32px ${color}40, 0 4px 16px rgba(0,0,0,0.1)` }}
-                                  >
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                      {period === 'monthly'
-                                        ? label
-                                        : (label ? new Date(label).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : '')
-                                      }
-                                    </p>
-                                    <div className="mt-2 flex items-center gap-2">
-                                      <div
-                                        className="w-3 h-3 rounded-full"
-                                        style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
-                                      />
-                                      <span className="text-sm font-black">{getScoreLabel(data.avg_score)}</span>
-                                    </div>
-                                    <p className="text-lg font-black mt-1">
-                                      {data.avg_score >= 0 ? '+' : ''}{data.avg_score.toFixed(2)}
-                                    </p>
-                                  </div>
-                                )
-                              }}
-                            />
-
-                            {/* 填充区域 */}
-                            <Area
-                              type="monotone"
-                              dataKey="avg_score"
-                              stroke="none"
-                              fill="url(#emotionAreaGradient)"
-                              connectNulls={true}
-                              isAnimationActive={true}
-                            />
-
-                            {/* 连线 - 使用 userSpaceOnUse 渐变 */}
-                            <Line
-                              type="monotone"
-                              dataKey="avg_score"
-                              stroke="url(#line-gradient)"
-                              strokeWidth={4}
-                              connectNulls={true}
-                              isAnimationActive={false}
-                              dot={(props: any) => {
-                                const { cx, cy, payload } = props
-                                if (payload.avg_score === null) return <g key={`empty-${payload.date}`} />
-                                const color = getScoreColor(payload.avg_score)
-                                return (
-                                  <circle
-                                    key={`dot-${payload.date}`}
-                                    cx={cx}
-                                    cy={cy}
-                                    r={6}
-                                    fill={color}
-                                    stroke="white"
-                                    strokeWidth={2.5}
-                                    style={{ filter: `drop-shadow(0 2px 6px ${color}80)` }}
-                                  />
-                                )
-                              }}
-                              activeDot={(props: any) => {
-                                const { cx, cy, payload } = props
-                                if (payload.avg_score === null) return <g key={`empty-active-${payload.date}`} />
-                                const color = getScoreColor(payload.avg_score)
-                                return (
-                                  <circle
-                                    key={`active-dot-${payload.date}`}
-                                    cx={cx}
-                                    cy={cy}
-                                    r={9}
-                                    fill={color}
-                                    stroke="white"
-                                    strokeWidth={3}
-                                    style={{ filter: `drop-shadow(0 4px 12px ${color})` }}
-                                  />
-                                )
-                              }}
-                            />
-                          </ComposedChart>
-                        </ResponsiveContainer>
+                      <div className="h-48 relative">
+                        {/* 背景色块 */}
+                        <div className="absolute inset-0 flex flex-col pointer-events-none" style={{ top: '0', bottom: '24px' }}>
+                          <div className="flex-1" style={{ backgroundColor: 'rgba(255, 149, 0, 0.15)' }} />
+                          <div className="flex-1" style={{ backgroundColor: 'rgba(249, 216, 73, 0.15)' }} />
+                          <div className="flex-1" style={{ backgroundColor: 'rgba(102, 176, 76, 0.15)' }} />
+                          <div className="flex-1" style={{ backgroundColor: 'rgba(50, 102, 177, 0.15)' }} />
+                          <div className="flex-1" style={{ backgroundColor: 'rgba(211, 47, 47, 0.15)' }} />
+                        </div>
+                        <ChartLine data={chartJsData} options={chartJsOptions} />
                       </div>
 
                       {/* 分数图例 */}
