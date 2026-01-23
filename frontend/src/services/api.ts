@@ -415,6 +415,13 @@ export const matchApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  
+  ackMatch: (roomId: string) =>
+  request<{ success: boolean; message?: string }>('/api/match/ack', {
+    method: 'POST',
+    body: JSON.stringify({ room_id: roomId }),
+  }),
+
 
   cancelMatch: () =>
     request<{ success: boolean; message: string }>('/api/match/cancel', {
