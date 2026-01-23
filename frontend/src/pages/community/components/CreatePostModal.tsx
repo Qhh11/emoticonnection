@@ -30,7 +30,7 @@ export default function CreatePostModal({
   isOpen,
   onClose,
   onSubmit,
-  userId,
+  //userId,
   onRequestPolish,
   onPolishReady,
   polishedContent,

@@ -102,7 +102,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
 
   // Get current mode's messages
   const messages = chatMode === 'text' ? textMessages : voiceMessages
-  const setMessages = chatMode === 'text' ? setTextMessages : setVoiceMessages
+  //const setMessages = chatMode === 'text' ? setTextMessages : setVoiceMessages
 
   // Gemini Live hook for real-time voice chat
   const geminiLive = useGeminiLive({
@@ -277,7 +277,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
     setTranscript('')
     setVoiceStatus('connecting')
     try {
-      await geminiLive.startLiveConversation()
+      //await geminiLive.startLiveConversation()
+      await geminiLive.connect()
+      await geminiLive.startStreaming()
       setVoiceStatus('connected')
     } catch (error) {
       console.error('[ChatAIView] Error starting live conversation:', error)
@@ -287,7 +289,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
 
   // End real-time conversation - like hanging up the phone
   const endLiveConversation = () => {
-    geminiLive.stopLiveConversation()
+    //geminiLive.stopLiveConversation()
+    geminiLive.stopStreaming()
+    geminiLive.disconnect()
     setVoiceStatus('idle')
   }
 

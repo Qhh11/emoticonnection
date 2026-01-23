@@ -62,7 +62,7 @@ export default function VibePicker({ selectedVibe, onSelect, size = 'medium' }: 
               `}
               style={{
                 backgroundColor: isSelected ? `${vibe.color}20` : 'transparent',
-                ringColor: isSelected ? vibe.color : 'transparent',
+                //ringColor: isSelected ? vibe.color : 'transparent',
               }}
             >
               <img

@@ -193,6 +193,7 @@ const Bar = styled.div<{ $delay: number }>`
   animation-delay: ${props => props.$delay}s;
 `;
 
+/*
 const TranscriptBox = styled.div`
   max-width: 600px;
   min-height: 80px;
@@ -207,6 +208,7 @@ const TranscriptBox = styled.div`
   color: #666;
   font-weight: 500;
 `;
+*/
 
 const ConversationScroll = styled.div`
   width: 100%;

@@ -28,7 +28,7 @@ interface CommunityViewProps {
 }
 
 export default function CommunityView({
-  onInteract,
+  //onInteract,
   userId,
   userNickname,
   onPostCreated,
