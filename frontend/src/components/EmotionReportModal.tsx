@@ -9,8 +9,7 @@ import {
   PointElement,
   LineElement,
   Filler,
-  Tooltip as ChartTooltip,
-  ScriptableContext
+  Tooltip as ChartTooltip
 } from 'chart.js'
 import { Line as ChartLine } from 'react-chartjs-2'
 
@@ -146,7 +145,7 @@ type TimelineDataPoint = { date: string; avg_score: number | null; dominant_emot
 const generateFullTimeline = (
   dataPoints: { date: string; avg_score: number; dominant_emotion: string }[] | undefined,
   period: 'weekly' | 'monthly',
-  startDate: string,
+  _startDate: string,
   endDate: string
 ): TimelineDataPoint[] => {
   // 即使没有数据也生成空的时间轴框架
