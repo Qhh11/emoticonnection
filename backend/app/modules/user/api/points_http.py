@@ -25,7 +25,8 @@ from crud.check_in_crud import (  # type: ignore
     get_check_in_history,
     get_user_points,
     add_points_to_user,
-    update_check_in
+    update_check_in,
+    calculate_streak
 )
 
 
@@ -163,15 +164,18 @@ async def get_today_check_in(user_id: str):
     Response:
     {
         "checked_in": true,
-        "check_in": {...}  // or null
+        "check_in": {...},  // or null
+        "streak": 5  // consecutive check-in days
     }
     """
     today = date.today().isoformat()
     check_in = get_check_in_by_date(user_id, today)
+    streak = calculate_streak(user_id)
 
     return {
         "checked_in": check_in is not None,
-        "check_in": check_in
+        "check_in": check_in,
+        "streak": streak
     }
 
 

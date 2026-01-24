@@ -209,3 +209,36 @@ def update_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
         "message": "心情已更新",
         "check_in": updated
     }
+
+
+def calculate_streak(user_id: str) -> int:
+    """
+    计算用户连续打卡天数
+
+    逻辑：从今天开始往前查，连续的打卡日期数
+    如果今天还没打卡，从昨天开始计算
+
+    :param user_id: 用户ID
+    :return: 连续打卡天数
+    """
+    from datetime import timedelta
+
+    today = date.today()
+    streak = 0
+    current_date = today
+
+    while True:
+        date_str = current_date.isoformat()
+        check_in = get_check_in_by_date(user_id, date_str)
+
+        if check_in:
+            streak += 1
+            current_date -= timedelta(days=1)
+        else:
+            # 如果今天还没打卡，从昨天开始计算
+            if current_date == today and streak == 0:
+                current_date -= timedelta(days=1)
+                continue
+            break
+
+    return streak

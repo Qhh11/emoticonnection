@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Avatar3D } from '../../config/avatars'
 import { getAvatarUrl } from '../../config/userAvatars'
-import { SocialStats, Post, User, EmotionReport, getMediaUrl, userApi, CheckInHistoryItem } from '../../services/api'
+import { SocialStats, Post, User, EmotionReport, DailyEmotionScore, getMediaUrl, userApi, CheckInHistoryItem, aiChatApi, utcDateToLocalDate } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
@@ -155,12 +155,14 @@ interface ProfileViewProps {
   userPosts: Post[]
   onOpenJournalDetail: (entry: DiaryEntry) => void
   onOpenPostDetail: (post: Post) => void
-  todayCheckIn: { mood: string; color: string; text: string } | null
+  todayCheckIn: { mood: string; color: string; text: string; streak: number } | null
   onOpenSettings?: () => void
   onViewFollowing?: () => void
   onViewFollowers?: () => void
   onOpenEmotionReport?: () => void
   weeklyReport?: EmotionReport | null
+  persistedScores?: DailyEmotionScore[] | null
+  onRefreshScores?: (scores: DailyEmotionScore[]) => void
 }
 
 // Helper functions for emotion display
@@ -192,9 +194,10 @@ const getTrendLabel = (direction: string): string => {
   return 'Stable'
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport, persistedScores, onRefreshScores }: ProfileViewProps) {
   const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
   const [showMoodPicker, setShowMoodPicker] = useState(false)
+  const [isRefreshingScore, setIsRefreshingScore] = useState(false)
 
   // Use todayCheckIn from props or local state
   const effectiveCheckIn = todayCheckIn || checkedInMood
@@ -403,7 +406,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
           </div>
 
           {/* Simplified Bar Chart - 7 bars for Mon-Sun with real data */}
-          <div className="flex-1 flex items-end justify-between gap-2 px-4">
+          <div className="flex items-end justify-between gap-2 px-4 h-24">
             {(() => {
               // Generate the 7 days of the current week (Monday to Sunday)
               const today = new Date()
@@ -420,11 +423,23 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                 })
               }
 
-              // Create a map of date -> data point from weeklyReport
+              // Create a map of date -> data point
+              // Prefer persistedScores (consistent across devices) over weeklyReport
+              // persistedScores use UTC dates, convert to local for display matching
               const dataByDate: Record<string, { avg_score: number; dominant_emotion: string }> = {}
-              if (weeklyReport?.emotion_trend?.data_points) {
+              if (persistedScores && persistedScores.length > 0) {
+                // Use persisted scores for consistent display across all devices
+                // Convert UTC date to local date for matching with weekDays
+                persistedScores.forEach(score => {
+                  const localDate = utcDateToLocalDate(score.utc_date)
+                  dataByDate[localDate] = {
+                    avg_score: score.avg_score,
+                    dominant_emotion: score.dominant_emotion
+                  }
+                })
+              } else if (weeklyReport?.emotion_trend?.data_points) {
+                // Fallback to weeklyReport if no persisted scores
                 weeklyReport.emotion_trend.data_points.forEach(point => {
-                  // Normalize the date format (handle both YYYY-MM-DD and ISO formats)
                   const pointDate = point.date.split('T')[0]
                   dataByDate[pointDate] = point
                 })
@@ -439,15 +454,16 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
 
                 if (data) {
                   // Has data: show score color + height based on score
-                  const height = Math.max(20, ((data.avg_score + 1) / 2) * 100)
+                  // Map [-1, 1] to [30px, 96px] for visible height differences
+                  const normalizedScore = (data.avg_score + 1) / 2  // 0 to 1
+                  const heightPx = Math.round(30 + normalizedScore * 66)  // 30px to 96px
                   const barColor = getScoreColor(data.avg_score)
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1">
                       <div
                         className="w-full rounded-t-lg transition-all hover:opacity-80"
                         style={{
-                          height: `${height}%`,
-                          minHeight: '20px',
+                          height: `${heightPx}px`,
                           backgroundColor: barColor
                         }}
                         title={`${getScoreLabel(data.avg_score)}: ${data.avg_score.toFixed(2)}`}
@@ -462,7 +478,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                     <div key={i} className="flex-1 flex flex-col items-center gap-1">
                       <div
                         className="w-full rounded-t-lg transition-all"
-                        style={{ height: '30%', minHeight: '20px', backgroundColor: bgColor }}
+                        style={{ height: '30px', backgroundColor: bgColor }}
                         title={isToday ? 'Today (no data yet)' : isFuture ? 'Future' : 'No data'}
                       />
                     </div>
@@ -475,27 +491,83 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
             <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
           </div>
 
-          {/* View Full Report Button */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onOpenEmotionReport?.()
-            }}
-            className="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-600 transition-all flex items-center justify-center gap-2"
-          >
-            <span>View Full Report</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </button>
+          {/* Score Legend */}
+          <div className="flex flex-wrap gap-2 mt-3 justify-center px-4">
+            {[
+              { label: 'Great', color: '#FF9500' },
+              { label: 'Good', color: '#F9D849' },
+              { label: 'Okay', color: '#66B04C' },
+              { label: 'Low', color: '#3266B1' },
+              { label: 'Bad', color: '#D32F2F' },
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-1">
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-[10px] font-bold text-gray-500">{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* View Full Report Button with Refresh */}
+          <div className="flex gap-2">
+            {/* Refresh Today's Score Button */}
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (!user?._id || isRefreshingScore) return
+                setIsRefreshingScore(true)
+                try {
+                  await aiChatApi.refreshTodayScore(user._id)
+                  const data = await aiChatApi.getWeeklyEmotionScores(user._id)
+                  onRefreshScores?.(data.scores)
+                } catch (err) {
+                  console.error('Failed to refresh today score:', err)
+                } finally {
+                  setIsRefreshingScore(false)
+                }
+              }}
+              disabled={isRefreshingScore}
+              className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
+              title="Refresh today's score"
+            >
+              <svg
+                className={`w-4 h-4 text-gray-600 ${isRefreshingScore ? 'animate-spin' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path d="M23 4v6h-6M1 20v-6h6" />
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+              </svg>
+            </button>
+
+            {/* View Full Report Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onOpenEmotionReport?.()
+              }}
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-600 transition-all flex items-center justify-center gap-2"
+            >
+              <span>View Full Report</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] flex flex-col shadow-sm relative">
           <div className="flex justify-between items-center mb-4">
             <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Check-in</h4>
-            <span className="text-[13px] font-black tracking-widest text-accent">STREAK: 12</span>
+            <span className="text-[13px] font-black tracking-widest text-accent">STREAK: {todayCheckIn?.streak ?? 0}</span>
           </div>
           <div className="mb-3">
             <p className="text-[14px] font-black tracking-wider text-gray-800">{currentMonth}</p>

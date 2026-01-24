@@ -17,7 +17,7 @@ import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView, { PeerSession } from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
-import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences } from '../services/api'
+import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences, DailyEmotionScore } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
 
@@ -86,7 +86,7 @@ export default function Dashboard() {
   } | null>(null)
 
   // Today's check-in status
-  const [todayCheckIn, setTodayCheckIn] = useState<{ mood: string; color: string; text: string } | null>(null)
+  const [todayCheckIn, setTodayCheckIn] = useState<{ mood: string; color: string; text: string; streak: number } | null>(null)
 
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false)
@@ -171,6 +171,9 @@ export default function Dashboard() {
 
   // Weekly emotion report for Profile card preview
   const [weeklyReport, setWeeklyReport] = useState<EmotionReport | null>(null)
+
+  // Persisted daily emotion scores (consistent across all devices)
+  const [persistedScores, setPersistedScores] = useState<DailyEmotionScore[] | null>(null)
 
   // Community post detail modal state (for avatar animation and AI reading)
   const [communityPostDetailOpen, setCommunityPostDetailOpen] = useState(false)
@@ -470,8 +473,11 @@ export default function Dashboard() {
           if (response.checked_in && response.check_in) {
             const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === response.check_in!.mood.toLowerCase())
             if (moodData) {
-              setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text })
+              setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: response.streak ?? 0 })
             }
+          } else {
+            // 没有打卡但仍需要显示 streak
+            setTodayCheckIn(null)
           }
         })
         .catch(err => console.error('Failed to fetch check-in status:', err))
@@ -491,6 +497,11 @@ export default function Dashboard() {
           })
           .catch(err => console.error('Failed to fetch weekly report:', err))
       }
+
+      // 加载持久化的每日情绪分数（用于柱状图，保证跨设备一致）
+      aiChatApi.getWeeklyEmotionScores(user._id)
+        .then(data => setPersistedScores(data.scores))
+        .catch(err => console.error('Failed to fetch emotion scores:', err))
     }
   }, [user?._id])
 
@@ -601,10 +612,13 @@ export default function Dashboard() {
       const response = await userApi.checkIn(user._id, { mood })
       if (response.success) {
         setPoints(response.total_points)
-        // Update todayCheckIn state
-        const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === mood.toLowerCase())
-        if (moodData) {
-          setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text })
+        // Refresh todayCheckIn state to get updated streak
+        const todayResponse = await userApi.getTodayCheckIn(user._id)
+        if (todayResponse.checked_in && todayResponse.check_in) {
+          const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === todayResponse.check_in!.mood.toLowerCase())
+          if (moodData) {
+            setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: todayResponse.streak ?? 0 })
+          }
         }
         return true
       }
@@ -620,10 +634,10 @@ export default function Dashboard() {
     try {
       const response = await userApi.updateCheckIn(user._id, { mood })
       if (response.success) {
-        // Update todayCheckIn state (no points change for update)
+        // Update todayCheckIn state (no points change for update, streak stays the same)
         const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === mood.toLowerCase())
         if (moodData) {
-          setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text })
+          setTodayCheckIn(prev => ({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: prev?.streak ?? 0 }))
         }
         return true
       }
@@ -785,6 +799,8 @@ export default function Dashboard() {
           onViewFollowers={() => setFollowListType('followers')}
           onOpenEmotionReport={() => setShowEmotionReport(true)}
           weeklyReport={weeklyReport}
+          persistedScores={persistedScores}
+          onRefreshScores={(scores) => setPersistedScores(scores)}
         />
       case 'diary':
         return (

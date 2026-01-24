@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { aiChatApi, EmotionReport } from '../services/api'
+import { aiChatApi, EmotionReport, DailyEmotionScore, utcDateToLocalDate } from '../services/api'
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import {
   Chart as ChartJS,
@@ -236,25 +236,42 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
   const [report, setReport] = useState<EmotionReport | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Persisted scores for consistent chart display across devices
+  const [persistedScores, setPersistedScores] = useState<DailyEmotionScore[] | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     if (isOpen && userId) {
       loadReport()
+      // Load persisted scores for weekly/monthly charts
+      if (period === 'weekly') {
+        aiChatApi.getWeeklyEmotionScores(userId)
+          .then(data => setPersistedScores(data.scores))
+          .catch(err => console.error('Failed to fetch persisted scores:', err))
+      } else if (period === 'monthly') {
+        aiChatApi.getMonthlyEmotionScores(userId)
+          .then(data => setPersistedScores(data.scores))
+          .catch(err => console.error('Failed to fetch persisted scores:', err))
+      } else {
+        setPersistedScores(null)
+      }
     }
   }, [isOpen, userId, period])
 
-  const loadReport = async () => {
+  const loadReport = async (forceRefresh = false) => {
     setError(null)
 
-    // 1. 先尝试显示缓存（秒开）
-    const cached = getCachedReport(userId, period)
-    if (cached) {
-      setReport(cached)
-      // 有缓存时直接使用，不再调用 API（节省配额）
-      return
+    // 1. 先尝试显示缓存（秒开），除非强制刷新
+    if (!forceRefresh) {
+      const cached = getCachedReport(userId, period)
+      if (cached) {
+        setReport(cached)
+        // 有缓存时直接使用，不再调用 API（节省配额）
+        return
+      }
     }
 
-    // 2. 无缓存时才调用 API
+    // 2. 无缓存或强制刷新时调用 API
     setIsLoading(true)
     try {
       let rawData: EmotionReport | string
@@ -277,6 +294,36 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
       setError(err instanceof Error ? err.message : 'Failed to load report')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    try {
+      // 1. Refresh today's score in MongoDB
+      await aiChatApi.refreshTodayScore(userId)
+
+      // 2. Clear cache to force fresh AI report
+      try {
+        sessionStorage.removeItem(getCacheKey(userId, period))
+      } catch {}
+
+      // 3. Reload persisted scores for charts
+      if (period === 'weekly') {
+        const data = await aiChatApi.getWeeklyEmotionScores(userId)
+        setPersistedScores(data.scores)
+      } else if (period === 'monthly') {
+        const data = await aiChatApi.getMonthlyEmotionScores(userId)
+        setPersistedScores(data.scores)
+      }
+
+      // 4. Reload AI report with forceRefresh
+      await loadReport(true)
+    } catch (err) {
+      console.error('Failed to refresh report:', err)
+    } finally {
+      setIsRefreshing(false)
     }
   }
 
@@ -331,6 +378,25 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 </button>
               ))}
             </div>
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors disabled:opacity-50"
+              title={`Refresh ${period} report`}
+            >
+              <svg
+                className={`w-4 h-4 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path d="M23 4v6h-6M1 20v-6h6" />
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+              </svg>
+            </button>
+            {/* Close Button */}
             <button
               onClick={onClose}
               className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
@@ -352,7 +418,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
             <div className="text-center py-20">
               <p className="text-red-500 font-bold mb-4">{error}</p>
               <button
-                onClick={loadReport}
+                onClick={() => loadReport()}
                 className="px-6 py-2 bg-black text-white rounded-full text-sm font-bold"
               >
                 Retry
@@ -404,11 +470,25 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 // Weekly/Monthly: 使用 Chart.js 实现两点间渐变
                 (() => {
                   // 生成完整时间轴数据
+                  // 优先使用 persistedScores（跨设备一致），否则用 report.emotion_trend.data_points
+                  // persistedScores 使用 UTC 日期，需要转换为本地日期显示
+                  const dataPointsToUse = persistedScores && persistedScores.length > 0
+                    ? persistedScores.map(s => ({
+                        date: utcDateToLocalDate(s.utc_date),
+                        avg_score: s.avg_score,
+                        dominant_emotion: s.dominant_emotion
+                      }))
+                    : report.emotion_trend?.data_points
+
+                  // 使用用户本地时区的今天作为 endDate，而不是后端的 UTC 时间
+                  const today = new Date()
+                  const localEndDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
                   const chartData = generateFullTimeline(
-                    report.emotion_trend?.data_points,
+                    dataPointsToUse,
                     period as 'weekly' | 'monthly',
                     report.start_date,
-                    report.end_date
+                    localEndDate
                   )
 
                   // 准备 Chart.js 数据

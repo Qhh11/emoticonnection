@@ -31,7 +31,7 @@ from config.mongodb_config import connect_to_mongodb, close_mongodb_connection  
 
 # Import API routes from modular structure
 from app.modules.chat.api import chat_http, chat_ws, match, media
-from app.modules.ai.api import ai_chat, emotion, diary, ai_helper, live_ws
+from app.modules.ai.api import ai_chat, emotion, diary, ai_helper, live_ws, emotion_scores
 from app.modules.post.api import post_http
 from app.modules.auth.api import auth
 from app.modules.social.api import following
@@ -102,6 +102,7 @@ app.include_router(ai_chat.router, prefix="/api/ai-chat", tags=["ai-chat"])
 app.include_router(ai_helper.router, prefix="/api/ai-helper", tags=["ai-helper"])
 app.include_router(emotion.router, prefix="/api/emotion", tags=["emotion"])
 app.include_router(diary.router, prefix="/api/diary", tags=["diary"])
+app.include_router(emotion_scores.router, prefix="/api/emotion-scores", tags=["emotion-scores"])
 app.include_router(live_ws.router) # New Gemini Live WebSocket
 # Post/Feed routes
 app.include_router(post_http.router, prefix="/api")

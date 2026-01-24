@@ -709,46 +709,55 @@ class EmotionAnalytics:
         self,
         user_id: str,
         period_type: Literal['daily', 'weekly', 'monthly'] = 'weekly',
-        end_date: Optional[str] = None
+        end_date: Optional[str] = None,
+        start_date: Optional[str] = None
     ) -> EmotionSummary:
         """
         Generate a complete emotion analytics report.
-        
+
         Args:
             user_id: User identifier
             period_type: 'daily', 'weekly', or 'monthly'
-            end_date: End date (ISO format), defaults to now
-            
+            end_date: End date (ISO format with Z suffix), defaults to now
+            start_date: Start date (ISO format with Z suffix). If provided with end_date,
+                       overrides the period_type-based calculation.
+
         Returns:
             Complete EmotionSummary
         """
         # Calculate date range
-        if end_date:
+        # If both start_date and end_date are provided, use them directly
+        if start_date and end_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
             end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         else:
-            end_dt = datetime.now(timezone.utc)
-            
-        if period_type == 'daily':
-            start_dt = end_dt - timedelta(days=1)
-        elif period_type == 'weekly':
-            start_dt = end_dt - timedelta(days=7)
-        else:  # monthly
-            start_dt = end_dt - timedelta(days=30)
-            
-        start_date = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            # Default behavior: calculate based on period_type
+            if end_date:
+                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            else:
+                end_dt = datetime.now(timezone.utc)
+
+            if period_type == 'daily':
+                start_dt = end_dt - timedelta(days=1)
+            elif period_type == 'weekly':
+                start_dt = end_dt - timedelta(days=7)
+            else:  # monthly
+                start_dt = end_dt - timedelta(days=30)
+
+        start_date_str = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         end_date_str = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        
+
         logger.info(f"Generating {period_type} report for user {user_id}")
-        logger.info(f"Date range: {start_date} to {end_date_str}")
-        
+        logger.info(f"Date range: {start_date_str} to {end_date_str}")
+
         # Fetch conversations
-        conversations = self.fetch_user_conversations(user_id, start_date, end_date_str)
-        
+        conversations = self.fetch_user_conversations(user_id, start_date_str, end_date_str)
+
         if not conversations:
             return EmotionSummary(
                 user_id=user_id,
                 period_type=period_type,
-                start_date=start_date,
+                start_date=start_date_str,
                 end_date=end_date_str,
                 average_mood_score=0.0,
                 mood_stability=1.0,
@@ -785,7 +794,7 @@ class EmotionAnalytics:
         return EmotionSummary(
             user_id=user_id,
             period_type=period_type,
-            start_date=start_date,
+            start_date=start_date_str,
             end_date=end_date_str,
             average_mood_score=average_mood,
             mood_stability=mood_stability,
@@ -826,29 +835,32 @@ def emotion_summary_to_json(summary: EmotionSummary) -> str:
 def generate_daily_emotion_report(
     user_id: str,
     end_date: Optional[str] = None,
+    start_date: Optional[str] = None,
     weaviate_manager: Optional[WeaviateManager] = None,
-    gemini_client = None,
+    gemini_client=None,
     llm_provider: str = 'gemini'
 ) -> EmotionSummary:
     """
     Generate daily emotion report for a user.
-    
+
     Args:
         user_id: User identifier
-        end_date: End date (ISO format), defaults to now
+        end_date: End date (ISO format with Z suffix), defaults to now
+        start_date: Start date (ISO format with Z suffix). If provided with end_date,
+                   uses this exact range instead of calculating from period_type.
         weaviate_manager: Optional WeaviateManager instance
         gemini_client: Optional Gemini client
         llm_provider: LLM provider (currently only 'gemini' supported)
     """
     if weaviate_manager is None:
         weaviate_manager = WeaviateManager()
-    
+
     if gemini_client is None:
         api_key = os.getenv("GEMINI_API_KEY")
         gemini_client = genai.Client(api_key=api_key)
-    
+
     analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
-    return analytics.generate_report(user_id, 'daily', end_date)
+    return analytics.generate_report(user_id, 'daily', end_date=end_date, start_date=start_date)
 
 
 def generate_weekly_emotion_report(

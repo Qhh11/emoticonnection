@@ -1,7 +1,7 @@
 // API 服务层 - 统一管理所有后端 API 调用
 
-// const BASE_URL = 'http://localhost:8000'
-const BASE_URL = "https://emoticonnection-backend.onrender.com"
+const BASE_URL = 'http://localhost:8000'
+//const BASE_URL = "https://emoticonnection-backend.onrender.com"
 
 // Token 管理
 export const getToken = (): string | null => {
@@ -193,7 +193,7 @@ export const userApi = {
   },
 
   getTodayCheckIn: (userId: string) =>
-    request<{ checked_in: boolean; check_in: CheckInHistoryItem | null }>(`/api/users/${userId}/check-in/today`),
+    request<{ checked_in: boolean; check_in: CheckInHistoryItem | null; streak: number }>(`/api/users/${userId}/check-in/today`),
 }
 
 // ============ 帖子 API ============
@@ -674,6 +674,31 @@ export const aiChatApi = {
     const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
     return request<EmotionReport>(`/api/diary/reports/monthly${query}`)
   },
+
+  // Persistent Daily Emotion Scores (consistent across all devices)
+  // These APIs call the backend server for persistent storage in MongoDB
+  // Pass user's timezone to ensure correct date alignment
+  getWeeklyEmotionScores: (userId: string) => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return request<{ scores: DailyEmotionScore[] }>(
+      `/api/emotion-scores/weekly?user_id=${userId}&timezone=${encodeURIComponent(tz)}`
+    )
+  },
+
+  getMonthlyEmotionScores: (userId: string) => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return request<{ scores: DailyEmotionScore[] }>(
+      `/api/emotion-scores/monthly?user_id=${userId}&timezone=${encodeURIComponent(tz)}`
+    )
+  },
+
+  refreshTodayScore: (userId: string) => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return request<{ success: boolean; score: DailyEmotionScore }>(
+      `/api/emotion-scores/refresh-today?user_id=${userId}&timezone=${encodeURIComponent(tz)}`,
+      { method: 'POST' }
+    )
+  },
 }
 
 // ============ AI Helper API ============
@@ -775,6 +800,34 @@ export interface TriggerAnalysis {
   associated_emotions: string[]
   example_contexts: string[]
   impact_score: number
+}
+
+export interface DailyEmotionScore {
+  id: string
+  user_id: string
+  utc_date: string  // YYYY-MM-DD format in UTC timezone
+  avg_score: number  // -1 to 1
+  dominant_emotion: string
+  interaction_count: number
+  locked: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+/**
+ * Convert UTC date string to user's local date string.
+ * Used for displaying dates in user's timezone.
+ *
+ * @param utcDateStr - Date string in YYYY-MM-DD format (UTC)
+ * @returns Date string in YYYY-MM-DD format (local timezone)
+ */
+export function utcDateToLocalDate(utcDateStr: string): string {
+  // Parse UTC date at noon to avoid timezone edge cases
+  const utcDate = new Date(utcDateStr + 'T12:00:00Z')
+  const year = utcDate.getFullYear()
+  const month = String(utcDate.getMonth() + 1).padStart(2, '0')
+  const day = String(utcDate.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export interface EmotionReport {

@@ -2,6 +2,7 @@
 import json
 import os
 import logging
+from datetime import datetime, timedelta
 from typing import Optional
 
 # Third-party imports
@@ -10,6 +11,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from pymongo import MongoClient
 
 # Add parent directory to path for imports
 import sys
@@ -46,6 +48,12 @@ check_environment_variables()
 # Global instances
 GEMINI_CLIENT = genai.Client(api_key=GEMINI_API_KEY)
 weaviate_manager = WeaviateManager()
+
+# MongoDB connection for persistent emotion scores
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+mongo_client = MongoClient(MONGODB_URI)
+mongo_db = mongo_client["emoticonnection"]
+daily_scores_collection = mongo_db["daily_emotion_scores"]
 
 
 # ==================== API Routes ====================
@@ -456,13 +464,200 @@ def get_emotion_summary():
         }
         
         return jsonify(summary), 200
-        
+
     except Exception as e:
         logger.error(f"Error in get_emotion_summary endpoint: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ==================== Emotion Scores Persistence API ====================
+
+@app.route('/api/emotion-scores/weekly', methods=['GET'])
+def get_weekly_emotion_scores():
+    """
+    Get user's persisted daily emotion scores for the past 7 days.
+
+    Query parameters:
+        user_id (required): User identifier
+
+    Returns:
+        Consistent data across all devices (stored in MongoDB)
+    """
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Missing user_id'}), 400
+
+    try:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
+        # 1. Lock past scores (ensure they can't be modified)
+        daily_scores_collection.update_many(
+            {"user_id": user_id, "date": {"$lt": today}, "locked": False},
+            {"$set": {"locked": True}}
+        )
+
+        # 2. Get 7 days of data
+        start_date = (datetime.utcnow() - timedelta(days=6)).strftime("%Y-%m-%d")
+        scores = list(daily_scores_collection.find(
+            {"user_id": user_id, "date": {"$gte": start_date, "$lte": today}},
+            {"_id": 0}
+        ).sort("date", 1))
+
+        # 3. If no scores exist, try to migrate from weekly report
+        if not scores:
+            scores = _migrate_from_weekly_report(user_id, today)
+
+        # Convert datetime objects to strings for JSON serialization
+        for score in scores:
+            if isinstance(score.get('created_at'), datetime):
+                score['created_at'] = score['created_at'].isoformat()
+            if isinstance(score.get('updated_at'), datetime):
+                score['updated_at'] = score['updated_at'].isoformat()
+
+        return jsonify({"scores": scores}), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_weekly_emotion_scores: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/emotion-scores/monthly', methods=['GET'])
+def get_monthly_emotion_scores():
+    """
+    Get user's persisted daily emotion scores for the past 30 days.
+
+    Query parameters:
+        user_id (required): User identifier
+    """
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Missing user_id'}), 400
+
+    try:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
+        daily_scores_collection.update_many(
+            {"user_id": user_id, "date": {"$lt": today}, "locked": False},
+            {"$set": {"locked": True}}
+        )
+
+        start_date = (datetime.utcnow() - timedelta(days=29)).strftime("%Y-%m-%d")
+        scores = list(daily_scores_collection.find(
+            {"user_id": user_id, "date": {"$gte": start_date, "$lte": today}},
+            {"_id": 0}
+        ).sort("date", 1))
+
+        # Convert datetime objects to strings
+        for score in scores:
+            if isinstance(score.get('created_at'), datetime):
+                score['created_at'] = score['created_at'].isoformat()
+            if isinstance(score.get('updated_at'), datetime):
+                score['updated_at'] = score['updated_at'].isoformat()
+
+        return jsonify({"scores": scores}), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_monthly_emotion_scores: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/emotion-scores/refresh-today', methods=['POST'])
+def refresh_today_score():
+    """
+    Refresh today's emotion score based on today's chat conversations.
+    Called after AI chat interactions to update the score.
+    """
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Missing user_id'}), 400
+
+    try:
+        # Generate daily report (only analyzes today's data)
+        report = generate_emotion_analytics_report(user_id, 'daily')
+
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
+        # Get dominant emotion from distribution
+        emotion_dist = report.get('emotion_distribution', {})
+        dominant_emotion = 'neutral'
+        if emotion_dist:
+            dominant_emotion = max(emotion_dist.keys(), key=lambda k: emotion_dist[k])
+
+        score_doc = {
+            "user_id": user_id,
+            "date": today,
+            "avg_score": report.get('metrics', {}).get('average_mood_score', 0.0),
+            "dominant_emotion": dominant_emotion,
+            "interaction_count": report.get('metrics', {}).get('total_interactions', 0),
+            "locked": False,
+            "updated_at": datetime.utcnow()
+        }
+
+        daily_scores_collection.update_one(
+            {"user_id": user_id, "date": today},
+            {"$set": score_doc, "$setOnInsert": {"created_at": datetime.utcnow()}},
+            upsert=True
+        )
+
+        # Convert datetime for response
+        score_doc["updated_at"] = score_doc["updated_at"].isoformat()
+
+        return jsonify({"success": True, "score": score_doc}), 200
+
+    except Exception as e:
+        logger.error(f"Error in refresh_today_score: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _migrate_from_weekly_report(user_id: str, today: str) -> list:
+    """
+    Migrate historical data from weekly report on first access.
+    This ensures existing users have their past data persisted.
+    """
+    try:
+        logger.info(f"Migrating emotion scores from weekly report for user {user_id}")
+        report = generate_emotion_analytics_report(user_id, 'weekly')
+        data_points = report.get('emotion_trend', {}).get('data_points', [])
+
+        migrated = []
+        for dp in data_points:
+            date_str = dp.get('date', '')[:10]  # Only take date part
+            if not date_str:
+                continue
+
+            doc = {
+                "user_id": user_id,
+                "date": date_str,
+                "avg_score": dp.get('avg_score', 0.0),
+                "dominant_emotion": dp.get('dominant_emotion', 'neutral'),
+                "interaction_count": dp.get('count', 1),
+                "locked": date_str < today,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+
+            # Only insert if not exists (avoid overwriting)
+            daily_scores_collection.update_one(
+                {"user_id": user_id, "date": doc['date']},
+                {"$setOnInsert": doc},
+                upsert=True
+            )
+
+            # Prepare for response
+            doc_copy = doc.copy()
+            doc_copy["created_at"] = doc["created_at"].isoformat()
+            doc_copy["updated_at"] = doc["updated_at"].isoformat()
+            migrated.append(doc_copy)
+
+        logger.info(f"Migrated {len(migrated)} scores for user {user_id}")
+        return migrated
+
+    except Exception as e:
+        logger.error(f"Migration failed for user {user_id}: {e}")
+        return []
 
 
 # ==================== Main ====================
