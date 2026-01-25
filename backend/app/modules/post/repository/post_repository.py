@@ -37,6 +37,7 @@ class PostRepository:
         visibility: str = "public",
         tags: Optional[List[str]] = None,
         emotion: Optional[str] = None,
+        emotion_color: Optional[str] = None,
         ai_emotion: Optional[str] = None,
         title: Optional[str] = None
     ) -> Dict:
@@ -75,6 +76,7 @@ class PostRepository:
             "visibility": visibility,
             "tags": tags,
             "emotion": emotion,
+            "emotion_color": emotion_color,  # Custom emotion color
             "ai_emotion": ai_emotion,
             "like_count": 0,
             "comment_count": 0,
@@ -816,6 +818,7 @@ class PostRepository:
             "visibility": post.get("visibility", "public"),
             "tags": post.get("tags", []),
             "emotion": post.get("emotion"),
+            "emotion_color": post.get("emotion_color"),  # Custom emotion color
             "ai_emotion": post.get("ai_emotion"),
             "like_count": post.get("like_count", 0),
             "comment_count": post.get("comment_count", 0),

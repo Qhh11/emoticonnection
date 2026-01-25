@@ -1,7 +1,7 @@
 // API 服务层 - 统一管理所有后端 API 调用
 
-//const BASE_URL = 'http://localhost:8000'
-const BASE_URL = "https://emoticonnection-backend.onrender.com"
+const BASE_URL = 'http://localhost:8000'
+//const BASE_URL = "https://emoticonnection-backend.onrender.com"
 
 // Token 管理
 export const getToken = (): string | null => {
@@ -143,6 +143,11 @@ export interface PointsResponse {
 export interface CheckInRequest {
   mood: string
   date?: string
+  // 情绪坐标轴相关字段
+  coordinate_x?: number  // -1 (消极) 到 1 (积极)
+  coordinate_y?: number  // -1 (低能量) 到 1 (高能量)
+  color?: string         // 计算出的颜色HEX值
+  emoji?: string         // 表情图标: 'angry' | 'happy' | 'sad' | 'calm'
 }
 
 export interface CheckInResponse {
@@ -156,6 +161,11 @@ export interface CheckInHistoryItem {
   date: string
   mood: string
   points_earned: number
+  // 情绪坐标轴相关字段
+  coordinate_x?: number
+  coordinate_y?: number
+  color?: string
+  emoji?: string
 }
 
 export const userApi = {
@@ -211,6 +221,7 @@ export interface Post {
   visibility: 'public' | 'friends' | 'anonymous'
   tags: string[]
   emotion: string | null
+  emotion_color: string | null  // Custom emotion color
   ai_emotion: string | null
   like_count: number
   comment_count: number
@@ -235,6 +246,7 @@ export interface CreatePostRequest {
   is_anonymous?: boolean
   tags?: string[]
   emotion?: string
+  emotion_color?: string  // Custom emotion color
   media_urls?: string[]
   visibility?: string
 }
@@ -562,6 +574,7 @@ export interface Diary {
   title: string
   content: string
   mood: string
+  color?: string  // Custom mood color (for custom emotions)
   created_at: string
 }
 
@@ -570,6 +583,7 @@ export interface CreateDiaryRequest {
   title: string
   content: string
   mood: string
+  color?: string  // Custom mood color (for custom emotions)
   session_id?: string
 }
 

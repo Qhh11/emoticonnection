@@ -4,7 +4,60 @@ import { getAvatarUrl } from '../../config/userAvatars'
 import { SocialStats, Post, User, EmotionReport, DailyEmotionScore, getMediaUrl, userApi, CheckInHistoryItem, aiChatApi, utcDateToLocalDate } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
 
-// Global Mood-Color Mapping from DESIGN_SYSTEM.md
+// 表情图片映射 - 使用 public 目录下的透明图片
+const EMOJI_IMAGES: Record<string, string> = {
+  happy: '/checkin/happy.png',   // 第一象限 - 黄色区域
+  angry: '/checkin/angry.png',   // 第二象限 - 红色区域
+  sad: '/checkin/sad.png',       // 第三象限 - 蓝色区域
+  calm: '/checkin/peace.png',    // 第四象限 - 绿色区域
+}
+
+// 8x8 网格颜色矩阵 - 与渲染的色块完全一致
+const COLOR_GRID = [
+  // 行1 (最上)
+  ['#D32F2F', '#DC4545', '#E55A5A', '#EE7070', '#FAD870', '#F9D040', '#E8C020', '#D8B010'],
+  // 行2
+  ['#DC4545', '#E55A5A', '#EE7070', '#F58585', '#FBE4A0', '#FAD870', '#F9D040', '#E8C020'],
+  // 行3
+  ['#E55A5A', '#EE7070', '#F58585', '#FAA0A0', '#FCF0C0', '#FBE4A0', '#FAD870', '#F9D040'],
+  // 行4 (靠近中心上)
+  ['#EE7070', '#F58585', '#FAA0A0', '#FDB5B5', '#FDFAE0', '#FCF0C0', '#FBE4A0', '#FAD870'],
+  // 行5 (靠近中心下)
+  ['#5588CC', '#6699D5', '#77AADD', '#88BBE5', '#E0F0D0', '#D0E8C0', '#C0E0B0', '#B0D8A0'],
+  // 行6
+  ['#4477BB', '#5588CC', '#6699D5', '#77AADD', '#B0D8A0', '#A0D090', '#90C880', '#80C070'],
+  // 行7
+  ['#3266B1', '#4477BB', '#5588CC', '#6699D5', '#90C880', '#80C070', '#70B860', '#66B04C'],
+  // 行8 (最下)
+  ['#2855A0', '#3266B1', '#4477BB', '#5588CC', '#80C070', '#70B860', '#66B04C', '#56A03C'],
+]
+
+// 根据坐标从网格中采样颜色
+function calculateColor(x: number, y: number): string {
+  // 将 [-1, 1] 映射到 [0, 7]
+  const col = Math.min(7, Math.max(0, Math.floor((x + 1) / 2 * 8)))
+  // y 轴反转: y=1 对应 row=0, y=-1 对应 row=7
+  const row = Math.min(7, Math.max(0, Math.floor((1 - y) / 2 * 8)))
+  return COLOR_GRID[row][col]
+}
+
+// 根据坐标获取表情
+function getEmojiFromCoordinate(x: number, y: number): string {
+  if (x >= 0 && y >= 0) return 'happy'   // 右上
+  if (x < 0 && y >= 0) return 'angry'    // 左上
+  if (x < 0 && y < 0) return 'sad'       // 左下
+  return 'calm'                           // 右下
+}
+
+// 根据坐标获取情绪标签
+function getMoodLabelFromCoordinate(x: number, y: number): string {
+  if (x >= 0 && y >= 0) return 'Excited'
+  if (x < 0 && y >= 0) return 'Stressed'
+  if (x < 0 && y < 0) return 'Sad'
+  return 'Calm'
+}
+
+// Global Mood-Color Mapping from DESIGN_SYSTEM.md (保留用于向后兼容)
 const MOOD_DATA = [
   { label: 'Bored', color: '#4B4E91', text: '#ffffff' },
   { label: 'Fear', color: '#9381BA', text: '#ffffff' },
@@ -139,12 +192,20 @@ function DiaryStackItem({ title, date, color, mood, accent, onClick }: DiaryStac
 }
 
 
+// 签到数据类型
+export interface CheckInData {
+  coordinate: { x: number; y: number }
+  color: string
+  emoji: string
+  mood: string
+}
+
 interface ProfileViewProps {
   points: number
   level: number
   avatar: string
-  onCheckIn: (mood: string) => Promise<boolean>
-  onUpdateCheckIn: (mood: string) => Promise<boolean>
+  onCheckIn: (data: CheckInData) => Promise<boolean>
+  onUpdateCheckIn: (data: CheckInData) => Promise<boolean>
   onThemeChange: (theme: Theme) => void
   currentTheme: Theme
   onOpenAvatarGallery: () => void
@@ -155,7 +216,15 @@ interface ProfileViewProps {
   userPosts: Post[]
   onOpenJournalDetail: (entry: DiaryEntry) => void
   onOpenPostDetail: (post: Post) => void
-  todayCheckIn: { mood: string; color: string; text: string; streak: number } | null
+  todayCheckIn: {
+    mood: string
+    color: string
+    text: string
+    streak: number
+    coordinate_x?: number
+    coordinate_y?: number
+    emoji?: string
+  } | null
   onOpenSettings?: () => void
   onViewFollowing?: () => void
   onViewFollowers?: () => void
@@ -195,13 +264,21 @@ const getTrendLabel = (direction: string): string => {
 }
 
 export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport, persistedScores, onRefreshScores }: ProfileViewProps) {
-  const [checkedInMood, setCheckedInMood] = useState<{ label: string; color: string; text: string } | null>(null)
-  const [showMoodPicker, setShowMoodPicker] = useState(false)
   const [isRefreshingScore, setIsRefreshingScore] = useState(false)
-
-  // Use todayCheckIn from props or local state
-  const effectiveCheckIn = todayCheckIn || checkedInMood
   const [showThemeSelector, setShowThemeSelector] = useState(false)
+
+  // 坐标轴打卡相关状态
+  const [showCoordinatePicker, setShowCoordinatePicker] = useState(false)
+  const [coordinate, setCoordinate] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+
+  // 计算当前颜色和表情
+  const currentColor = calculateColor(coordinate.x, coordinate.y)
+  const currentEmoji = getEmojiFromCoordinate(coordinate.x, coordinate.y)
+
+  // 使用 todayCheckIn 判断是否已签到
+  const effectiveCheckIn = todayCheckIn
 
   // Calendar state with check-in history
   type CalendarDate = {
@@ -209,6 +286,9 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
     isToday: boolean
     isPast: boolean
     mood: typeof MOOD_DATA[0] | null
+    // 新增坐标轴签到字段
+    customColor?: string
+    emoji?: string
   }
 
   const [calendarData, setCalendarData] = useState<{ monthYear: string; dates: CalendarDate[]; startDayOffset: number }>(() => {
@@ -245,24 +325,34 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
       try {
         const history = await userApi.getCheckInHistory(user._id, 31)
 
-        // Create a map of date -> mood
+        // Create a map of date -> mood/color/emoji data
         const today = new Date()
         const year = today.getFullYear()
         const month = today.getMonth()
 
-        const checkInMap = new Map<number, typeof MOOD_DATA[0]>()
+        const checkInMap = new Map<number, { mood: typeof MOOD_DATA[0] | null; customColor?: string; emoji?: string }>()
 
         history.forEach((item: CheckInHistoryItem) => {
           const itemDate = new Date(item.date)
           // Only consider check-ins from current month
           if (itemDate.getFullYear() === year && itemDate.getMonth() === month) {
             const day = itemDate.getDate()
-            // Find matching mood data
-            const moodData = MOOD_DATA.find(m =>
-              m.label.toLowerCase() === item.mood.toLowerCase()
-            )
-            if (moodData) {
-              checkInMap.set(day, moodData)
+
+            // 优先使用坐标轴签到的数据
+            if (item.color && item.emoji) {
+              checkInMap.set(day, {
+                mood: null,
+                customColor: item.color,
+                emoji: item.emoji
+              })
+            } else {
+              // 旧的心情签到数据 - 向后兼容
+              const moodData = MOOD_DATA.find(m =>
+                m.label.toLowerCase() === item.mood.toLowerCase()
+              )
+              if (moodData) {
+                checkInMap.set(day, { mood: moodData })
+              }
             }
           }
         })
@@ -270,10 +360,15 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
         // Update calendar with check-in data
         setCalendarData(prev => ({
           ...prev,
-          dates: prev.dates.map(dateInfo => ({
-            ...dateInfo,
-            mood: checkInMap.get(dateInfo.day) || null
-          }))
+          dates: prev.dates.map(dateInfo => {
+            const checkIn = checkInMap.get(dateInfo.day)
+            return {
+              ...dateInfo,
+              mood: checkIn?.mood || null,
+              customColor: checkIn?.customColor,
+              emoji: checkIn?.emoji
+            }
+          })
         }))
       } catch (err) {
         console.error('Failed to fetch check-in history:', err)
@@ -286,22 +381,60 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
   const currentMonth = calendarData.monthYear
   const calendarDates = calendarData.dates
 
-  const handleCheckIn = async (mood: typeof MOOD_DATA[0]) => {
+  // 拖拽处理
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+    updatePosition(e)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return
+    updatePosition(e)
+  }
+
+  const handlePointerUp = () => setIsDragging(false)
+
+  const updatePosition = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    let x = (e.clientX - rect.left - centerX) / centerX
+    let y = -(e.clientY - rect.top - centerY) / centerY
+    x = Math.max(-1, Math.min(1, x))
+    y = Math.max(-1, Math.min(1, y))
+    setCoordinate({ x, y })
+  }
+
+  // 确认打卡
+  const handleConfirmCheckIn = async () => {
+    const data: CheckInData = {
+      coordinate: coordinate,
+      color: currentColor,
+      emoji: currentEmoji,
+      mood: getMoodLabelFromCoordinate(coordinate.x, coordinate.y)
+    }
+
     let success: boolean
     if (effectiveCheckIn) {
-      // Already checked in today, update mood
-      success = await onUpdateCheckIn(mood.label)
+      // Already checked in today, update
+      success = await onUpdateCheckIn(data)
     } else {
       // First check-in of the day
-      success = await onCheckIn(mood.label)
+      success = await onCheckIn(data)
     }
+
     if (success) {
-      setCheckedInMood(mood)
-      setShowMoodPicker(false)
-      // Update calendar to reflect new mood
+      setShowCoordinatePicker(false)
+      // Update calendar to reflect new check-in
       setCalendarData(prev => ({
         ...prev,
-        dates: prev.dates.map(d => d.isToday ? { ...d, mood } : d)
+        dates: prev.dates.map(d => d.isToday ? {
+          ...d,
+          mood: null,
+          customColor: currentColor,
+          emoji: currentEmoji
+        } : d)
       }))
     }
   }
@@ -382,7 +515,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
       <section className="grid lg:grid-cols-5 gap-8">
         <div className="lg:col-span-3 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-6 flex flex-col justify-between h-[420px]">
           <div className="flex justify-between items-center">
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Emotion Insights</h4>
+            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-black">Emotion Insights</h4>
             <span className="text-[12px] font-bold text-black/20">Weekly</span>
           </div>
 
@@ -566,24 +699,187 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
 
         <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] flex flex-col shadow-sm relative">
           <div className="flex justify-between items-center mb-4">
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Check-in</h4>
+            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-black">Check-in</h4>
             <span className="text-[13px] font-black tracking-widest text-accent">STREAK: {todayCheckIn?.streak ?? 0}</span>
           </div>
           <div className="mb-3">
             <p className="text-[14px] font-black tracking-wider text-gray-800">{currentMonth}</p>
           </div>
 
-          {/* Mood Picker - Show at top when active */}
-          {showMoodPicker && (
+          {/* 坐标轴打卡组件 */}
+          {showCoordinatePicker && (
             <div className="mb-4 bg-gray-50 p-4 rounded-2xl border border-black/5">
-              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-300 mb-3">Choose Vibe</p>
-              <div className="grid grid-cols-3 gap-2">
-                {MOOD_DATA.map(m => (
-                  <button key={m.label} onClick={() => handleCheckIn(m)} className="aspect-square rounded-xl flex flex-col items-center justify-center space-y-1 transition-all hover:scale-105 active:scale-95 shadow-sm" style={{ backgroundColor: m.color }}>
-                    <span className="text-[14px] font-black tracking-tighter uppercase" style={{ color: m.text }}>{m.label}</span>
+              {/* 标题 + Help Dropdown */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-300">
+                  How are you feeling?
+                </p>
+                {/* Help Dropdown 触发按钮 */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowHelpModal(!showHelpModal)}
+                    className="w-5 h-5 rounded-full bg-gray-200 text-gray-400 text-xs flex items-center justify-center hover:bg-gray-300 transition-colors"
+                  >
+                    ?
                   </button>
-                ))}
+
+                  {/* Help Dropdown Panel */}
+                  {showHelpModal && (
+                    <div className="absolute right-0 top-7 w-64 bg-white rounded-2xl shadow-xl border border-black/5 z-50 p-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                      {/* Arrow */}
+                      <div className="absolute -top-2 right-2 w-4 h-4 bg-white rotate-45 border-l border-t border-black/5" />
+
+                      {/* Title */}
+                      <h4 className="text-[13px] font-black text-gray-800 mb-3">Emotion Coordinate Guide</h4>
+
+                      {/* Coordinate diagram */}
+                      <div className="relative aspect-square bg-gray-50 rounded-xl overflow-hidden mb-3">
+                        {/* 4 quadrant backgrounds */}
+                        <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+                          <div className="bg-[#D32F2F]/15" />
+                          <div className="bg-[#F9D040]/15" />
+                          <div className="bg-[#3266B1]/15" />
+                          <div className="bg-[#66B04C]/15" />
+                        </div>
+
+                        {/* Axis lines */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="absolute w-full h-[1px] bg-gray-200" />
+                          <div className="absolute h-full w-[1px] bg-gray-200" />
+                        </div>
+
+                        {/* Center point */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-2 h-2 rounded-full bg-gray-300" />
+                        </div>
+
+                        {/* Axis labels */}
+                        <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[7px] font-bold text-gray-400">Negative</span>
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[7px] font-bold text-gray-400">Positive</span>
+                        <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[7px] font-bold text-gray-400">High Energy</span>
+                        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[7px] font-bold text-gray-400">Low Energy</span>
+
+                        {/* Four quadrant emotions */}
+                        <div className="absolute top-[12%] left-[12%] flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full bg-[#D32F2F] flex items-center justify-center">
+                            <img src="/checkin/angry.png" alt="angry" className="w-4 h-4" />
+                          </div>
+                          <span className="text-[7px] font-bold text-gray-500 mt-0.5">Stressed</span>
+                        </div>
+
+                        <div className="absolute top-[12%] right-[12%] flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full bg-[#F9D040] flex items-center justify-center">
+                            <img src="/checkin/happy.png" alt="happy" className="w-5 h-5" />
+                          </div>
+                          <span className="text-[7px] font-bold text-gray-500 mt-0.5">Excited</span>
+                        </div>
+
+                        <div className="absolute bottom-[12%] left-[12%] flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full bg-[#3266B1] flex items-center justify-center">
+                            <img src="/checkin/sad.png" alt="sad" className="w-5 h-5" />
+                          </div>
+                          <span className="text-[7px] font-bold text-gray-500 mt-0.5">Sad</span>
+                        </div>
+
+                        <div className="absolute bottom-[12%] right-[12%] flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full bg-[#66B04C] flex items-center justify-center">
+                            <img src="/checkin/peace.png" alt="calm" className="w-6 h-6" />
+                          </div>
+                          <span className="text-[7px] font-bold text-gray-500 mt-0.5">Relaxed</span>
+                        </div>
+                      </div>
+
+                      {/* Instructions */}
+                      <p className="text-[10px] text-gray-400 text-center">
+                        Drag the dot to express your mood
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* 坐标轴画布 */}
+              <div
+                className="relative w-full aspect-square rounded-xl overflow-hidden cursor-crosshair touch-none"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+              >
+                {/* 8x8 渐变色块网格 - 每个象限4x4，四个角最深，中心最浅 */}
+                <div className="absolute inset-0 grid grid-cols-8 grid-rows-8">
+                  {/* 行1 (最上) - 左上红色最深，右上黄色最深 */}
+                  <div className="bg-[#D32F2F]" /><div className="bg-[#DC4545]" /><div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" />
+                  <div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" /><div className="bg-[#E8C020]" /><div className="bg-[#D8B010]" />
+                  {/* 行2 */}
+                  <div className="bg-[#DC4545]" /><div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" /><div className="bg-[#F58585]" />
+                  <div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" /><div className="bg-[#E8C020]" />
+                  {/* 行3 */}
+                  <div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" /><div className="bg-[#F58585]" /><div className="bg-[#FAA0A0]" />
+                  <div className="bg-[#FCF0C0]" /><div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" />
+                  {/* 行4 (靠近中心) */}
+                  <div className="bg-[#EE7070]" /><div className="bg-[#F58585]" /><div className="bg-[#FAA0A0]" /><div className="bg-[#FDB5B5]" />
+                  <div className="bg-[#FDFAE0]" /><div className="bg-[#FCF0C0]" /><div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" />
+
+                  {/* 行5 (靠近中心) - 蓝色和绿色都是原点最浅 */}
+                  <div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" /><div className="bg-[#77AADD]" /><div className="bg-[#88BBE5]" />
+                  <div className="bg-[#E0F0D0]" /><div className="bg-[#D0E8C0]" /><div className="bg-[#C0E0B0]" /><div className="bg-[#B0D8A0]" />
+                  {/* 行6 */}
+                  <div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" /><div className="bg-[#77AADD]" />
+                  <div className="bg-[#B0D8A0]" /><div className="bg-[#A0D090]" /><div className="bg-[#90C880]" /><div className="bg-[#80C070]" />
+                  {/* 行7 */}
+                  <div className="bg-[#3266B1]" /><div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" />
+                  <div className="bg-[#90C880]" /><div className="bg-[#80C070]" /><div className="bg-[#70B860]" /><div className="bg-[#66B04C]" />
+                  {/* 行8 (最下) - 左下蓝色最深，右下绿色最深 */}
+                  <div className="bg-[#2855A0]" /><div className="bg-[#3266B1]" /><div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" />
+                  <div className="bg-[#80C070]" /><div className="bg-[#70B860]" /><div className="bg-[#66B04C]" /><div className="bg-[#56A03C]" />
+                </div>
+
+                {/* 坐标轴线 */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="absolute w-full h-[2px] bg-white/40" />
+                  <div className="absolute h-full w-[2px] bg-white/40" />
+                </div>
+
+                {/* 坐标轴标签 - 放在轴的两端 */}
+                {/* 横轴: Negative -> Positive */}
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-black/70 text-[11px] font-bold">Negative</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-black/70 text-[11px] font-bold">Positive</span>
+                {/* 纵轴: Low Energy -> High Energy */}
+                <span className="absolute top-2 left-1/2 -translate-x-1/2 text-black/70 text-[11px] font-bold">High Energy</span>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-black/70 text-[11px] font-bold">Low Energy</span>
+
+                {/* 中心表情 - 背景颜色随光标位置动态变化 */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors duration-200"
+                    style={{ backgroundColor: currentColor }}
+                  >
+                    <img
+                      src={EMOJI_IMAGES[currentEmoji]}
+                      alt={currentEmoji}
+                      className="w-9 h-9 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                {/* 可拖拽的点 */}
+                <div
+                  className="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-gray-400 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10"
+                  style={{
+                    left: `${(coordinate.x + 1) / 2 * 100}%`,
+                    top: `${(1 - (coordinate.y + 1) / 2) * 100}%`,
+                  }}
+                />
+              </div>
+
+              {/* 确认按钮 */}
+              <button
+                onClick={handleConfirmCheckIn}
+                className="mt-3 w-full py-2.5 bg-black text-white rounded-xl text-[12px] font-black uppercase tracking-widest hover:bg-gray-800 transition-colors"
+              >
+                Confirm Check-in
+              </button>
             </div>
           )}
 
@@ -605,11 +901,32 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
             {calendarDates.map((dateInfo, i) => {
               // Today - show check-in button (always clickable to allow mood update)
               if (dateInfo.isToday) {
+                const todayColor = effectiveCheckIn?.color || dateInfo.customColor
                 return (
-                  <button key={i} onClick={() => setShowMoodPicker(!showMoodPicker)} className={`group w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-500 border-2 text-[12px] ${effectiveCheckIn ? 'border-transparent shadow-lg font-black hover:opacity-90' : 'bg-transparent border-accent text-accent hover:bg-accent hover:text-white hover:scale-105'}`} style={{ backgroundColor: effectiveCheckIn?.color || 'transparent', color: effectiveCheckIn?.text || 'inherit' }}>
-                    {effectiveCheckIn ? (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      // 如果已签到，初始化坐标到已有位置
+                      if (effectiveCheckIn?.coordinate_x !== undefined && effectiveCheckIn?.coordinate_y !== undefined) {
+                        setCoordinate({ x: effectiveCheckIn.coordinate_x, y: effectiveCheckIn.coordinate_y })
+                      } else {
+                        setCoordinate({ x: 0, y: 0 })
+                      }
+                      setShowCoordinatePicker(!showCoordinatePicker)
+                    }}
+                    className={`group w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-500 border-2 text-[12px] relative ${todayColor ? 'border-transparent shadow-lg font-black hover:opacity-90' : 'bg-transparent border-accent text-accent hover:bg-accent hover:text-white hover:scale-105'}`}
+                    style={{ backgroundColor: todayColor || 'transparent', color: todayColor ? '#fff' : 'inherit' }}
+                  >
+                    {todayColor ? (
                       <>
-                        <span className="group-hover:hidden">{dateInfo.day}</span>
+                        {/* 显示表情图标 */}
+                        {(effectiveCheckIn?.emoji || dateInfo.emoji) && (
+                          <img
+                            src={EMOJI_IMAGES[effectiveCheckIn?.emoji || dateInfo.emoji || 'happy']}
+                            alt=""
+                            className="w-8 h-8 group-hover:hidden"
+                          />
+                        )}
                         <span className="hidden group-hover:block text-sm">✎</span>
                       </>
                     ) : (
@@ -621,15 +938,27 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
 
               // Past days - show with mood color if checked in, gray if not
               if (dateInfo.isPast) {
+                // 优先使用新的坐标轴签到数据 - 显示表情图标
+                if (dateInfo.customColor && dateInfo.emoji) {
+                  return (
+                    <div key={i} className="aspect-square rounded-xl border border-transparent flex items-center justify-center transition-all duration-500 shadow-sm" style={{ backgroundColor: dateInfo.customColor }}>
+                      <img
+                        src={EMOJI_IMAGES[dateInfo.emoji]}
+                        alt=""
+                        className="w-8 h-8"
+                      />
+                    </div>
+                  )
+                }
+                // 旧的心情签到数据 - 向后兼容，显示数字
                 if (dateInfo.mood) {
-                  // 有签到记录，显示 mood 颜色
                   return (
                     <div key={i} className="aspect-square rounded-xl border border-transparent flex items-center justify-center text-[12px] font-black transition-all duration-500 shadow-sm" style={{ backgroundColor: dateInfo.mood.color, color: dateInfo.mood.text }}>
                       {dateInfo.day}
                     </div>
                   )
                 }
-                // 没有签到记录，显示灰色
+                // 没有签到记录，显示灰色数字
                 return (
                   <div key={i} className="aspect-square rounded-xl border border-black/5 flex items-center justify-center text-[12px] font-black text-black/10 transition-all duration-500">
                     {dateInfo.day}
@@ -656,9 +985,23 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
           <div className="card-stack overflow-visible px-4 pt-10">
             {userPosts.slice(0, 5).map((post, i) => {
               const postMood = post.emotion || post.ai_emotion || 'Neutral'
-              const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === postMood.toLowerCase())
-              const color = moodData?.color || '#4B4E91'
-              const textColor = postMood === 'Joy' ? '#121212' : '#ffffff'
+              // Use custom emotion_color if available, otherwise fall back to mood color mapping
+              let color: string
+              let textColor: string
+              if (post.emotion_color) {
+                color = post.emotion_color
+                // Calculate text color based on brightness
+                const hex = post.emotion_color.replace('#', '')
+                const r = parseInt(hex.substr(0, 2), 16)
+                const g = parseInt(hex.substr(2, 2), 16)
+                const b = parseInt(hex.substr(4, 2), 16)
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000
+                textColor = brightness > 128 ? '#121212' : '#ffffff'
+              } else {
+                const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === postMood.toLowerCase())
+                color = moodData?.color || '#4B4E91'
+                textColor = postMood === 'Joy' ? '#121212' : '#ffffff'
+              }
               const imageUrl = post.media_urls && post.media_urls.length > 0 ? getMediaUrl(post.media_urls[0]) : undefined
               return (
                 <GalleryCard

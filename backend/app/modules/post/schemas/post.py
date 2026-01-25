@@ -76,6 +76,11 @@ class PostCreate(BaseModel):
         description="User-selected emotion for the post",
         json_schema_extra={"example": "happy"}
     )
+    emotion_color: Optional[str] = Field(
+        default=None,
+        description="Custom emotion color (hex)",
+        json_schema_extra={"example": "#9381BA"}
+    )
 
 
 class PostUpdate(BaseModel):
@@ -108,6 +113,7 @@ class PostOut(BaseModel):
     visibility: PostVisibility = Field(..., description="Visibility setting")
     tags: List[str] = Field(default_factory=list, description="Post tags")
     emotion: Optional[str] = Field(None, description="User-selected emotion")
+    emotion_color: Optional[str] = Field(None, description="Custom emotion color")
     ai_emotion: Optional[str] = Field(None, description="AI-analyzed emotion")
     like_count: int = Field(default=0, description="Number of likes")
     comment_count: int = Field(default=0, description="Number of comments")

@@ -16,13 +16,25 @@ check_ins = db.check_ins
 users = db.users
 
 
-def create_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
+def create_check_in(
+    user_id: str,
+    mood: str,
+    check_date: str,
+    coordinate_x: Optional[float] = None,
+    coordinate_y: Optional[float] = None,
+    color: Optional[str] = None,
+    emoji: Optional[str] = None
+) -> Dict[str, Any]:
     """
     创建打卡记录并更新用户积分
 
     :param user_id: 用户ID
-    :param mood: 情绪
+    :param mood: 情绪标签
     :param check_date: 打卡日期 (YYYY-MM-DD)
+    :param coordinate_x: 情绪坐标X (-1到1)
+    :param coordinate_y: 情绪坐标Y (-1到1)
+    :param color: 计算出的颜色HEX值
+    :param emoji: 表情图标名称
     :return: 打卡记录
     """
     # 检查今天是否已经打卡
@@ -40,7 +52,11 @@ def create_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
         "date": check_date,
         "mood": mood,
         "points_earned": 10,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
+        "coordinate_x": coordinate_x,
+        "coordinate_y": coordinate_y,
+        "color": color,
+        "emoji": emoji
     }
 
     result = check_ins.insert_one(check_in_doc)
@@ -182,13 +198,25 @@ def get_user_points(user_id: str) -> Dict[str, Any]:
     }
 
 
-def update_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
+def update_check_in(
+    user_id: str,
+    mood: str,
+    check_date: str,
+    coordinate_x: Optional[float] = None,
+    coordinate_y: Optional[float] = None,
+    color: Optional[str] = None,
+    emoji: Optional[str] = None
+) -> Dict[str, Any]:
     """
     更新当日打卡心情（不增加积分）
 
     :param user_id: 用户ID
-    :param mood: 新的情绪
+    :param mood: 新的情绪标签
     :param check_date: 打卡日期 (YYYY-MM-DD)
+    :param coordinate_x: 情绪坐标X (-1到1)
+    :param coordinate_y: 情绪坐标Y (-1到1)
+    :param color: 计算出的颜色HEX值
+    :param emoji: 表情图标名称
     :return: 更新结果
     """
     existing = get_check_in_by_date(user_id, check_date)
@@ -198,9 +226,18 @@ def update_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
             "message": "今天还没有打卡"
         }
 
+    update_data = {
+        "mood": mood,
+        "updated_at": datetime.utcnow(),
+        "coordinate_x": coordinate_x,
+        "coordinate_y": coordinate_y,
+        "color": color,
+        "emoji": emoji
+    }
+
     check_ins.update_one(
         {"user_id": user_id, "date": check_date},
-        {"$set": {"mood": mood, "updated_at": datetime.utcnow()}}
+        {"$set": update_data}
     )
 
     updated = get_check_in_by_date(user_id, check_date)

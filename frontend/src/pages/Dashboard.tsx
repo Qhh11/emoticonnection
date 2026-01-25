@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
+import FisheyeSidebar from '../components/dashboard/FisheyeSidebar'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
 import EmotionReportModal, { markUserActivity, getCachedReport, setCachedReport } from '../components/EmotionReportModal'
@@ -15,7 +16,7 @@ import CommunityView from './community/CommunityView'
 import PostDetailModal from './community/components/PostDetailModal'
 import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView, { PeerSession } from './soulsync/SoulSyncView'
-import ProfileView, { Theme, THEMES } from './profile/ProfileView'
+import ProfileView, { Theme, THEMES, CheckInData } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
 import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences, DailyEmotionScore } from '../services/api'
 
@@ -38,7 +39,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { user: AuthUser, logout } = useAuth()
   const [user, setUser] = useState<User | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('profile')
+  const [activeTab, setActiveTab] = useState<Tab>('community')
   const [points, setPoints] = useState(0)
   const [level, setLevel] = useState(1)
   const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([])
@@ -86,7 +87,15 @@ export default function Dashboard() {
   } | null>(null)
 
   // Today's check-in status
-  const [todayCheckIn, setTodayCheckIn] = useState<{ mood: string; color: string; text: string; streak: number } | null>(null)
+  const [todayCheckIn, setTodayCheckIn] = useState<{
+    mood: string
+    color: string
+    text: string
+    streak: number
+    coordinate_x?: number
+    coordinate_y?: number
+    emoji?: string
+  } | null>(null)
 
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false)
@@ -104,6 +113,7 @@ export default function Dashboard() {
 
   // User avatar state
   const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR)
+
 
   // User profile modal state (for viewing other users)
   const [viewingUserId, setViewingUserId] = useState<string | null>(null)
@@ -185,6 +195,9 @@ export default function Dashboard() {
   const [communityCreatePostOpen, setCommunityCreatePostOpen] = useState(false)
   const [communityPolishedContent, setCommunityPolishedContent] = useState<string | null>(null)
 
+  // Matching modal open state (for triggering tour when modal opens)
+  const [isMatchingModalOpen, setIsMatchingModalOpen] = useState(false)
+
   // Load user data from AuthUser on mount or when AuthUser changes
   useEffect(() => {
     if (AuthUser?.user_id) {
@@ -248,24 +261,33 @@ export default function Dashboard() {
     }
   }, [activeTab, selectedAvatar])
 
-  // Matching Tour - show tour for first-time VIP users on SoulSync tab
+  // Matching Tour - show tour for first-time VIP users when MatchingModal opens
   useEffect(() => {
-    if (activeTab === 'soulsync' && !hasSeenMatchingGuide && !hasActiveSession && level >= 3) {
-      // Delay showing tour to let the page render first
+    if (activeTab === 'soulsync' && isMatchingModalOpen && !hasSeenMatchingGuide && !hasActiveSession && level >= 3) {
+      // Delay showing tour to let the modal render first
       const timer = setTimeout(() => {
         setShowMatchingTour(true)
         setMatchingTourStep(1)
-      }, 500)
+      }, 300)
       return () => clearTimeout(timer)
-    } else if (activeTab !== 'soulsync') {
+    } else if (!isMatchingModalOpen || activeTab !== 'soulsync') {
       setShowMatchingTour(false)
     }
-  }, [activeTab, hasSeenMatchingGuide, hasActiveSession, level])
+  }, [activeTab, isMatchingModalOpen, hasSeenMatchingGuide, hasActiveSession, level])
 
   // Returning user welcome message - show for 5 seconds on SoulSync tab
-  // Only show on subsequent visits, NOT immediately after completing tour
+  // Show when: on SoulSync, not in chat, not in tour, and either:
+  // 1. Has seen matching guide before (returning user)
+  // 2. Is not a VIP user (level < 3, so they won't see the tour anyway)
   useEffect(() => {
-    if (activeTab === 'soulsync' && hasSeenMatchingGuide && !hasActiveSession && !showMatchingTour && !justCompletedTour) {
+    const shouldShowWelcome = activeTab === 'soulsync'
+      && !hasActiveSession
+      && !showMatchingTour
+      && !justCompletedTour
+      && !isMatchingModalOpen
+      && (hasSeenMatchingGuide || level < 3)
+
+    if (shouldShowWelcome) {
       setShowSoulSyncWelcome(true)
       const timer = setTimeout(() => {
         setShowSoulSyncWelcome(false)
@@ -274,7 +296,7 @@ export default function Dashboard() {
     } else {
       setShowSoulSyncWelcome(false)
     }
-  }, [activeTab, hasSeenMatchingGuide, hasActiveSession, showMatchingTour, justCompletedTour])
+  }, [activeTab, hasSeenMatchingGuide, hasActiveSession, showMatchingTour, justCompletedTour, isMatchingModalOpen, level])
 
   // Get returning user catchphrase for SoulSync based on avatar
   const getReturningUserCatchphrase = (): string => {
@@ -453,7 +475,7 @@ export default function Dashboard() {
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
             title: d.title || `Journal - ${new Date(d.created_at).toLocaleDateString()}`,
             mood: d.mood || 'Neutral',
-            color: getMoodColor(d.mood),
+            color: d.color || getMoodColor(d.mood),  // Use custom color if available, otherwise derive from mood
             text: d.content
           }))
           setDiaryEntries(entries)
@@ -471,12 +493,27 @@ export default function Dashboard() {
       userApi.getTodayCheckIn(user._id)
         .then(response => {
           if (response.checked_in && response.check_in) {
-            const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === response.check_in!.mood.toLowerCase())
-            if (moodData) {
-              setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: response.streak ?? 0 })
+            const checkIn = response.check_in
+            // 优先使用新的坐标轴签到数据
+            if (checkIn.color && checkIn.emoji) {
+              setTodayCheckIn({
+                mood: checkIn.mood,
+                color: checkIn.color,
+                text: '#fff',
+                streak: response.streak ?? 0,
+                coordinate_x: checkIn.coordinate_x,
+                coordinate_y: checkIn.coordinate_y,
+                emoji: checkIn.emoji
+              })
+            } else {
+              // 旧的心情签到数据 - 向后兼容
+              const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === checkIn.mood.toLowerCase())
+              if (moodData) {
+                setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: response.streak ?? 0 })
+              }
             }
           } else {
-            // 没有打卡但仍需要显示 streak
+            // 没有打卡
             setTodayCheckIn(null)
           }
         })
@@ -553,7 +590,8 @@ export default function Dashboard() {
           user_id: user._id,
           title: entry.title,
           content: entry.text,
-          mood: entry.mood
+          mood: entry.mood,
+          color: entry.color  // Pass custom color for custom emotions
         })
         // 标记用户活动，用于 Report 缓存判断
         markUserActivity(user._id)
@@ -579,7 +617,7 @@ export default function Dashboard() {
             date: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase(),
             title: d.title || `Journal - ${new Date(d.created_at).toLocaleDateString()}`,
             mood: d.mood || 'Neutral',
-            color: getMoodColor(d.mood),
+            color: d.color || getMoodColor(d.mood),  // Use custom color if available, otherwise derive from mood
             text: d.content
           }))
           setDiaryEntries(entries)
@@ -606,19 +644,31 @@ export default function Dashboard() {
     }
   }
 
-  const handleCheckIn = async (mood: string): Promise<boolean> => {
+  const handleCheckIn = async (data: CheckInData): Promise<boolean> => {
     if (!user?._id) return false
     try {
-      const response = await userApi.checkIn(user._id, { mood })
+      const response = await userApi.checkIn(user._id, {
+        mood: data.mood,
+        coordinate_x: data.coordinate.x,
+        coordinate_y: data.coordinate.y,
+        color: data.color,
+        emoji: data.emoji,
+      })
       if (response.success) {
         setPoints(response.total_points)
         // Refresh todayCheckIn state to get updated streak
         const todayResponse = await userApi.getTodayCheckIn(user._id)
         if (todayResponse.checked_in && todayResponse.check_in) {
-          const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === todayResponse.check_in!.mood.toLowerCase())
-          if (moodData) {
-            setTodayCheckIn({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: todayResponse.streak ?? 0 })
-          }
+          const checkIn = todayResponse.check_in
+          setTodayCheckIn({
+            mood: checkIn.mood,
+            color: checkIn.color || data.color,
+            text: '#fff',
+            streak: todayResponse.streak ?? 0,
+            coordinate_x: checkIn.coordinate_x,
+            coordinate_y: checkIn.coordinate_y,
+            emoji: checkIn.emoji
+          })
         }
         return true
       }
@@ -629,16 +679,27 @@ export default function Dashboard() {
     }
   }
 
-  const handleUpdateCheckIn = async (mood: string): Promise<boolean> => {
+  const handleUpdateCheckIn = async (data: CheckInData): Promise<boolean> => {
     if (!user?._id) return false
     try {
-      const response = await userApi.updateCheckIn(user._id, { mood })
+      const response = await userApi.updateCheckIn(user._id, {
+        mood: data.mood,
+        coordinate_x: data.coordinate.x,
+        coordinate_y: data.coordinate.y,
+        color: data.color,
+        emoji: data.emoji,
+      })
       if (response.success) {
         // Update todayCheckIn state (no points change for update, streak stays the same)
-        const moodData = MOOD_DATA.find(m => m.label.toLowerCase() === mood.toLowerCase())
-        if (moodData) {
-          setTodayCheckIn(prev => ({ mood: moodData.label, color: moodData.color, text: moodData.text, streak: prev?.streak ?? 0 }))
-        }
+        setTodayCheckIn(prev => ({
+          mood: data.mood,
+          color: data.color,
+          text: '#fff',
+          streak: prev?.streak ?? 0,
+          coordinate_x: data.coordinate.x,
+          coordinate_y: data.coordinate.y,
+          emoji: data.emoji
+        }))
         return true
       }
       return false
@@ -865,6 +926,7 @@ export default function Dashboard() {
             externalChatInput={chatInputFromBubble}
             onExternalChatInputConsumed={() => setChatInputFromBubble(null)}
             onOpenAssistantWithAction={handleOpenAssistantWithAction}
+            onMatchingModalChange={setIsMatchingModalOpen}
           />
         )
       default:
@@ -873,19 +935,17 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-[#FAFAFA] text-[#121212] overflow-hidden">
-      <aside className="fixed left-0 top-0 h-screen w-20 md:w-24 bg-white border-r border-black/[0.03] flex flex-col items-center py-12 z-50 shadow-sm">
-        <nav className="flex-1 flex flex-col space-y-10 mt-4">
-          <NavItem active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} icon={<ProfileIcon />} label="profile" />
-          <NavItem active={activeTab === 'diary'} onClick={() => setActiveTab('diary')} icon={<DiaryIcon />} label="diary" />
-          <NavItem active={activeTab === 'soulsync'} onClick={() => setActiveTab('soulsync')} icon={<ChatIcon />} label="chat" />
-          <NavItem active={activeTab === 'community'} onClick={() => setActiveTab('community')} icon={<CommunityIcon />} label="community" />
-        </nav>
-
-        <button onClick={handleLogout} className="mt-auto text-gray-300 hover:text-accent transition-colors">
-          <LogoutIcon />
-        </button>
-      </aside>
+    <div className="flex h-screen text-[#121212] overflow-hidden">
+      <FisheyeSidebar
+        items={[
+          { id: 'community', icon: <CommunityIcon />, label: 'community', active: activeTab === 'community', onClick: () => setActiveTab('community') },
+          { id: 'diary', icon: <DiaryIcon />, label: 'diary', active: activeTab === 'diary', onClick: () => setActiveTab('diary') },
+          { id: 'soulsync', icon: <ChatIcon />, label: 'chat', active: activeTab === 'soulsync', onClick: () => setActiveTab('soulsync') },
+          { id: 'profile', icon: <ProfileIcon />, label: 'profile', active: activeTab === 'profile', onClick: () => setActiveTab('profile') },
+        ]}
+        onLogout={handleLogout}
+        logoutIcon={<LogoutIcon />}
+      />
 
       {bursts.map(burst => (
         <div key={burst.id} className="fixed inset-0 pointer-events-none z-[100]">
@@ -1363,29 +1423,8 @@ export default function Dashboard() {
           setDeleteConfirm(null)
         }}
       />
+
     </div>
-  )
-}
-
-interface NavItemProps {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-}
-
-function NavItem({ active, onClick, icon, label }: NavItemProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative group w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${active ? 'bg-accent text-accent-inverse shadow-xl scale-110' : 'text-gray-300 hover:text-accent'}`}
-    >
-      {icon}
-      {/* Tooltip */}
-      <span className="absolute left-full ml-3 px-3 py-1.5 bg-accent text-accent-inverse text-xs font-bold rounded-lg whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 capitalize shadow-lg">
-        {label}
-      </span>
-    </button>
   )
 }
 

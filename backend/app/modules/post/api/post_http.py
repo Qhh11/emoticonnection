@@ -131,6 +131,7 @@ async def create_post(
         visibility=post_data.visibility.value,
         tags=post_data.tags,
         emotion=post_data.emotion,
+        emotion_color=post_data.emotion_color,  # Pass custom emotion color
         ai_emotion=ai_emotion,
         title=post_data.title
     )

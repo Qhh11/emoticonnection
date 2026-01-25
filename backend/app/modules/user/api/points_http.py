@@ -37,6 +37,11 @@ from crud.check_in_crud import (  # type: ignore
 class CheckInRequest(BaseModel):
     mood: str
     date: Optional[str] = None  # YYYY-MM-DD, defaults to today
+    # 情绪坐标轴相关字段
+    coordinate_x: Optional[float] = None  # -1 (消极) 到 1 (积极)
+    coordinate_y: Optional[float] = None  # -1 (低能量) 到 1 (高能量)
+    color: Optional[str] = None  # 计算出的颜色HEX值
+    emoji: Optional[str] = None  # 表情图标: angry/happy/sad/calm
 
 
 class CheckInResponse(BaseModel):
@@ -55,6 +60,11 @@ class CheckInHistoryItem(BaseModel):
     date: str
     mood: str
     points_earned: int
+    # 情绪坐标轴相关字段
+    coordinate_x: Optional[float] = None
+    coordinate_y: Optional[float] = None
+    color: Optional[str] = None
+    emoji: Optional[str] = None
 
 
 # ============================================================================
@@ -97,8 +107,12 @@ async def check_in(user_id: str, request: CheckInRequest):
 
     Request:
     {
-        "mood": "Joy",
-        "date": "2025-01-07"  // optional, defaults to today
+        "mood": "Excited",
+        "date": "2025-01-07",  // optional, defaults to today
+        "coordinate_x": 0.5,   // optional
+        "coordinate_y": 0.8,   // optional
+        "color": "#F9A825",    // optional
+        "emoji": "happy"       // optional
     }
 
     Response:
@@ -112,7 +126,15 @@ async def check_in(user_id: str, request: CheckInRequest):
     # Use today's date if not provided
     check_date = request.date or date.today().isoformat()
 
-    result = create_check_in(user_id, request.mood, check_date)
+    result = create_check_in(
+        user_id,
+        request.mood,
+        check_date,
+        coordinate_x=request.coordinate_x,
+        coordinate_y=request.coordinate_y,
+        color=request.color,
+        emoji=request.emoji
+    )
 
     # Get updated total points
     user_points = get_user_points(user_id)
@@ -137,7 +159,7 @@ async def get_history(
 
     Response:
     [
-        {"date": "2025-01-07", "mood": "Joy", "points_earned": 10},
+        {"date": "2025-01-07", "mood": "Excited", "points_earned": 10, "coordinate_x": 0.5, "coordinate_y": 0.8, "color": "#F9A825", "emoji": "happy"},
         {"date": "2025-01-06", "mood": "Sad", "points_earned": 10},
         ...
     ]
@@ -148,7 +170,11 @@ async def get_history(
         CheckInHistoryItem(
             date=item["date"],
             mood=item["mood"],
-            points_earned=item["points_earned"]
+            points_earned=item["points_earned"],
+            coordinate_x=item.get("coordinate_x"),
+            coordinate_y=item.get("coordinate_y"),
+            color=item.get("color"),
+            emoji=item.get("emoji")
         )
         for item in history
     ]
@@ -188,7 +214,11 @@ async def update_today_check_in(user_id: str, request: CheckInRequest):
 
     Request:
     {
-        "mood": "Joy"
+        "mood": "Excited",
+        "coordinate_x": 0.5,
+        "coordinate_y": 0.8,
+        "color": "#F9A825",
+        "emoji": "happy"
     }
 
     Response:
@@ -200,7 +230,15 @@ async def update_today_check_in(user_id: str, request: CheckInRequest):
     }
     """
     today = date.today().isoformat()
-    result = update_check_in(user_id, request.mood, today)
+    result = update_check_in(
+        user_id,
+        request.mood,
+        today,
+        coordinate_x=request.coordinate_x,
+        coordinate_y=request.coordinate_y,
+        color=request.color,
+        emoji=request.emoji
+    )
 
     # Get current total points
     user_points = get_user_points(user_id)

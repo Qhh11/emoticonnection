@@ -6,12 +6,21 @@
 interface OnlineIndicatorProps {
   isOnline: boolean
   size?: 'sm' | 'md'
+  inline?: boolean
 }
 
-export default function OnlineIndicator({ isOnline, size = 'sm' }: OnlineIndicatorProps) {
+export default function OnlineIndicator({ isOnline, size = 'sm', inline = false }: OnlineIndicatorProps) {
   if (!isOnline) return null
 
-  const sizeClass = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
+  const sizeClass = size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3'
+
+  if (inline) {
+    return (
+      <span className={`inline-flex ${sizeClass}`}>
+        <span className={`relative inline-flex rounded-full ${sizeClass} bg-green-500`} />
+      </span>
+    )
+  }
 
   return (
     <span className={`absolute -bottom-1 -right-1 flex ${sizeClass}`}>

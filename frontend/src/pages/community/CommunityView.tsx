@@ -1,6 +1,7 @@
 /**
  * CommunityView - 社区主页面
  * 重构版：使用网格布局、Following/Exploring Tab、Modal 弹窗
+ * 三维联动系统：内容 -> 统计 -> 背景
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -11,7 +12,6 @@ import CommunityHeader from './components/CommunityHeader'
 import PostGrid from './components/PostGrid'
 import PostDetailModal from './components/PostDetailModal'
 import CreatePostModal, { CreatePostData } from './components/CreatePostModal'
-
 interface CommunityViewProps {
   onInteract: (e: React.MouseEvent) => void
   userId?: string
@@ -173,6 +173,7 @@ export default function CommunityView({
       post_type: mediaUrls.length > 0 ? 'image' : 'text',
       visibility: 'public',
       emotion: data.emotion,
+      emotion_color: data.emotionColor,  // Pass custom emotion color
       media_urls: mediaUrls,
     })
 
@@ -213,35 +214,39 @@ export default function CommunityView({
     onCreatePostChange?.(false)
   }
 
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header */}
-      <CommunityHeader
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onCreatePost={handleOpenCreateModal}
-      />
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 relative">
+      {/* 主内容区 - 无局部背景，使用全局 Aurora 背景 */}
+      <main className="w-full space-y-8 relative z-10">
+        {/* Header */}
+        <CommunityHeader
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onCreatePost={handleOpenCreateModal}
+        />
 
-      {/* Error */}
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm font-bold">
-          {error}
-          <button onClick={() => loadPosts(true)} className="ml-4 underline">
-            Retry
-          </button>
-        </div>
-      )}
+        {/* Error */}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm font-bold">
+            {error}
+            <button onClick={() => loadPosts(true)} className="ml-4 underline">
+              Retry
+            </button>
+          </div>
+        )}
 
-      {/* Main Content - Full Width */}
-      <PostGrid
-        posts={posts}
-        onPostClick={handlePostClick}
-        onLike={handleLike}
-        onLoadMore={handleLoadMore}
-        hasMore={hasMore}
-        isLoading={isLoading}
-        userId={userId}
-      />
+        {/* Main Content - Full Width */}
+        <PostGrid
+          posts={posts}
+          onPostClick={handlePostClick}
+          onLike={handleLike}
+          onLoadMore={handleLoadMore}
+          hasMore={hasMore}
+          isLoading={isLoading}
+          userId={userId}
+        />
+      </main>
 
       {/* Create Post Modal */}
       <CreatePostModal
@@ -265,6 +270,7 @@ export default function CommunityView({
         onViewProfile={onViewProfile}
         onPointsChanged={onPointsChanged}
       />
+
     </div>
   )
 }
