@@ -220,7 +220,7 @@ class EmotionAnalytics:
     ) -> List[Dict[str, Any]]:
         """
         Fetch user conversations within the specified date range from
-        Conversations, AIConversations, and UserPosts collections.
+        ChatEmotions, AIConversations, and UserPosts collections.
         
         Args:
             user_id: User identifier
@@ -238,14 +238,13 @@ class EmotionAnalytics:
         
         all_conversations = []
         
-        # 1. 从 Conversations 集合获取对话 (用户之间的对话)
+        # 1. 从 ChatEmotions 集合获取聊天情感数据 (用户之间的对话情感分析)
         try:
-            collection = self.weaviate_manager.client.collections.get("Conversations")
+            collection = self.weaviate_manager.client.collections.get("ChatEmotions")
             
             response = collection.query.fetch_objects(
                 filters=(
-                    (Filter.by_property("userId1").equal(user_id) | 
-                     Filter.by_property("userId2").equal(user_id)) &
+                    Filter.by_property("userId").equal(user_id) &
                     Filter.by_property("timestamp").greater_or_equal(start_date) &
                     Filter.by_property("timestamp").less_or_equal(end_date)
                 ),
@@ -254,14 +253,26 @@ class EmotionAnalytics:
             )
             
             for obj in response.objects:
-                conv = obj.properties.copy()
-                conv['source'] = 'peer_chat'  # 标记来源
+                props = obj.properties
+                # 转换为统一格式，包含预标记的情感信息
+                conv = {
+                    'timestamp': props.get('timestamp', ''),
+                    'userQuery': props.get('content', ''),
+                    'llmResponse': '',  # 聊天消息没有AI回复
+                    'userId1': user_id,
+                    'userId2': props.get('sessionId', ''),  # 使用sessionId标识对话
+                    'source': 'chat_emotion',
+                    'primaryEmotion': props.get('primaryEmotion', ''),
+                    'primaryEmotionScore': props.get('primaryEmotionScore', 0),
+                    'secondaryEmotion': props.get('secondaryEmotion', ''),
+                    'secondaryEmotionScore': props.get('secondaryEmotionScore', 0)
+                }
                 all_conversations.append(conv)
             
-            logger.info(f"Fetched {len(response.objects)} records from Conversations")
+            logger.info(f"Fetched {len(response.objects)} records from ChatEmotions")
                 
         except Exception as e:
-            logger.warning(f"Error fetching from Conversations: {e}")
+            logger.warning(f"Error fetching from ChatEmotions: {e}")
         
         # 2. 从 AIConversations 集合获取对话 (用户与AI的对话)
         try:
@@ -373,14 +384,39 @@ class EmotionAnalytics:
             9. envy: Jealousy, resentment of another's success, or a painful desire for what others have.
             """
             
-            # Separate conversations: those with pre-labeled emotions (posts) vs those needing analysis
+            # Separate conversations: those with pre-labeled emotions vs those needing analysis
             conversations_needing_analysis = []
             
             for conv in conversations:
-                # Check if this is a post with emotion already labeled
+                # Check if this has emotion already labeled
                 source = conv.get('source', '')
                 
-                if source == 'user_post':
+                # Handle ChatEmotions (chat messages with AI emotion analysis)
+                if source == 'chat_emotion':
+                    primary_emotion = conv.get('primaryEmotion', '').strip()
+                    
+                    if primary_emotion:
+                        # Use AI-analyzed emotion from chat
+                        normalized_emotion = self.normalize_emotion(primary_emotion)
+                        emotion_score = self.EMOTION_SCORES.get(normalized_emotion, 0.0)
+                        
+                        # Use emotion score as intensity (convert percentage to 0-1 scale)
+                        primary_score = conv.get('primaryEmotionScore', 50)
+                        intensity = min(1.0, primary_score / 100.0)
+                        
+                        all_data_points.append(EmotionDataPoint(
+                            timestamp=conv.get('timestamp', ''),
+                            emotion=normalized_emotion,
+                            intensity=intensity,
+                            sentiment_score=emotion_score,
+                            trigger_context=f"chat in session {conv.get('userId2', '')}"
+                        ))
+                    else:
+                        # No emotion labeled, need to analyze
+                        conversations_needing_analysis.append(conv)
+                
+                # Handle UserPosts (posts with emotion tags)
+                elif source == 'user_post':
                     # Use AI emotion if available, otherwise use user emotion, or analyze if neither exists
                     ai_emotion = conv.get('aiEmotion', '').strip()
                     user_emotion = conv.get('emotion', '').strip()
