@@ -278,7 +278,6 @@ class EmotionAnalytics:
             )
             
             for obj in ai_response.objects:
-                # 转换 AIConversations 格式为统一格式
                 props = obj.properties
                 conv = {
                     'timestamp': props.get('timestamp', ''),
@@ -286,7 +285,7 @@ class EmotionAnalytics:
                     'llmResponse': props.get('aiResponse', ''),
                     'userId1': user_id,
                     'userId2': 'ai_assistant',
-                    'source': 'ai_chat'  # 标记来源
+                    'source': 'ai_chat' 
                 }
                 all_conversations.append(conv)
             
@@ -295,136 +294,134 @@ class EmotionAnalytics:
         except Exception as e:
             logger.warning(f"Error fetching from AIConversations: {e}")
         
-        # 3. 标准化时间戳并按时间排序
         def normalize_timestamp(ts):
-            """将时间戳转换为字符串以便排序"""
             if ts is None:
                 return ''
             if isinstance(ts, datetime):
                 return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
             return str(ts)
         
-        # 标准化所有时间戳
         for conv in all_conversations:
             conv['timestamp'] = normalize_timestamp(conv.get('timestamp'))
         
-        # 按时间戳排序
         all_conversations.sort(key=lambda x: x.get('timestamp', ''))
         
         logger.info(f"Total conversations fetched: {len(all_conversations)}")
         return all_conversations
 
     def analyze_emotions_from_text(self, conversations: List[Dict]) -> List[EmotionDataPoint]:
-        """
-        Analyze emotions from conversation texts using Gemini with enhanced prompt engineering.
-        
-        Args:
-            conversations: List of conversation records
-            
-        Returns:
-            List of emotion data points
-        """
-        if not conversations:
-            return []
-            
-        # Batch analyze for efficiency
-        batch_size = 20
-        all_data_points = []
-        
-        # 优化后的情绪定义，帮助模型更精准区分
-        emotion_definitions = """
-        请严格基于以下 9 种情绪进行分类（括号内为判断标准）：
-        1. bored (无聊): 感到乏味、无趣、发呆、低能量、或是"没什么事"的平淡状态。
-        2. fear (恐惧): 对当下具体威胁的害怕、惊吓、或是想要逃离的冲动。
-        3. joy (快乐): 开心、兴奋、满足、感激、或是轻松愉悦的状态。
-        4. sadness (忧伤): 失落、难过、想哭、遗憾、或是受到伤害的感觉。
-        5. disgust (厌恶): 反感、恶心、鄙视、不仅是生理上的，也包括对某人某事的道德厌恶。
-        6. anxiety (焦虑): 对未来的担忧、紧张、压力大、不知所措、或是"悬着一颗心"。
-        7. anger (愤怒): 生气、暴躁、想要攻击、或是对不公的抗议。
-        8. embarrassment (尴尬): 羞愧、社死现场、不好意思、或是想要找地缝钻进去。
-        9. envy (羡慕): 嫉妒、酸葡萄心理、或是渴望拥有别人拥有的东西。
-        """
-        
-        for i in range(0, len(conversations), batch_size):
-            batch = conversations[i:i+batch_size]
-            
-            texts_for_analysis = []
-            for conv in batch:
-                timestamp = conv.get('timestamp', '')
-                user_query = conv.get('userQuery', '')
-                texts_for_analysis.append({
-                    'timestamp': timestamp,
-                    'text': user_query
-                })
-            
-            # 这里的 Prompt 经过了重写，增加了 CoT (Chain of Thought) 和防御性指令
-            prompt = f"""你是一位擅长共情和文本挖掘的心理分析专家。请分析以下用户对话片段的情绪状态。
-
-            【分析指南】
-            1. **语境分析**：结合标点符号（如"..."可能代表无语或犹豫）、Emoji（"😅"代表尴尬而非开心）、语气词（"切"代表不屑）。
-            2. **区分易混淆情绪**：
-               - "明天要考试了好慌" 是 anxiety (焦虑) 而不是 fear (恐惧)。
-               - "不知道干嘛" 是 bored (无聊) 而不是 sadness (忧伤)。
-            3. **触发源识别**：只有在用户明确提及原因时（如"因为工作被骂了"）才填写 trigger_context。如果用户只说"好烦"，trigger_context 应为 null。
-            4. **情感打分**：
-               - intensity (0.0-1.0): 情绪的强烈程度。0.1为微弱，0.9为极强。
-               - sentiment_score (-1.0 到 1.0): -1.0(极度消极) 到 1.0(极度积极)。注意：anger 和 sadness 通常是负分，但 joy 是正分。
-            
-            {emotion_definitions}
-
-            【待分析消息列表】
-            {json.dumps(texts_for_analysis, ensure_ascii=False, indent=2)}
-
-            请返回一个纯 JSON 数组（不要包含 Markdown 标记），每个对象包含：
-            - timestamp: (保持原样)
-            - reasoning: (简短分析这句话为什么被归为此类情绪，这有助于提高准确性)
-            - emotion: (必须是上述9个英文单词之一)
-            - intensity: (浮点数)
-            - sentiment_score: (浮点数)
-            - trigger_context: (简短描述触发原因，如果没有则为 null)
             """
-
-            try:
-                response = self._call_llm(prompt)
-                # Parse JSON response
-                response = response.strip()
-                if response.startswith('```'):
-                    # 移除可能的 markdown 代码块标记
-                    response = response.split('\n', 1)[1]
-                    response = response.rsplit('```', 1)[0]
+            Analyze emotions from English conversation texts using Gemini with advanced 
+            prompt engineering, including CoT reasoning and linguistic nuance detection.
+            """
+            if not conversations:
+                return []
                 
-                emotion_results = json.loads(response)
+            batch_size = 20
+            all_data_points = []
+            
+            # Enhanced emotion definitions for cross-cultural nuance
+            emotion_definitions = """
+            Classify strictly into these 9 categories:
+            1. bored: Feeling weary, uninterested, low energy, or a "flat" neutral state.
+            2. fear: Dread, fright, or an immediate urge to escape a specific threat.
+            3. joy: Happiness, excitement, satisfaction, gratitude, or pleasant relaxation.
+            4. sadness: Loss, grief, disappointment, regret, or feeling emotionally hurt.
+            5. disgust: Strong aversion, revulsion, or moral contempt for a person or situation.
+            6. anxiety: Future-oriented worry, tension, feeling overwhelmed, or "on edge."
+            7. anger: Resentment, irritability, hostility, or protest against perceived injustice.
+            8. embarrassment: Self-consciousness, shame, social awkwardness, or "cringe" moments.
+            9. envy: Jealousy, resentment of another's success, or a painful desire for what others have.
+            """
+            
+            for i in range(0, len(conversations), batch_size):
+                batch = conversations[i:i+batch_size]
+                texts_for_analysis = [
+                    {'timestamp': conv.get('timestamp', ''), 'text': conv.get('userQuery', '')}
+                    for conv in batch
+                ]
                 
-                for result in emotion_results:
-                    # Normalize the emotion to our 9 categories
-                    raw_emotion = result.get('emotion', 'bored')
-                    normalized_emotion = self.normalize_emotion(raw_emotion)
-                    
-                    # 某些极端情况下模型可能返回 null 作为 trigger
-                    trigger_ctx = result.get('trigger_context')
-                    if trigger_ctx == 'null' or trigger_ctx == 'None':
-                        trigger_ctx = None
+                # Advanced Prompt Engineering: System instructions + Few-Shot Examples
+                prompt = f"""You are an expert Psychologist and Linguistic Analyst specializing in empathy and text mining. 
+                Analyze the emotional state of the following user messages.
 
-                    all_data_points.append(EmotionDataPoint(
-                        timestamp=result.get('timestamp', ''),
-                        emotion=normalized_emotion,
-                        intensity=float(result.get('intensity', 0.5)),
-                        sentiment_score=float(result.get('sentiment_score', 0.0)),
-                        trigger_context=trigger_ctx
-                    ))
-            except Exception as e:
-                logger.warning(f"Batch emotion analysis failed: {e}")
-                # Fallback: create neutral data points
-                for conv in batch:
-                    all_data_points.append(EmotionDataPoint(
-                        timestamp=conv.get('timestamp', ''),
-                        emotion='bored', # Fallback to bored/neutral
-                        intensity=0.1,
-                        sentiment_score=0.0,
-                        trigger_context=None
-                    ))
+                ### ANALYSIS GUIDELINES
+                1. **Linguistic Nuance**: Consider punctuation ("..." can imply hesitation or speechless annoyance), emojis ("😅" often indicates embarrassment/awkwardness, not joy), and slang.
+                2. **Distinguish Overlapping Emotions**:
+                - "I'm worried about the test tomorrow" is ANXIETY (future worry), not FEAR (immediate threat).
+                - "I have nothing to do" is BORED, not SADNESS.
+                - "I wish I had her life" is ENVY, not ANGER.
+                3. **Causal Trigger Extraction**: Only provide `trigger_context` if a specific cause is explicitly mentioned (e.g., "Upset because I failed"). If they just say "I'm so mad," `trigger_context` must be null.
+                4. **Scoring Methodology**:
+                - `intensity` (0.0 to 1.0): 0.1 is barely noticeable, 0.9 is overwhelming.
+                - `sentiment_score` (-1.0 to 1.0): -1.0 is extremely negative, 1.0 is extremely positive. Note: Anger/Sadness are usually negative; Joy is positive.
+
+                ### EMOTION TAXONOMY
+                {emotion_definitions}
+
+                ### EXAMPLES FOR CHAIN-OF-THOUGHT
+                - Text: "I can't believe he got the promotion over me after all my hard work... 😒"
+                Analysis: User expresses resentment toward a peer's success. Use of eye-roll emoji implies bitterness.
+                Result: {{"emotion": "envy", "intensity": 0.7, "sentiment_score": -0.4, "trigger_context": "peer's promotion"}}
+
+                - Text: "The presentation is in 10 minutes and my hands are shaking."
+                Analysis: Physical symptoms of nervousness regarding an upcoming event.
+                Result: {{"emotion": "anxiety", "intensity": 0.8, "sentiment_score": -0.3, "trigger_context": "upcoming presentation"}}
+
+                ### MESSAGES TO ANALYZE
+                {json.dumps(texts_for_analysis, indent=2)}
+
+                ### OUTPUT INSTRUCTIONS
+                Return ONLY a valid JSON array of objects. Each object MUST include:
+                - timestamp: (identical to input)
+                - reasoning: (one short sentence explaining the linguistic cues used for classification)
+                - emotion: (one of the 9 English words above)
+                - intensity: (float)
+                - sentiment_score: (float)
+                - trigger_context: (string or null)
+                """
+
+                try:
+                    response = self._call_llm(prompt)
+                    response = response.strip()
                     
-        return all_data_points
+                    # Handling Markdown Code Blocks
+                    if response.startswith('```'):
+                        if '\n' in response:
+                            response = response.split('\n', 1)[1]
+                        response = response.rsplit('```', 1)[0].strip()
+                    
+                    emotion_results = json.loads(response)
+                    
+                    for result in emotion_results:
+                        raw_emotion = result.get('emotion', 'bored').lower()
+                        normalized_emotion = self.normalize_emotion(raw_emotion)
+                        
+                        # Clean up null values
+                        trigger_ctx = result.get('trigger_context')
+                        if str(trigger_ctx).lower() in ['null', 'none', '']:
+                            trigger_ctx = None
+
+                        all_data_points.append(EmotionDataPoint(
+                            timestamp=result.get('timestamp', ''),
+                            emotion=normalized_emotion,
+                            intensity=float(result.get('intensity', 0.5)),
+                            sentiment_score=float(result.get('sentiment_score', 0.0)),
+                            trigger_context=trigger_ctx
+                        ))
+                except Exception as e:
+                    logger.warning(f"Batch emotion analysis failed: {e}")
+                    # Fallback: create neutral data points in case of API failure
+                    for conv in batch:
+                        all_data_points.append(EmotionDataPoint(
+                            timestamp=conv.get('timestamp', ''),
+                            emotion='bored',
+                            intensity=0.1,
+                            sentiment_score=0.0,
+                            trigger_context=None
+                        ))
+                        
+            return all_data_points
 
     def calculate_emotion_distribution(
         self, 
@@ -545,57 +542,60 @@ class EmotionAnalytics:
         )
 
     def generate_word_cloud(
-        self, 
-        conversations: List[Dict],
-        data_points: List[EmotionDataPoint]
-    ) -> EmotionWordCloud:
-        """Generate emotion word cloud from conversations."""
-        if not conversations:
-            return EmotionWordCloud(words={}, top_emotions=[], total_count=0)
+            self, 
+            conversations: List[Dict],
+            data_points: List[EmotionDataPoint]
+        ) -> EmotionWordCloud:
+            """Generate emotion word cloud from conversations in English."""
+            if not conversations:
+                return EmotionWordCloud(words={}, top_emotions=[], total_count=0)
+                
+            # Combine all user queries
+            all_text = " ".join(
+                conv.get('userQuery', '') for conv in conversations
+            )
             
-        # Combine all user queries
-        all_text = " ".join(
-            conv.get('userQuery', '') for conv in conversations
-        )
-        
-        # Use Gemini to extract emotion-related keywords
-        prompt = f"""从以下文本中提取与情绪相关的关键词和表达。
-            返回JSON格式: {{"words": {{"词语1": 频次, "词语2": 频次, ...}}, "emotions": ["情绪1", "情绪2", ...]}}
+            # Use LLM to extract emotion-related keywords and expressions
+            prompt = f"""Extract emotion-related keywords and expressions from the following text.
+                Return strictly in JSON format: {{"words": {{"word1": frequency, "word2": frequency, ...}}, "emotions": ["emotion1", "emotion2", ...]}}
 
-            文本:
-            {all_text[:5000]}
+                Text:
+                {all_text[:5000]}
 
-            只返回JSON，不要其他内容。"""
+                Return ONLY the JSON object, no other text."""
 
-        try:
-            response = self._call_llm(prompt)
-            response = response.strip()
-            if response.startswith('```'):
-                response = response.split('\n', 1)[1]
-                response = response.rsplit('```', 1)[0]
+            try:
+                response = self._call_llm(prompt)
+                response = response.strip()
+                
+                # Clean Markdown formatting if necessary
+                if response.startswith('```'):
+                    if '\n' in response:
+                        response = response.split('\n', 1)[1]
+                    response = response.rsplit('```', 1)[0].strip()
+                
+                result = json.loads(response)
+                words = result.get('words', {})
+                emotions = result.get('emotions', [])
+                
+            except Exception as e:
+                logger.warning(f"Word cloud generation failed: {e}")
+                # Fallback: count emotions directly from data points
+                emotion_counts = Counter(dp.emotion for dp in data_points)
+                words = dict(emotion_counts.most_common(20))
+                emotions = list(emotion_counts.keys())[:5]
             
-            result = json.loads(response)
-            words = result.get('words', {})
-            emotions = result.get('emotions', [])
-            
-        except Exception as e:
-            logger.warning(f"Word cloud generation failed: {e}")
-            # Fallback: count emotions from data points
-            emotion_counts = Counter(dp.emotion for dp in data_points)
-            words = dict(emotion_counts.most_common(20))
-            emotions = list(emotion_counts.keys())[:5]
-        
-        return EmotionWordCloud(
-            words=words,
-            top_emotions=emotions[:10],
-            total_count=sum(words.values())
-        )
+            return EmotionWordCloud(
+                words=words,
+                top_emotions=emotions[:10],
+                total_count=sum(words.values())
+            )
 
     def analyze_triggers(
         self, 
         data_points: List[EmotionDataPoint]
     ) -> List[TriggerAnalysis]:
-        """Analyze common emotion triggers."""
+        """Analyze common emotion triggers based on English categories."""
         if not data_points:
             return []
             
@@ -603,11 +603,13 @@ class EmotionAnalytics:
         triggers_by_type = {}
         for dp in data_points:
             if dp.trigger_context:
+                # Standardize context to lowercase for better matching
                 context = dp.trigger_context.lower()
                 
-                # Categorize trigger
+                # Categorize trigger based on predefined English categories
                 trigger_type = 'other'
                 for category in self.TRIGGER_CATEGORIES:
+                    # Match categories like 'work_stress' with text like 'work stress'
                     if category.replace('_', ' ') in context:
                         trigger_type = category
                         break
@@ -639,71 +641,79 @@ class EmotionAnalytics:
                 impact_score=round(avg_impact, 3)
             ))
         
-        # Sort by frequency
+        # Sort by frequency to show the most common triggers first
         triggers.sort(key=lambda x: x.frequency, reverse=True)
         return triggers[:10]
 
     def generate_summary_and_suggestions(
-        self,
-        user_id: str,
-        period_type: str,
-        data_points: List[EmotionDataPoint],
-        emotion_distribution: Dict[str, float],
-        average_mood: float,
-        trend: EmotionTrend,
-        triggers: List[TriggerAnalysis]
-    ) -> Dict[str, Any]:
-        """Generate AI summary, insights, suggestions, and predictions."""
-        
-        # Prepare context for Gemini
-        context = f"""
-用户ID: {user_id}
-报告周期: {period_type}
-数据点数量: {len(data_points)}
-
-情绪分布:
-{json.dumps(emotion_distribution, ensure_ascii=False, indent=2)}
-
-平均心情得分: {average_mood} (范围: -1到1)
-
-情绪趋势: {trend.trend_direction}
-波动性: {trend.volatility}
-
-主要触发情境:
-{json.dumps([asdict(t) for t in triggers[:5]], ensure_ascii=False, indent=2)}
-"""
-
-        prompt = f"""作为一位专业的情绪分析师，请基于以下用户情绪数据生成一份{period_type}情绪报告。
-
-{context}
-
-请返回JSON格式:
-{{
-    "summary_text": "一段200字左右的整体情绪状态总结",
-    "key_insights": ["洞察1", "洞察2", "洞察3"],
-    "suggestions": ["建议1", "建议2", "建议3"],
-    "trend_prediction": "对未来一段时间情绪趋势的预测和说明"
-}}
-
-请用温暖、支持的语气，提供实用的建议。只返回JSON，不要其他内容。"""
-
-        try:
-            response = self._call_llm(prompt)
-            response = response.strip()
-            if response.startswith('```'):
-                response = response.split('\n', 1)[1]
-                response = response.rsplit('```', 1)[0]
+            self,
+            user_id: str,
+            period_type: str,
+            data_points: List[EmotionDataPoint],
+            emotion_distribution: Dict[str, float],
+            average_mood: float,
+            trend: EmotionTrend,
+            triggers: List[TriggerAnalysis]
+        ) -> Dict[str, Any]:
+            """Generate AI summary, insights, suggestions, and predictions in English."""
             
-            return json.loads(response)
-            
-        except Exception as e:
-            logger.error(f"Summary generation failed: {e}")
-            return {
-                "summary_text": "无法生成总结，请稍后重试。",
-                "key_insights": [],
-                "suggestions": ["保持积极心态", "适当运动", "与亲友交流"],
-                "trend_prediction": "数据不足，无法预测趋势。"
-            }
+            # Prepare context for the LLM
+            context = f"""
+    User ID: {user_id}
+    Report Period: {period_type}
+    Number of Data Points: {len(data_points)}
+
+    Emotion Distribution:
+    {json.dumps(emotion_distribution, ensure_ascii=False, indent=2)}
+
+    Average Mood Score: {average_mood} (Range: -1.0 to 1.0)
+
+    Emotion Trend: {trend.trend_direction}
+    Volatility: {trend.volatility}
+
+    Primary Triggers/Contexts:
+    {json.dumps([asdict(t) for t in triggers[:5]], ensure_ascii=False, indent=2)}
+    """
+
+            prompt = f"""As a professional emotional health analyst, please generate a {period_type} emotional report based on the following user data.
+
+    {context}
+
+    Please return the response strictly in JSON format:
+    {{
+        "summary_text": "A general summary of the emotional state (approx. 200 words)",
+        "key_insights": ["Insight 1", "Insight 2", "Insight 3"],
+        "suggestions": ["Suggestion 1", "Suggestion 2", "Suggestion 3"],
+        "trend_prediction": "Prediction and explanation of the emotional trend for the upcoming period"
+    }}
+
+    Use a warm, supportive, and empathetic tone. Provide practical and actionable advice. Return ONLY the JSON object."""
+
+            try:
+                response = self._call_llm(prompt)
+                response = response.strip()
+                
+                # Remove Markdown code blocks if present
+                if response.startswith('```'):
+                    if '\n' in response:
+                        response = response.split('\n', 1)[1]
+                    response = response.rsplit('```', 1)[0].strip()
+                
+                return json.loads(response)
+                
+            except Exception as e:
+                logger.error(f"Summary generation failed: {e}")
+                # Fallback response in English
+                return {
+                    "summary_text": "We were unable to generate your summary at this time. Please try again later.",
+                    "key_insights": [],
+                    "suggestions": [
+                        "Maintain a positive mindset",
+                        "Engage in physical activity",
+                        "Connect with friends or family"
+                    ],
+                    "trend_prediction": "Insufficient data to make a prediction."
+                }
 
     def generate_report(
         self,
@@ -766,10 +776,10 @@ class EmotionAnalytics:
                 emotion_trend=EmotionTrend('daily', [], 'stable', 0.0),
                 word_cloud=EmotionWordCloud({}, [], 0),
                 triggers=[],
-                summary_text="该时段内没有找到对话记录。",
+                summary_text="No conversations found in this period.",
                 key_insights=[],
-                suggestions=["开始记录你的心情和想法吧！"],
-                trend_prediction="数据不足，无法预测。"
+                suggestions=["Start recording your moods and thoughts!"],
+                trend_prediction="Insufficient data for reporting."
             )
         
         # Analyze emotions
@@ -918,31 +928,3 @@ def generate_monthly_emotion_report(
     analytics = EmotionAnalytics(weaviate_manager, gemini_client=gemini_client, llm_provider='gemini')
     return analytics.generate_report(user_id, 'monthly', end_date)
 
-
-if __name__ == "__main__":
-    # Test the analytics module
-    from google import genai
-    from dotenv import load_dotenv
-    
-    load_dotenv()
-    
-    try:
-        manager = WeaviateManager()
-        
-        # Use Gemini (solely supported)
-        print("Using Gemini API...")
-        api_key = os.getenv("GEMINI_API_KEY")
-        gemini_client = genai.Client(api_key=api_key)
-        analytics = EmotionAnalytics(manager, gemini_client=gemini_client, llm_provider='gemini')
-        
-        # Generate a weekly report
-        report = analytics.generate_report("test_user_123", "weekly")
-        print(analytics.to_json(report))
-        
-    except Exception as e:
-        print(f"Test failed: {e}")
-    finally:
-        try:
-            manager.close()
-        except:
-            pass
