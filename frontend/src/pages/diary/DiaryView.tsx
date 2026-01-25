@@ -129,7 +129,16 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
     onTurnComplete: () => {
       console.log('[ChatAIView] Gemini turn complete')
       // Don't reset to idle - stay connected for continuous conversation
-    }
+    },
+    voiceName: isVip && activeAvatar ? activeAvatar.voiceName : undefined,
+    systemInstruction: isVip && activeAvatar ? `
+      You are ${activeAvatar.name}, a 3D digital companion in the EmotiConnect app. 
+      Your personality is: ${activeAvatar.personality.join(', ')}.
+      ${activeAvatar.description}
+      Respond to the user in a way that matches this personality.
+      Keep responses concise and natural for voice conversation.
+      Always speak in the language that the user is using.
+    ` : undefined
   })
 
   // Sync voice status with Gemini Live connection state

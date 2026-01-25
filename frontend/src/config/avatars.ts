@@ -14,6 +14,7 @@ export interface Avatar3D {
   shadowIntensity?: number
   skyboxImage?: string // Custom HDRI for specific avatar
   greeting: string
+  voiceName: 'Aoede' | 'Charon' | 'Fenrir' | 'Kore' | 'Puck'
 }
 
 export const AVATARS_3D: Avatar3D[] = [
@@ -32,7 +33,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Blushy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Blushy.gif',
     isLocked: false,
-    greeting: 'Um... hello. If it feels a bit hard to talk right now, that\'s okay... we can take it slow.'
+    greeting: 'Um... hello. If it feels a bit hard to talk right now, that\'s okay... we can take it slow.',
+    voiceName: 'Kore'
   },
   {
     id: 'bluey',
@@ -49,7 +51,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Bluey.glb', import.meta.url).href,
     videoPath: '/asset/gif/Bluey.gif',
     isLocked: false,
-    greeting: 'I feel a bit sad. Do you feel it too?'
+    greeting: 'I feel a bit sad. Do you feel it too?',
+    voiceName: 'Puck'
   },
   {
     id: 'grumpy',
@@ -66,7 +69,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Grumpy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Grumpy.gif',
     isLocked: false,
-    greeting: 'Who annoyed you today? Tell me all about it, I\'ve got your back.'
+    greeting: 'Who annoyed you today? Tell me all about it, I\'ve got your back.',
+    voiceName: 'Fenrir'
   },
   {
     id: 'scaredy',
@@ -83,7 +87,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Scaredy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Scaredy.gif',
     isLocked: false,
-    greeting: 'I can\'t stop thinking about what might go wrong. Are you stuck in those thoughts too?'
+    greeting: 'I can\'t stop thinking about what might go wrong. Are you stuck in those thoughts too?',
+    voiceName: 'Puck'
   },
   {
     id: 'snoozy',
@@ -100,7 +105,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Snoozy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Snoozy.gif',
     isLocked: false,
-    greeting: 'You\'ve had a long day, haven\'t you? It\'s okay, let\'s just sit here for a while. You can tell me anything.'
+    greeting: 'You\'ve had a long day, haven\'t you? It\'s okay, let\'s just sit here for a while. You can tell me anything.',
+    voiceName: 'Aoede'
   },
   {
     id: 'sunny',
@@ -117,7 +123,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Sunny.glb', import.meta.url).href,
     videoPath: '/asset/gif/Sunny.gif',
     isLocked: false,
-    greeting: 'Hey! I\'m so happy to see you! Did anything wonderful happen today? I\'d love to hear about it!'
+    greeting: 'Hey! I\'m so happy to see you! Did anything wonderful happen today? I\'d love to hear about it!',
+    voiceName: 'Kore'
   },
   {
     id: 'zippy',
@@ -134,7 +141,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Zippy.glb', import.meta.url).href,
     videoPath: '/asset/gif/Zippy.gif',
     isLocked: false,
-    greeting: 'Hello! I\'ve been thinking about how to clear up your thoughts. Why don\'t we start with the thing that\'s on your mind the most?'
+    greeting: 'Hello! I\'ve been thinking about how to clear up your thoughts. Why don\'t we start with the thing that\'s on your mind the most?',
+    voiceName: 'Charon'
   },
   {
     id: 'yucky',
@@ -151,7 +159,8 @@ export const AVATARS_3D: Avatar3D[] = [
     modelPath: new URL('../assets/3davatar/Yucky.glb', import.meta.url).href,
     videoPath: '/asset/gif/Yucky.gif',
     isLocked: false,
-    greeting: 'I understand your feeling of aversion. That feeling is real and important. If you\'re ready, we can talk about the details.'
+    greeting: 'I understand your feeling of aversion. That feeling is real and important. If you\'re ready, we can talk about the details.',
+    voiceName: 'Charon'
   },
   {
     id: 'sparkle',
@@ -171,6 +180,7 @@ export const AVATARS_3D: Avatar3D[] = [
     exposure: 1.2, // Mimicking higher HDRI intensity
     environmentImage: 'neutral',
     shadowIntensity: 0.8,
-    greeting: 'I noticed some subtle shifts in your mood. Sometimes these complex feelings are just reminders to look within. Want to talk about it?'
+    greeting: 'I noticed some subtle shifts in your mood. Sometimes these complex feelings are just reminders to look within. Want to talk about it?',
+    voiceName: 'Aoede'
   }
 ]

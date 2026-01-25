@@ -4,9 +4,11 @@ interface GeminiLiveConfig {
     onTranscript?: (text: string) => void;
     onError?: (error: string) => void;
     onTurnComplete?: () => void;
+    systemInstruction?: string;
+    voiceName?: string;
 }
 
-export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiLiveConfig) => {
+export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemInstruction, voiceName }: GeminiLiveConfig) => {
     const [isConnected, setIsConnected] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
@@ -79,14 +81,33 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete }: GeminiL
                     console.log('[GeminiLive] WebSocket Connected');
 
                     // Send Setup Message
-                    const setupMessage = {
+                    const setupMessage: any = {
                         setup: {
                             model: `models/${model}`,
-                            generation_config: {
-                                response_modalities: ['AUDIO']
+                            generationConfig: {
+                                responseModalities: ['audio']
                             }
                         }
                     };
+
+                    // Add system instruction if provided
+                    if (systemInstruction) {
+                        setupMessage.setup.systemInstruction = {
+                            parts: [{ text: systemInstruction }]
+                        };
+                    }
+
+                    // Add voice config if provided
+                    if (voiceName) {
+                        setupMessage.setup.generationConfig.speechConfig = {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: {
+                                    voiceName: voiceName
+                                }
+                            }
+                        };
+                    }
+
                     ws.send(JSON.stringify(setupMessage));
 
                     setIsConnected(true);
