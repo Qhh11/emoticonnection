@@ -77,7 +77,7 @@ interface SoulSyncViewProps {
 export default function SoulSyncView({
   onInteract,
   userId,
-  userAvatar: _userAvatar,
+  userAvatar,
   onViewProfile,
   onSessionChange,
   onProactiveHintChange,
@@ -89,7 +89,6 @@ export default function SoulSyncView({
   userLevel,
   onMatchingModalChange,
 }: SoulSyncViewProps) {
-  // Note: _userAvatar is kept for API compatibility but not used in new ChatHub layout
   // Check if user is VIP (level >= 3) for AI assistant features
   const isVip = (userLevel ?? 0) >= 3
 
@@ -731,7 +730,7 @@ export default function SoulSyncView({
         {/* Chat View with Sidebar */}
         <section className="h-[600px] bg-white/60 backdrop-blur-xl rounded-3xl border border-white/20 shadow-lg overflow-hidden flex">
           {/* Left Sidebar: Contact Lists */}
-          <div className="w-72 border-r border-black/5 flex flex-col">
+          <div className="w-72 border-r-2 border-gray-200 flex flex-col bg-white/40">
             {/* Friends Section */}
             <div className="flex-1 overflow-y-auto">
               <div className="p-4 border-b border-black/5 sticky top-0 bg-white/80 backdrop-blur-sm z-10">
@@ -826,10 +825,22 @@ export default function SoulSyncView({
                 </div>
               ) : (
                 currentSession.messages.map(m => (
-                  <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className="space-y-1.5 max-w-[75%]">
+                  <div key={m.id} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className="flex items-end gap-2">
+                      {/* Partner avatar - show on left for peer messages */}
+                      {m.role === 'peer' && (
+                        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                          {currentSession.isAnonymous ? (
+                            <span className="text-base">🎭</span>
+                          ) : currentSession.partnerAvatar && currentSession.partnerAvatar.length > 2 ? (
+                            <img src={getAvatarUrl(currentSession.partnerAvatar)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-sm">{currentSession.partnerAvatar || '👤'}</span>
+                          )}
+                        </div>
+                      )}
                       <div
-                        className={`p-3 rounded-2xl font-bold text-sm leading-relaxed shadow-md ${
+                        className={`p-3 rounded-2xl font-bold text-sm leading-relaxed shadow-md max-w-[280px] ${
                           m.role === 'user'
                             ? 'bg-black text-white rounded-br-sm'
                             : 'bg-white text-gray-800 rounded-bl-sm border border-black/5'
@@ -837,19 +848,29 @@ export default function SoulSyncView({
                       >
                         {m.text}
                       </div>
-                      {m.role === 'peer' && m.emotionAnalysis && (
-                        <div className="float-left">
-                          <EmotionGradientBar
-                            primaryEmotion={m.emotionAnalysis.primary_emotion}
-                            primaryPercentage={m.emotionAnalysis.primary_percentage}
-                            primaryColor={m.emotionAnalysis.primary_color}
-                            secondaryEmotion={m.emotionAnalysis.secondary_emotion}
-                            secondaryPercentage={m.emotionAnalysis.secondary_percentage}
-                            secondaryColor={m.emotionAnalysis.secondary_color}
-                          />
+                      {/* User avatar - show on right for user messages */}
+                      {m.role === 'user' && (
+                        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                          {userAvatar && userAvatar.length > 2 ? (
+                            <img src={getAvatarUrl(userAvatar)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-sm">{userAvatar || '👤'}</span>
+                          )}
                         </div>
                       )}
                     </div>
+                    {m.role === 'peer' && m.emotionAnalysis && (
+                      <div className="ml-10 mt-1.5">
+                        <EmotionGradientBar
+                          primaryEmotion={m.emotionAnalysis.primary_emotion}
+                          primaryPercentage={m.emotionAnalysis.primary_percentage}
+                          primaryColor={m.emotionAnalysis.primary_color}
+                          secondaryEmotion={m.emotionAnalysis.secondary_emotion}
+                          secondaryPercentage={m.emotionAnalysis.secondary_percentage}
+                          secondaryColor={m.emotionAnalysis.secondary_color}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))
               )}
