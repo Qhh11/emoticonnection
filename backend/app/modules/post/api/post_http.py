@@ -145,6 +145,45 @@ async def create_post(
     except Exception as e:
         print(f"[Points] Failed to award points: {e}")
 
+    # Write post to Weaviate for semantic search and analytics
+    try:
+        import importlib.util
+        from datetime import datetime
+        
+        # Import WeaviateManager if not already imported
+        genai_app_path = Path(__file__).resolve().parents[5] / "genai" / "app"
+        weaviate_spec = importlib.util.spec_from_file_location(
+            "weaviate_client", genai_app_path / "weaviate_client.py"
+        )
+        weaviate_module = importlib.util.module_from_spec(weaviate_spec)
+        weaviate_spec.loader.exec_module(weaviate_module)
+        WeaviateManager = weaviate_module.WeaviateManager
+        
+        weaviate_manager = WeaviateManager()
+        
+        # Prepare post data for Weaviate
+        post_data_for_weaviate = [{
+            "userId": str(post_data.author_id),
+            "postId": str(post['id']),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "content": post_data.content or "",
+            "emotion": post_data.emotion or "",
+            "aiEmotion": ai_emotion or "",
+            "tags": post_data.tags or []
+        }]
+        
+        # Write to Weaviate UserPosts collection
+        success = weaviate_manager.write_data("UserPosts", post_data_for_weaviate)
+        
+        if success:
+            print(f"[Weaviate] Post {post['id']} successfully written to Weaviate")
+        else:
+            print(f"[Weaviate] Failed to write post {post['id']} to Weaviate")
+        
+        weaviate_manager.close()
+    except Exception as e:
+        print(f"[Weaviate] Error writing post to Weaviate: {e}")
+
     return PostOut(**post)
 
 

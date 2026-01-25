@@ -199,7 +199,7 @@ class EmotionAnalytics:
 
             client = genai.Client()
             response_text = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt
             )
             
@@ -219,8 +219,8 @@ class EmotionAnalytics:
         end_date: str
     ) -> List[Dict[str, Any]]:
         """
-        Fetch user conversations within the specified date range from both
-        Conversations and AIConversations collections.
+        Fetch user conversations within the specified date range from
+        Conversations, AIConversations, and UserPosts collections.
         
         Args:
             user_id: User identifier
@@ -294,6 +294,42 @@ class EmotionAnalytics:
         except Exception as e:
             logger.warning(f"Error fetching from AIConversations: {e}")
         
+        # 3. 从 UserPosts 集合获取用户发布的帖子
+        try:
+            posts_collection = self.weaviate_manager.client.collections.get("UserPosts")
+            
+            posts_response = posts_collection.query.fetch_objects(
+                filters=(
+                    Filter.by_property("userId").equal(user_id) &
+                    Filter.by_property("timestamp").greater_or_equal(start_date) &
+                    Filter.by_property("timestamp").less_or_equal(end_date)
+                ),
+                limit=1000,
+                sort=wq.Sort.by_property("timestamp", ascending=True)
+            )
+            
+            for obj in posts_response.objects:
+                props = obj.properties
+                # 将帖子内容转换为对话格式，以便统一分析
+                conv = {
+                    'timestamp': props.get('timestamp', ''),
+                    'userQuery': props.get('content', ''),
+                    'llmResponse': '',  # 帖子没有回复
+                    'userId1': user_id,
+                    'userId2': 'self',  # 标记为自我表达
+                    'source': 'user_post',
+                    'emotion': props.get('emotion', ''),  # 保留用户标记的心情
+                    'aiEmotion': props.get('aiEmotion', ''),  # 保留AI分析的心情
+                    'tags': props.get('tags', []),  # 保留标签
+                    'postId': props.get('postId', '')  # 保留帖子ID引用
+                }
+                all_conversations.append(conv)
+            
+            logger.info(f"Fetched {len(posts_response.objects)} records from UserPosts")
+                
+        except Exception as e:
+            logger.warning(f"Error fetching from UserPosts: {e}")
+        
         def normalize_timestamp(ts):
             if ts is None:
                 return ''
@@ -313,6 +349,9 @@ class EmotionAnalytics:
             """
             Analyze emotions from English conversation texts using Gemini with advanced 
             prompt engineering, including CoT reasoning and linguistic nuance detection.
+            
+            For posts with pre-labeled emotions, use those directly. For other conversations,
+            use AI analysis.
             """
             if not conversations:
                 return []
@@ -334,8 +373,52 @@ class EmotionAnalytics:
             9. envy: Jealousy, resentment of another's success, or a painful desire for what others have.
             """
             
-            for i in range(0, len(conversations), batch_size):
-                batch = conversations[i:i+batch_size]
+            # Separate conversations: those with pre-labeled emotions (posts) vs those needing analysis
+            conversations_needing_analysis = []
+            
+            for conv in conversations:
+                # Check if this is a post with emotion already labeled
+                source = conv.get('source', '')
+                
+                if source == 'user_post':
+                    # Use AI emotion if available, otherwise use user emotion, or analyze if neither exists
+                    ai_emotion = conv.get('aiEmotion', '').strip()
+                    user_emotion = conv.get('emotion', '').strip()
+                    
+                    if ai_emotion:
+                        # Use AI-analyzed emotion from post creation
+                        normalized_emotion = self.normalize_emotion(ai_emotion)
+                        emotion_score = self.EMOTION_SCORES.get(normalized_emotion, 0.0)
+                        
+                        all_data_points.append(EmotionDataPoint(
+                            timestamp=conv.get('timestamp', ''),
+                            emotion=normalized_emotion,
+                            intensity=0.6,  # Default intensity for pre-labeled
+                            sentiment_score=emotion_score,
+                            trigger_context=', '.join(conv.get('tags', [])) if conv.get('tags') else None
+                        ))
+                    elif user_emotion:
+                        # Use user-selected emotion
+                        normalized_emotion = self.normalize_emotion(user_emotion)
+                        emotion_score = self.EMOTION_SCORES.get(normalized_emotion, 0.0)
+                        
+                        all_data_points.append(EmotionDataPoint(
+                            timestamp=conv.get('timestamp', ''),
+                            emotion=normalized_emotion,
+                            intensity=0.5,  # Default intensity for user-selected
+                            sentiment_score=emotion_score,
+                            trigger_context=', '.join(conv.get('tags', [])) if conv.get('tags') else None
+                        ))
+                    else:
+                        # No emotion labeled, need to analyze
+                        conversations_needing_analysis.append(conv)
+                else:
+                    # Regular conversation, needs analysis
+                    conversations_needing_analysis.append(conv)
+            
+            # Analyze conversations that don't have pre-labeled emotions
+            for i in range(0, len(conversations_needing_analysis), batch_size):
+                batch = conversations_needing_analysis[i:i+batch_size]
                 texts_for_analysis = [
                     {'timestamp': conv.get('timestamp', ''), 'text': conv.get('userQuery', '')}
                     for conv in batch
@@ -546,7 +629,10 @@ class EmotionAnalytics:
             conversations: List[Dict],
             data_points: List[EmotionDataPoint]
         ) -> EmotionWordCloud:
-            """Generate emotion word cloud from conversations in English."""
+            """
+            Generate emotion word cloud from conversations in English.
+            Includes tags from user posts for enhanced context.
+            """
             if not conversations:
                 return EmotionWordCloud(words={}, top_emotions=[], total_count=0)
                 
@@ -554,6 +640,15 @@ class EmotionAnalytics:
             all_text = " ".join(
                 conv.get('userQuery', '') for conv in conversations
             )
+            
+            # Extract tags from user posts
+            post_tags = []
+            for conv in conversations:
+                if conv.get('source') == 'user_post' and conv.get('tags'):
+                    post_tags.extend(conv.get('tags', []))
+            
+            # Count tag frequencies
+            tag_counter = Counter(post_tags)
             
             # Use LLM to extract emotion-related keywords and expressions
             prompt = f"""Extract emotion-related keywords and expressions from the following text.
@@ -578,12 +673,26 @@ class EmotionAnalytics:
                 words = result.get('words', {})
                 emotions = result.get('emotions', [])
                 
+                # Merge post tags into words (boost their frequency)
+                for tag, count in tag_counter.items():
+                    if tag in words:
+                        words[tag] += count
+                    else:
+                        words[tag] = count
+                
             except Exception as e:
                 logger.warning(f"Word cloud generation failed: {e}")
                 # Fallback: count emotions directly from data points
                 emotion_counts = Counter(dp.emotion for dp in data_points)
                 words = dict(emotion_counts.most_common(20))
                 emotions = list(emotion_counts.keys())[:5]
+                
+                # Add tags even in fallback
+                for tag, count in tag_counter.items():
+                    if tag in words:
+                        words[tag] += count
+                    else:
+                        words[tag] = count
             
             return EmotionWordCloud(
                 words=words,
