@@ -12,33 +12,10 @@ const EMOJI_IMAGES: Record<string, string> = {
   calm: '/checkin/peace.png',    // 第四象限 - 绿色区域
 }
 
-// 8x8 网格颜色矩阵 - 与渲染的色块完全一致
-const COLOR_GRID = [
-  // 行1 (最上)
-  ['#D32F2F', '#DC4545', '#E55A5A', '#EE7070', '#FAD870', '#F9D040', '#E8C020', '#D8B010'],
-  // 行2
-  ['#DC4545', '#E55A5A', '#EE7070', '#F58585', '#FBE4A0', '#FAD870', '#F9D040', '#E8C020'],
-  // 行3
-  ['#E55A5A', '#EE7070', '#F58585', '#FAA0A0', '#FCF0C0', '#FBE4A0', '#FAD870', '#F9D040'],
-  // 行4 (靠近中心上)
-  ['#EE7070', '#F58585', '#FAA0A0', '#FDB5B5', '#FDFAE0', '#FCF0C0', '#FBE4A0', '#FAD870'],
-  // 行5 (靠近中心下)
-  ['#5588CC', '#6699D5', '#77AADD', '#88BBE5', '#E0F0D0', '#D0E8C0', '#C0E0B0', '#B0D8A0'],
-  // 行6
-  ['#4477BB', '#5588CC', '#6699D5', '#77AADD', '#B0D8A0', '#A0D090', '#90C880', '#80C070'],
-  // 行7
-  ['#3266B1', '#4477BB', '#5588CC', '#6699D5', '#90C880', '#80C070', '#70B860', '#66B04C'],
-  // 行8 (最下)
-  ['#2855A0', '#3266B1', '#4477BB', '#5588CC', '#80C070', '#70B860', '#66B04C', '#56A03C'],
-]
-
-// 根据坐标从网格中采样颜色
+// 根据坐标计算颜色 - 使用动态背景的双线性插值
 function calculateColor(x: number, y: number): string {
-  // 将 [-1, 1] 映射到 [0, 7]
-  const col = Math.min(7, Math.max(0, Math.floor((x + 1) / 2 * 8)))
-  // y 轴反转: y=1 对应 row=0, y=-1 对应 row=7
-  const row = Math.min(7, Math.max(0, Math.floor((1 - y) / 2 * 8)))
-  return COLOR_GRID[row][col]
+  // 直接使用动态背景颜色函数
+  return calculateDynamicBackground(x, y)
 }
 
 // 根据坐标获取表情
@@ -55,6 +32,40 @@ function getMoodLabelFromCoordinate(x: number, y: number): string {
   if (x < 0 && y >= 0) return 'Stressed'
   if (x < 0 && y < 0) return 'Sad'
   return 'Calm'
+}
+
+// 计算动态背景颜色 - 双线性插值实现平滑过渡 (用于流体情绪映射场)
+// 返回十六进制颜色，便于添加透明度后缀
+// 颜色取自 8x8 网格的四个角落
+function calculateDynamicBackground(x: number, y: number): string {
+  // 四个角的颜色 (RGB) - 取自 COLOR_GRID 的四个角
+  const colors = {
+    topLeft: { r: 211, g: 47, b: 47 },       // #D32F2F 红色 (愤怒/焦虑)
+    topRight: { r: 216, g: 176, b: 16 },     // #D8B010 金黄 (兴奋/快乐)
+    bottomLeft: { r: 40, g: 85, b: 160 },    // #2855A0 深蓝 (悲伤/疲惫)
+    bottomRight: { r: 86, g: 160, b: 60 },   // #56A03C 绿色 (平静/放松)
+  }
+
+  // 归一化坐标 (0-1)
+  const nx = (x + 1) / 2
+  const ny = (1 - y) / 2  // Y轴反转
+
+  // 线性插值
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+  const lerpColor = (c1: typeof colors.topLeft, c2: typeof colors.topLeft, t: number) => ({
+    r: Math.round(lerp(c1.r, c2.r, t)),
+    g: Math.round(lerp(c1.g, c2.g, t)),
+    b: Math.round(lerp(c1.b, c2.b, t)),
+  })
+
+  // 双线性插值
+  const top = lerpColor(colors.topLeft, colors.topRight, nx)
+  const bottom = lerpColor(colors.bottomLeft, colors.bottomRight, nx)
+  const final = lerpColor(top, bottom, ny)
+
+  // 转换为十六进制格式
+  const toHex = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${toHex(final.r)}${toHex(final.g)}${toHex(final.b)}`
 }
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md (保留用于向后兼容)
@@ -711,7 +722,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
             <div className="mb-4 bg-gray-50 p-4 rounded-2xl border border-black/5">
               {/* 标题 + Help Dropdown */}
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-300">
+                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-500">
                   How are you feeling?
                 </p>
                 {/* Help Dropdown 触发按钮 */}
@@ -798,79 +809,77 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                 </div>
               </div>
 
-              {/* 坐标轴画布 */}
+              {/* 坐标轴画布 - 流体情绪映射场 */}
               <div
-                className="relative w-full aspect-square rounded-xl overflow-hidden cursor-crosshair touch-none"
+                className="relative w-full aspect-square rounded-2xl overflow-hidden cursor-crosshair touch-none"
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerLeave={handlePointerUp}
               >
-                {/* 8x8 渐变色块网格 - 每个象限4x4，四个角最深，中心最浅 */}
-                <div className="absolute inset-0 grid grid-cols-8 grid-rows-8">
-                  {/* 行1 (最上) - 左上红色最深，右上黄色最深 */}
-                  <div className="bg-[#D32F2F]" /><div className="bg-[#DC4545]" /><div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" />
-                  <div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" /><div className="bg-[#E8C020]" /><div className="bg-[#D8B010]" />
-                  {/* 行2 */}
-                  <div className="bg-[#DC4545]" /><div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" /><div className="bg-[#F58585]" />
-                  <div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" /><div className="bg-[#E8C020]" />
-                  {/* 行3 */}
-                  <div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" /><div className="bg-[#F58585]" /><div className="bg-[#FAA0A0]" />
-                  <div className="bg-[#FCF0C0]" /><div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" />
-                  {/* 行4 (靠近中心) */}
-                  <div className="bg-[#EE7070]" /><div className="bg-[#F58585]" /><div className="bg-[#FAA0A0]" /><div className="bg-[#FDB5B5]" />
-                  <div className="bg-[#FDFAE0]" /><div className="bg-[#FCF0C0]" /><div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" />
-
-                  {/* 行5 (靠近中心) - 蓝色和绿色都是原点最浅 */}
-                  <div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" /><div className="bg-[#77AADD]" /><div className="bg-[#88BBE5]" />
-                  <div className="bg-[#E0F0D0]" /><div className="bg-[#D0E8C0]" /><div className="bg-[#C0E0B0]" /><div className="bg-[#B0D8A0]" />
-                  {/* 行6 */}
-                  <div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" /><div className="bg-[#77AADD]" />
-                  <div className="bg-[#B0D8A0]" /><div className="bg-[#A0D090]" /><div className="bg-[#90C880]" /><div className="bg-[#80C070]" />
-                  {/* 行7 */}
-                  <div className="bg-[#3266B1]" /><div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" />
-                  <div className="bg-[#90C880]" /><div className="bg-[#80C070]" /><div className="bg-[#70B860]" /><div className="bg-[#66B04C]" />
-                  {/* 行8 (最下) - 左下蓝色最深，右下绿色最深 */}
-                  <div className="bg-[#2855A0]" /><div className="bg-[#3266B1]" /><div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" />
-                  <div className="bg-[#80C070]" /><div className="bg-[#70B860]" /><div className="bg-[#66B04C]" /><div className="bg-[#56A03C]" />
-                </div>
-
-                {/* 坐标轴线 */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="absolute w-full h-[2px] bg-white/40" />
-                  <div className="absolute h-full w-[2px] bg-white/40" />
-                </div>
-
-                {/* 坐标轴标签 - 放在轴的两端 */}
-                {/* 横轴: Negative -> Positive */}
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-black/70 text-[11px] font-bold">Negative</span>
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-black/70 text-[11px] font-bold">Positive</span>
-                {/* 纵轴: Low Energy -> High Energy */}
-                <span className="absolute top-2 left-1/2 -translate-x-1/2 text-black/70 text-[11px] font-bold">High Energy</span>
-                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-black/70 text-[11px] font-bold">Low Energy</span>
-
-                {/* 中心表情 - 背景颜色随光标位置动态变化 */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors duration-200"
-                    style={{ backgroundColor: currentColor }}
-                  >
-                    <img
-                      src={EMOJI_IMAGES[currentEmoji]}
-                      alt={currentEmoji}
-                      className="w-9 h-9 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-
-                {/* 可拖拽的点 */}
+                {/* 动态渐变背景 - 渐变中心跟随光标位置 */}
                 <div
-                  className="absolute w-5 h-5 bg-white rounded-full shadow-lg border-2 border-gray-400 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10"
+                  className="absolute inset-0 transition-all duration-200"
+                  style={{
+                    background: `radial-gradient(
+                      ellipse 80% 80% at ${((coordinate.x + 1) / 2) * 100}% ${((1 - coordinate.y) / 2) * 100}%,
+                      ${calculateDynamicBackground(coordinate.x, coordinate.y)}88 0%,
+                      ${calculateDynamicBackground(coordinate.x, coordinate.y)}66 20%,
+                      ${calculateDynamicBackground(coordinate.x, coordinate.y)}44 40%,
+                      ${calculateDynamicBackground(coordinate.x, coordinate.y)}22 60%,
+                      #fafafa 85%
+                    )`
+                  }}
+                />
+
+                {/* 坐标轴标签 */}
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-black/50 uppercase tracking-wider">
+                  Unpleasant
+                </span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-black/50 uppercase tracking-wider">
+                  Pleasant
+                </span>
+                <span className="absolute top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold text-black/50 uppercase tracking-wider">
+                  High Energy
+                </span>
+                <span className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] font-bold text-black/50 uppercase tracking-wider">
+                  Low Energy
+                </span>
+
+                {/* 放大的半透明表情叠加在标签上方 */}
+                <div
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden transition-transform duration-300"
+                  style={{
+                    transform: `translate(${coordinate.x * 12}%, ${-coordinate.y * 12}%)`,
+                  }}
+                >
+                  <img
+                    src={EMOJI_IMAGES[currentEmoji]}
+                    alt=""
+                    className="w-36 h-36 opacity-25 transition-opacity duration-300"
+                    style={{
+                      filter: 'blur(1px)',
+                    }}
+                  />
+                </div>
+
+                {/* 可拖拽的小光标点 */}
+                <div
+                  className="absolute w-6 h-6 rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 transition-all duration-100"
                   style={{
                     left: `${(coordinate.x + 1) / 2 * 100}%`,
                     top: `${(1 - (coordinate.y + 1) / 2) * 100}%`,
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    border: '2px solid rgba(0, 0, 0, 0.1)',
+                    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.15)',
                   }}
                 />
+              </div>
+
+              {/* 实时参数显示 */}
+              <div className="flex justify-center gap-6 mt-2 text-[10px] font-medium text-gray-400">
+                <span>E: {coordinate.y >= 0 ? '+' : ''}{(coordinate.y * 10).toFixed(1)}</span>
+                <span>P: {coordinate.x >= 0 ? '+' : ''}{(coordinate.x * 10).toFixed(1)}</span>
               </div>
 
               {/* 确认按钮 */}
@@ -906,7 +915,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                   <button
                     key={i}
                     onClick={() => {
-                      // 如果已签到，初始化坐标到已有位置
+                      // 如果已打卡，从上次位置初始化；否则从中心开始
                       if (effectiveCheckIn?.coordinate_x !== undefined && effectiveCheckIn?.coordinate_y !== undefined) {
                         setCoordinate({ x: effectiveCheckIn.coordinate_x, y: effectiveCheckIn.coordinate_y })
                       } else {
