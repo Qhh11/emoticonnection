@@ -115,6 +115,85 @@ def create_schema():
     except Exception as e:
         print(f"❌ Error occurred during creation: {e}")
     
+    # --- Create UserPosts Collection ---
+    posts_collection_name = "UserPosts"
+    
+    if client.collections.exists(posts_collection_name):
+        print(f"Collection '{posts_collection_name}' already exists, deleting old collection...")
+        client.collections.delete(posts_collection_name)
+
+    print(f"Creating new collection '{posts_collection_name}'...")
+    try:
+        client.collections.create(
+            name=posts_collection_name,
+            properties=[
+                # userId: User ID who created the post, not vectorized, used for exact filtering
+                wc.Property(name="userId", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # postId: MongoDB post ID reference
+                wc.Property(name="postId", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # timestamp: Date type, used for time range filtering
+                wc.Property(name="timestamp", data_type=wc.DataType.DATE, skip_vectorization=True),
+                
+                # content: Post content (main vectorized content for semantic search)
+                wc.Property(name="content", data_type=wc.DataType.TEXT),
+                
+                # emotion: User-selected emotion or AI-detected emotion
+                wc.Property(name="emotion", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # aiEmotion: AI-analyzed emotion from content (optional)
+                wc.Property(name="aiEmotion", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # tags: Array of tags for filtering
+                wc.Property(name="tags", data_type=wc.DataType.TEXT_ARRAY, skip_vectorization=True),
+            ]
+        )
+        print(f"✅ Success! Database table '{posts_collection_name}' created.")
+    except Exception as e:
+        print(f"❌ Error occurred during creation: {e}")
+    
+    # --- Create ChatEmotions Collection ---
+    chat_emotions_collection = "ChatEmotions"
+    
+    if client.collections.exists(chat_emotions_collection):
+        print(f"Collection '{chat_emotions_collection}' already exists, deleting old collection...")
+        client.collections.delete(chat_emotions_collection)
+
+    print(f"Creating new collection '{chat_emotions_collection}'...")
+    try:
+        client.collections.create(
+            name=chat_emotions_collection,
+            properties=[
+                # userId: User ID who sent the message
+                wc.Property(name="userId", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # sessionId: Chat session/room ID
+                wc.Property(name="sessionId", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # timestamp: Message timestamp
+                wc.Property(name="timestamp", data_type=wc.DataType.DATE, skip_vectorization=True),
+                
+                # content: Message text content (vectorized for semantic search)
+                wc.Property(name="content", data_type=wc.DataType.TEXT),
+                
+                # primaryEmotion: Primary emotion detected by AI (e.g., 'happiness')
+                wc.Property(name="primaryEmotion", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # primaryEmotionScore: Percentage/confidence of primary emotion (e.g., 80)
+                wc.Property(name="primaryEmotionScore", data_type=wc.DataType.NUMBER, skip_vectorization=True),
+                
+                # secondaryEmotion: Secondary emotion detected by AI (e.g., 'calm')
+                wc.Property(name="secondaryEmotion", data_type=wc.DataType.TEXT, skip_vectorization=True),
+                
+                # secondaryEmotionScore: Percentage/confidence of secondary emotion (e.g., 20)
+                wc.Property(name="secondaryEmotionScore", data_type=wc.DataType.NUMBER, skip_vectorization=True),
+            ]
+        )
+        print(f"✅ Success! Database table '{chat_emotions_collection}' created.")
+    except Exception as e:
+        print(f"❌ Error occurred during creation: {e}")
+    
     finally:
         manager.close()
 

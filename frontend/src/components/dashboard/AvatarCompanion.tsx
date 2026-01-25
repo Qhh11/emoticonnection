@@ -38,9 +38,9 @@ interface AvatarCompanionProps {
 
 export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, showVipHint, showProactiveHint, showAssistantBubble, onCloseBubble, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, showPolishHint, showPolishButton, profileDialogueText, animateLookingCloser, showCommunityPolishButton, tourTargetPosition, tourMode }: AvatarCompanionProps) {
   const [position, setPosition] = useState(() => {
-    // Load saved position from sessionStorage or use default
+    // Load saved position from sessionStorage or use default (bottom-left)
     const saved = sessionStorage.getItem('avatarCompanionPosition')
-    return saved ? JSON.parse(saved) : { x: window.innerWidth - 200, y: 100 }
+    return saved ? JSON.parse(saved) : { x: 100, y: window.innerHeight - 280 }
   })
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
@@ -230,8 +230,9 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
         )}
 
         {/* Tour mode unified bubble - integrated step progress + dialogue + navigation */}
+        {/* Positioned to the LEFT of Avatar to avoid blocking MatchingModal content */}
         {tourMode && !isDragging && (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-[320px] animate-in fade-in zoom-in-95 duration-300">
+          <div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 w-[280px] animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-white/95 backdrop-blur-md rounded-3xl p-5 shadow-2xl border border-white/30">
               {/* Step progress bar */}
               <div className="flex items-center justify-between mb-3">
@@ -304,8 +305,8 @@ export default function AvatarCompanion({ avatar, onClose, onClick, activeTab, s
                 </button>
               </div>
             </div>
-            {/* Triangle pointer towards Avatar */}
-            <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-4 h-4 bg-white/95 rotate-45 rounded-sm shadow-lg" />
+            {/* Triangle pointer towards Avatar (pointing right) */}
+            <div className="absolute top-1/2 -translate-y-1/2 -right-2 w-4 h-4 bg-white/95 rotate-45 rounded-sm shadow-lg" />
           </div>
         )}
 

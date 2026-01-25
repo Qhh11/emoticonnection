@@ -37,7 +37,7 @@ const toneConfigs = {
 
 type ViewType = 'menu' | 'rewrite' | 'response' | 'topic'
 
-export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, avatarPosition, context }: AssistantBubbleProps) {
+export default function AssistantBubble({ isOpen, onClose, onSelectText, partnerLastMessage, chatHistory, initialAction, initialInputText, onActionConsumed, avatarPosition/*, context*/ }: AssistantBubbleProps) {
   const [view, setView] = useState<ViewType>('menu')
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)

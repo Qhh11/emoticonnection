@@ -34,6 +34,7 @@ class DiaryRequest(BaseModel):
     title: str
     content: str
     mood: str = "Neutral"
+    color: Optional[str] = None  # Custom mood color
 
 class GenerateDiaryRequest(BaseModel):
     """AI 生成日记请求模型"""
@@ -76,7 +77,8 @@ async def create_diary(request: DiaryRequest, repo: DiaryRepository = Depends(ge
             session_id=request.session_id or "",
             title=request.title,
             content=request.content,
-            mood=request.mood
+            mood=request.mood,
+            color=request.color  # Pass custom color
         )
         return diary
     except Exception as e:

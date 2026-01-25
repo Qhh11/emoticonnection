@@ -277,7 +277,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
     setTranscript('')
     setVoiceStatus('connecting')
     try {
-      await geminiLive.startLiveConversation()
+      //await geminiLive.startLiveConversation()
+      await geminiLive.connect()
+      await geminiLive.startStreaming()
       setVoiceStatus('connected')
     } catch (error) {
       console.error('[ChatAIView] Error starting live conversation:', error)
@@ -287,7 +289,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
 
   // End real-time conversation - like hanging up the phone
   const endLiveConversation = () => {
-    geminiLive.stopLiveConversation()
+    //geminiLive.stopLiveConversation()
+    geminiLive.stopStreaming()
+    geminiLive.disconnect()
     setVoiceStatus('idle')
   }
 
@@ -313,7 +317,12 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
   if (isVip && activeAvatar) {
     return (
       <LayoutGroup>
-        <div className="h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
+        <div
+          className="h-full flex flex-col relative overflow-hidden backdrop-blur-xl"
+          style={{
+            background: `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, ${activeAvatar.color}20 40%, ${activeAvatar.color}35 100%)`
+          }}
+        >
           {/* Ambient glow effect */}
           <motion.div
             className="absolute inset-0 opacity-30"
@@ -332,17 +341,17 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                   <button
                     key={a.id}
                     onClick={() => setActiveAvatar(a)}
-                    className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'border-white/10 opacity-40'}`}
+                    className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'border-gray-200 opacity-50'}`}
                   >
                     <img src={a.videoPath || ''} alt={a.name} className="w-full h-full object-contain" />
                   </button>
                 ))}
               </div>
               <div className="flex flex-col">
-                <span className="text-white text-[12px] font-black uppercase tracking-widest">
+                <span className="text-gray-800 text-[16px] font-black uppercase tracking-widest">
                   {activeAvatar.name}
                 </span>
-                <span className="text-white/60 text-[11px] font-medium leading-relaxed">
+                <span className="text-gray-500 text-[11px] font-medium leading-relaxed">
                   {activeAvatar.description}
                 </span>
               </div>
@@ -353,13 +362,13 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
               {chatMode === 'voice' && (
                 <button
                   onClick={switchToTextMode}
-                  className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all flex items-center space-x-2"
+                  className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-all flex items-center space-x-2"
                   title="Switch to text mode"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#374151">
                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
                   </svg>
-                  <span className="text-white text-[10px] font-black uppercase tracking-widest">Text</span>
+                  <span className="text-gray-700 text-[10px] font-black uppercase tracking-widest">Text</span>
                 </button>
               )}
 
@@ -368,7 +377,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 disabled={isSaving || textMessages.length < 2}
                 className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${saveSuccess
                   ? 'bg-green-500 text-white'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } disabled:opacity-30 disabled:cursor-not-allowed`}
               >
                 {isSaving ? '...' : saveSuccess ? 'Saved!' : 'Save'}
@@ -801,6 +810,31 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
   const [title, setTitle] = useState('')
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0] | null>(null)
 
+  // Custom mood state
+  const [showCustomMood, setShowCustomMood] = useState(false)
+  const [customMoodLabel, setCustomMoodLabel] = useState('')
+  const [customMoodHue, setCustomMoodHue] = useState(260) // Hue value 0-360
+
+  // Convert hue to Morandi-style color (low saturation, muted tones)
+  const hueToMorandiColor = (hue: number): string => {
+    const s = 45 // Low saturation for muted feel
+    const l = 55 // Medium lightness
+    const c = (1 - Math.abs(2 * l / 100 - 1)) * s / 100
+    const x = c * (1 - Math.abs((hue / 60) % 2 - 1))
+    const m = l / 100 - c / 2
+    let r = 0, g = 0, b = 0
+    if (hue < 60) { r = c; g = x }
+    else if (hue < 120) { r = x; g = c }
+    else if (hue < 180) { g = c; b = x }
+    else if (hue < 240) { g = x; b = c }
+    else if (hue < 300) { r = x; b = c }
+    else { r = c; b = x }
+    const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, '0')
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+  }
+
+  const customMoodColor = hueToMorandiColor(customMoodHue)
+
   // Notify parent about mode changes
   useEffect(() => {
     onModeChange?.(mode)
@@ -827,17 +861,33 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
   const handleSave = (e: React.MouseEvent) => {
     if (!content.trim()) return
 
+    // Determine mood and color - use custom if selected, otherwise use predefined or default
+    let moodLabel = 'Neutral'
+    let moodColor = '#121212'
+
+    if (showCustomMood) {
+      // Custom mood: use custom color, and custom label if provided
+      moodLabel = customMoodLabel.trim() || 'Custom'
+      moodColor = customMoodColor
+    } else if (selectedMood) {
+      moodLabel = selectedMood.label
+      moodColor = selectedMood.color
+    }
+
     // Manual mode: save with user-selected mood and color
     onAddEntry({
       title: title.trim() || `Journal - ${new Date().toLocaleDateString()}`,
-      mood: selectedMood?.label || 'Neutral',
-      color: selectedMood?.color || '#121212',
+      mood: moodLabel,
+      color: moodColor,
       text: content
     })
 
     setContent('')
     setTitle('')
     setSelectedMood(null)
+    setShowCustomMood(false)
+    setCustomMoodLabel('')
+    setCustomMoodHue(260) // Reset to default purple
     onInteract(e)
   }
 
@@ -875,7 +925,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Give your entry a title..."
-                  className="w-full text-3xl font-black tracking-tight bg-transparent border-none focus:ring-0 placeholder:text-gray-100 p-0"
+                  className="w-full text-3xl font-black tracking-tight bg-transparent border-none focus:ring-0 focus:outline-none outline-none placeholder:text-gray-100 p-0"
                 />
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-black/5 flex items-center justify-center overflow-hidden">
@@ -891,20 +941,81 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                   {MOOD_DATA.map(m => (
                     <button
                       key={m.label}
-                      onClick={() => setSelectedMood(m)}
-                      className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${selectedMood?.label === m.label ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                      onClick={() => {
+                        setSelectedMood(m)
+                        setShowCustomMood(false)
+                      }}
+                      className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${selectedMood?.label === m.label && !showCustomMood ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
                     >
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }}></div>
                       <span className="text-[13px] font-black uppercase tracking-widest">{m.label}</span>
                     </button>
                   ))}
+                  {/* Custom mood button */}
+                  <button
+                    onClick={() => {
+                      setShowCustomMood(true)
+                      setSelectedMood(null)
+                    }}
+                    className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${showCustomMood ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                  >
+                    <span className="text-[13px]">+</span>
+                    <span className="text-[13px] font-black uppercase tracking-widest">Custom</span>
+                  </button>
                 </div>
+
+                {/* Custom mood input panel */}
+                {showCustomMood && (
+                  <div className="mt-4 p-6 bg-gray-50 rounded-2xl border border-black/5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-10 h-10 rounded-xl flex-shrink-0 shadow-inner"
+                        style={{ backgroundColor: customMoodColor }}
+                      />
+                      <input
+                        type="text"
+                        value={customMoodLabel}
+                        onChange={(e) => setCustomMoodLabel(e.target.value)}
+                        placeholder="Enter emotion name..."
+                        maxLength={20}
+                        className="flex-1 px-4 py-2 bg-white rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Choose Color
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          value={customMoodHue}
+                          onChange={(e) => setCustomMoodHue(Number(e.target.value))}
+                          className="w-full h-3 rounded-full appearance-none cursor-pointer"
+                          style={{
+                            // Morandi-style gradient (muted, low saturation colors)
+                            background: 'linear-gradient(to right, #b88e8e, #b8a88e, #a8b88e, #8eb8a8, #8ea8b8, #988eb8, #b88eb8, #b88e8e)',
+                          }}
+                        />
+                        {/* Custom thumb indicator */}
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-white shadow-lg pointer-events-none"
+                          style={{
+                            backgroundColor: customMoodColor,
+                            left: `calc(${(customMoodHue / 360) * 100}% - 10px)`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What's your current frequency? Write anything, and I'll help you capture the essence..."
-                className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 text-xl font-bold leading-relaxed placeholder:text-gray-200 resize-none"
+                className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 focus:outline-none outline-none text-xl font-bold leading-relaxed placeholder:text-gray-200 resize-none"
               />
               <div className="flex justify-end">
                 <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Save</button>

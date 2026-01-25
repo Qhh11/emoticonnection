@@ -25,10 +25,11 @@ class DiaryRepository:
             "title": diary["title"],
             "content": diary["content"],
             "mood": diary.get("mood", "Neutral"),
+            "color": diary.get("color"),  # Custom mood color
             "created_at": diary["created_at"]
         }
 
-    async def create_diary(self, user_id: str, session_id: str, title: str, content: str, mood: str) -> Dict:
+    async def create_diary(self, user_id: str, session_id: str, title: str, content: str, mood: str, color: Optional[str] = None) -> Dict:
         """Create a new diary entry"""
         try:
             user_oid = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
@@ -43,6 +44,7 @@ class DiaryRepository:
             "title": title,
             "content": content,
             "mood": mood,
+            "color": color,  # Custom mood color
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }

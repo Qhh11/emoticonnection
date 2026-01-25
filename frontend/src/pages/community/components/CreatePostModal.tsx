@@ -22,6 +22,7 @@ export interface CreatePostData {
   title: string
   content: string
   emotion: string
+  emotionColor?: string  // Custom emotion color
   images: File[]
   isAnonymous: boolean
 }
@@ -30,7 +31,7 @@ export default function CreatePostModal({
   isOpen,
   onClose,
   onSubmit,
-  userId,
+  //userId,
   onRequestPolish,
   onPolishReady,
   polishedContent,
@@ -39,6 +40,7 @@ export default function CreatePostModal({
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [selectedVibe, setSelectedVibe] = useState<string | null>(null)
+  const [selectedVibeColor, setSelectedVibeColor] = useState<string | undefined>(undefined)
   const [images, setImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [isAnonymous, setIsAnonymous] = useState(false)
@@ -116,6 +118,7 @@ export default function CreatePostModal({
         title: title.trim() || content.slice(0, 50),
         content: content.trim(),
         emotion: selectedVibe,
+        emotionColor: selectedVibeColor,  // Pass custom color
         images,
         isAnonymous,
       })
@@ -124,6 +127,7 @@ export default function CreatePostModal({
       setTitle('')
       setContent('')
       setSelectedVibe(null)
+      setSelectedVibeColor(undefined)
       setImages([])
       setImagePreviews([])
       setIsAnonymous(false)
@@ -266,7 +270,12 @@ export default function CreatePostModal({
             </label>
             <VibePicker
               selectedVibe={selectedVibe}
-              onSelect={setSelectedVibe}
+              onSelect={(vibe, color) => {
+                setSelectedVibe(vibe)
+                setSelectedVibeColor(color)
+              }}
+              customColor={selectedVibeColor}
+              onCustomColorChange={setSelectedVibeColor}
               size="small"
             />
           </div>

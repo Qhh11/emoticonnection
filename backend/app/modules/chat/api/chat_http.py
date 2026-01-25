@@ -283,6 +283,11 @@ async def send_message(
 
     # AI Emotion Analysis for text messages
     emotion_result = None
+    primary_emotion = None
+    primary_score = None
+    secondary_emotion = None
+    secondary_score = None
+    
     if message_data.message_type.value == "text" and message_data.content:
         try:
             from app.modules.ai.core.emotion import EmotionService
@@ -298,7 +303,15 @@ async def send_message(
 
             if matches:
                 emotion_result = matches[0][0].lower()
+                primary_emotion = matches[0][0].lower()
+                primary_score = int(matches[0][1])
+                
+                if len(matches) > 1:
+                    secondary_emotion = matches[1][0].lower()
+                    secondary_score = int(matches[1][1])
+                
                 print(f"[AI HTTP] Detected emotion: {emotion_result}")
+                print(f"[AI HTTP] Primary: {primary_emotion} ({primary_score}%), Secondary: {secondary_emotion} ({secondary_score}%)")
         except Exception as e:
             print(f"[AI HTTP] Emotion analysis failed: {e}")
 
@@ -312,6 +325,47 @@ async def send_message(
         media_url=message_data.media_url,
         emotion=emotion_result
     )
+
+    # Write emotion analysis to Weaviate for analytics
+    if primary_emotion and message_data.message_type.value == "text":
+        try:
+            import importlib.util
+            from datetime import datetime
+            
+            # Import WeaviateManager
+            genai_app_path = Path(__file__).resolve().parents[5] / "genai" / "app"
+            weaviate_spec = importlib.util.spec_from_file_location(
+                "weaviate_client", genai_app_path / "weaviate_client.py"
+            )
+            weaviate_module = importlib.util.module_from_spec(weaviate_spec)
+            weaviate_spec.loader.exec_module(weaviate_module)
+            WeaviateManager = weaviate_module.WeaviateManager
+            
+            weaviate_manager = WeaviateManager()
+            
+            # Prepare emotion data for Weaviate
+            emotion_data = [{
+                "userId": str(message_data.sender_id),
+                "sessionId": str(room_id),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "content": message_data.content,
+                "primaryEmotion": primary_emotion,
+                "primaryEmotionScore": primary_score or 0,
+                "secondaryEmotion": secondary_emotion or "",
+                "secondaryEmotionScore": secondary_score or 0
+            }]
+            
+            # Write to Weaviate ChatEmotions collection
+            success = weaviate_manager.write_data("ChatEmotions", emotion_data)
+            
+            if success:
+                print(f"[Weaviate] Chat emotion data written for message in room {room_id}")
+            else:
+                print(f"[Weaviate] Failed to write chat emotion data")
+            
+            weaviate_manager.close()
+        except Exception as e:
+            print(f"[Weaviate] Error writing chat emotion to Weaviate: {e}")
 
     # Add emotion color to response
     if message.get('emotion'):

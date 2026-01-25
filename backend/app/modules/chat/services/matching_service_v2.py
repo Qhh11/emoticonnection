@@ -174,6 +174,21 @@ class MatchingServiceV2:
             EmotionType.WARM, EmotionType.FRIENDLY, EmotionType.NEUTRAL,
             EmotionType.CALM, EmotionType.HOPEFUL, EmotionType.CURIOUS
         }
+        self.pending_ttl = timedelta(minutes=0.5) 
+        self.active_matches: Dict[str, dict] = {} 
+
+
+    def _is_pending_valid(self, info: dict) -> bool:
+        ts = info.get("created_at")
+        if not ts:
+            return False
+        return datetime.utcnow() - ts < self.pending_ttl
+
+    def _clear_match_state_for_users(self, user_a: str, user_b: str, room_id: Optional[str] = None):
+        self.user_match_map.pop(user_a, None)
+        self.user_match_map.pop(user_b, None)
+        if room_id:
+            self.active_matches.pop(room_id, None)
 
     async def find_match(self, request: MatchRequestV2Internal) -> MatchResponseV2:
         """Main matching entry point"""
@@ -183,6 +198,12 @@ class MatchingServiceV2:
         print(f"[MatchV2] Mode: {request.mode}")
         print(f"[MatchV2] Role: {request.role}, Need: {request.support_need}, Topic: {request.topic}")
         print(f"[MatchV2] Emotion: {request.current_emotion}, Intensity: {request.emotion_intensity}")
+        if request.user_id in self.user_match_map:
+            info = self.user_match_map[request.user_id]
+            if info.get("state") == "pending" and self._is_pending_valid(info):
+                return self._return_existing_match(request.user_id)
+            # stale / already active -> allow rematch
+            self.user_match_map.pop(request.user_id, None)
 
         if request.risk_level == RiskLevel.CRISIS:
             return self._handle_crisis_user(request)
@@ -213,6 +234,9 @@ class MatchingServiceV2:
             safety_tips=self._get_safety_tips(request)
         )
 
+    def _min_required_score(self, attempts: int, waited_seconds: float) -> float:
+        return max(1.5, 3.0 - 0.25 * attempts - 0.001 * waited_seconds)
+
     def _find_best_match(self, request: MatchRequestV2Internal, queue: List[QueueEntry]) -> Optional[QueueEntry]:
         """Find the best match from queue"""
         candidates: List[Tuple[QueueEntry, float, str]] = []
@@ -228,7 +252,10 @@ class MatchingServiceV2:
 
             score, reason = self._calculate_match_score(request, other)
             print(f"[MatchV2] Score with {other.user_id}: {score:.2f} (min required: 3.0)")
-            if score >= 3.0:
+
+            waited = (datetime.utcnow() - entry.joined_at).total_seconds()
+            min_req = self._min_required_score(entry.match_attempts, waited)
+            if score >= min_req:
                 candidates.append((entry, score, reason))
             else:
                 print(f"[MatchV2] Score too low, not adding to candidates")
@@ -388,17 +415,33 @@ class MatchingServiceV2:
                                          source='matching')
         
         room_id = room["id"]
-        self.active_matches[room_id] = (request.user_id, matched_request.user_id)
-        
         match_score, match_reason = self._calculate_match_score(request, matched_request)
-        
+        now = datetime.utcnow()
+        self.active_matches[room_id] = {
+            "users": (request.user_id, matched_request.user_id),
+            "ack": {request.user_id: False, matched_request.user_id: False},
+            "created_at": now,
+        }
+
         self.user_match_map[request.user_id] = {
-            "room_id": room_id, "peer_id": matched_request.user_id,
-            "is_anonymous": is_anonymous, "mode": request.mode, "score": match_score, "reason": match_reason
+            "room_id": room_id,
+            "peer_id": matched_request.user_id,
+            "is_anonymous": is_anonymous,
+            "mode": request.mode,
+            "score": match_score,
+            "reason": match_reason,
+            "state": "pending",
+            "created_at": now,
         }
         self.user_match_map[matched_request.user_id] = {
-            "room_id": room_id, "peer_id": request.user_id,
-            "is_anonymous": is_anonymous, "mode": request.mode, "score": match_score, "reason": match_reason
+            "room_id": room_id,
+            "peer_id": request.user_id,
+            "is_anonymous": is_anonymous,
+            "mode": request.mode,
+            "score": match_score,
+            "reason": match_reason,
+            "state": "pending",
+            "created_at": now,
         }
         
         print(f"[MatchV2] Created match: User {request.user_id} <-> User {matched_request.user_id} "
@@ -410,6 +453,26 @@ class MatchingServiceV2:
             match_score=match_score, match_reason=match_reason,
             safety_tips=self._generate_match_tips(request, matched_request)
         )
+
+    def ack_match(self, user_id: str, room_id: str) -> bool:
+        st = self.active_matches.get(room_id)
+        if not st:
+            return False
+
+        u1, u2 = st["users"]
+        if user_id not in (u1, u2):
+            return False
+
+        st["ack"][user_id] = True
+
+        if st["ack"].get(u1) and st["ack"].get(u2):
+            self._clear_match_state_for_users(u1, u2, room_id=room_id)
+        else:
+            info = self.user_match_map.get(user_id)
+            if info and info.get("room_id") == room_id:
+                info["state"] = "active"
+
+        return True
 
     def _add_to_queue(self, request: MatchRequestV2Internal) -> None:
         """Add to matching queue"""
@@ -510,15 +573,17 @@ class MatchingServiceV2:
     def get_queue_status(self, user_id: str) -> dict:
         if user_id in self.user_match_map:
             info = self.user_match_map[user_id]
-            return {
-                "matched": True,
-                "room_id": info["room_id"],
-                "matched_user_id": info["peer_id"],
-                "is_anonymous": info["is_anonymous"],
-                "match_type": info["mode"],
-                "match_score": info.get("score"),
-                "match_reason": info.get("reason"),
-            }
+            if info.get("state") == "pending" and self._is_pending_valid(info):
+                return {
+                    "matched": True,
+                    "room_id": info["room_id"],
+                    "matched_user_id": info["peer_id"],
+                    "is_anonymous": info["is_anonymous"],
+                    "match_type": info["mode"],
+                    "match_score": info.get("score"),
+                    "match_reason": info.get("reason"),
+                }
+            self.user_match_map.pop(user_id, None)
 
         for mode, queue in self.queues.items():
             for i, entry in enumerate(queue):

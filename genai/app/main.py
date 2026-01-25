@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timezone
 
 # Third-party imports
-from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types

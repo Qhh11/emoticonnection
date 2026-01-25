@@ -16,13 +16,25 @@ check_ins = db.check_ins
 users = db.users
 
 
-def create_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
+def create_check_in(
+    user_id: str,
+    mood: str,
+    check_date: str,
+    coordinate_x: Optional[float] = None,
+    coordinate_y: Optional[float] = None,
+    color: Optional[str] = None,
+    emoji: Optional[str] = None
+) -> Dict[str, Any]:
     """
     创建打卡记录并更新用户积分
 
     :param user_id: 用户ID
-    :param mood: 情绪
+    :param mood: 情绪标签
     :param check_date: 打卡日期 (YYYY-MM-DD)
+    :param coordinate_x: 情绪坐标X (-1到1)
+    :param coordinate_y: 情绪坐标Y (-1到1)
+    :param color: 计算出的颜色HEX值
+    :param emoji: 表情图标名称
     :return: 打卡记录
     """
     # 检查今天是否已经打卡
@@ -40,7 +52,11 @@ def create_check_in(user_id: str, mood: str, check_date: str) -> Dict[str, Any]:
         "date": check_date,
         "mood": mood,
         "points_earned": 10,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
+        "coordinate_x": coordinate_x,
+        "coordinate_y": coordinate_y,
+        "color": color,
+        "emoji": emoji
     }
 
     result = check_ins.insert_one(check_in_doc)
@@ -180,3 +196,86 @@ def get_user_points(user_id: str) -> Dict[str, Any]:
         "points": user.get("points", 0),
         "level": user.get("level", 1)
     }
+
+
+def update_check_in(
+    user_id: str,
+    mood: str,
+    check_date: str,
+    coordinate_x: Optional[float] = None,
+    coordinate_y: Optional[float] = None,
+    color: Optional[str] = None,
+    emoji: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    更新当日打卡心情（不增加积分）
+
+    :param user_id: 用户ID
+    :param mood: 新的情绪标签
+    :param check_date: 打卡日期 (YYYY-MM-DD)
+    :param coordinate_x: 情绪坐标X (-1到1)
+    :param coordinate_y: 情绪坐标Y (-1到1)
+    :param color: 计算出的颜色HEX值
+    :param emoji: 表情图标名称
+    :return: 更新结果
+    """
+    existing = get_check_in_by_date(user_id, check_date)
+    if not existing:
+        return {
+            "success": False,
+            "message": "今天还没有打卡"
+        }
+
+    update_data = {
+        "mood": mood,
+        "updated_at": datetime.utcnow(),
+        "coordinate_x": coordinate_x,
+        "coordinate_y": coordinate_y,
+        "color": color,
+        "emoji": emoji
+    }
+
+    check_ins.update_one(
+        {"user_id": user_id, "date": check_date},
+        {"$set": update_data}
+    )
+
+    updated = get_check_in_by_date(user_id, check_date)
+    return {
+        "success": True,
+        "message": "心情已更新",
+        "check_in": updated
+    }
+
+
+def calculate_streak(user_id: str) -> int:
+    """
+    计算用户连续打卡天数
+
+    逻辑：从今天开始往前查，连续的打卡日期数
+    如果今天还没打卡，从昨天开始计算
+
+    :param user_id: 用户ID
+    :return: 连续打卡天数
+    """
+    from datetime import timedelta
+
+    today = date.today()
+    streak = 0
+    current_date = today
+
+    while True:
+        date_str = current_date.isoformat()
+        check_in = get_check_in_by_date(user_id, date_str)
+
+        if check_in:
+            streak += 1
+            current_date -= timedelta(days=1)
+        else:
+            # 如果今天还没打卡，从昨天开始计算
+            if current_date == today and streak == 0:
+                current_date -= timedelta(days=1)
+                continue
+            break
+
+    return streak
