@@ -363,7 +363,18 @@ const VoiceChatOverlay: React.FC<VoiceChatOverlayProps> = ({ isOpen, onClose, em
                         <Bubble $isUser={msg.role === 'user'}>{msg.content}</Bubble>
                     </MessageRow>
                 ))}
-                {(transcript || status === 'speaking') && (
+
+                {/* Real-time Transcripts */}
+                {geminiLive.transcripts.map((t) => (
+                    <MessageRow key={t.id} $isUser={t.role === 'user'}>
+                        <Bubble $isUser={t.role === 'user'}>
+                            {t.text || "..."}
+                        </Bubble>
+                    </MessageRow>
+                ))}
+
+                {/* Fallback for when no transcripts but AI is speaking or user is listening */}
+                {geminiLive.transcripts.length === 0 && (transcript || status === 'speaking') && (
                     <MessageRow $isUser={status !== 'speaking'}>
                         <Bubble $isUser={status !== 'speaking'}>
                             {transcript || "..."}

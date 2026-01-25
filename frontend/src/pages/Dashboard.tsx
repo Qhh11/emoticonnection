@@ -146,7 +146,7 @@ export default function Dashboard() {
   const [chatInputFromBubble, setChatInputFromBubble] = useState<string | null>(null)
 
   // Diary mode tracking and rewrite function ref
-  const [diaryMode, setDiaryMode] = useState<'ai' | 'voice' | 'manual'>('manual')
+  const [diaryMode, setDiaryMode] = useState<'ai' | 'manual'>('manual')
   const diaryRewriteRef = useRef<() => boolean>()
   const diarySetContentRef = useRef<(text: string) => void>()
 
@@ -911,11 +911,11 @@ export default function Dashboard() {
           onActionConsumed={() => setAssistantAction({ action: null })}
           profileDialogueText={
             activeTab === 'profile' ? profileDialogueText
-            : activeTab === 'community' && communityPostDetailOpen ? profileDialogueText
-            : activeTab === 'community' && communityCreatePostOpen ? profileDialogueText
-            : activeTab === 'diary' && diaryMode === 'manual' ? profileDialogueText
-            : activeTab === 'soulsync' && showSoulSyncWelcome ? getReturningUserCatchphrase()
-            : null
+              : activeTab === 'community' && communityPostDetailOpen ? profileDialogueText
+                : activeTab === 'community' && communityCreatePostOpen ? profileDialogueText
+                  : activeTab === 'diary' && diaryMode === 'manual' ? profileDialogueText
+                    : activeTab === 'soulsync' && showSoulSyncWelcome ? getReturningUserCatchphrase()
+                      : null
           }
           animateLookingCloser={activeTab === 'community' && communityPostDetailOpen}
           showCommunityPolishButton={activeTab === 'community' && communityCreatePostOpen && !showAssistantBubble}

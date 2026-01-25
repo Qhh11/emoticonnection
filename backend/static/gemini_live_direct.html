@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Live - 实时语音对话</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .start-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .stop-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .stop-btn:hover:not(:disabled) {
+            background: #c82333;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .transcript {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .user-message {
+            background: #e3f2fd;
+            margin-left: 20px;
+        }
+
+        .ai-message {
+            background: #f3e5f5;
+            margin-right: 20px;
+        }
+
+        .message-label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .user-label {
+            color: #1976d2;
+        }
+
+        .ai-label {
+            color: #7b1fa2;
+        }
+
+        .config-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .config-section h3 {
+            color: #495057;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎤 Gemini Live</h1>
+        <p class="subtitle">实时语音对话 - 直接连接</p>
+
+        <div class="warning">
+            ⚠️ 注意：这是开发环境。生产环境请使用 Ephemeral Tokens 而不是 API Key。
+        </div>
+
+        <div class="config-section">
+            <h3>API 配置</h3>
+            <input type="password" id="apiKey" placeholder="输入你的 Google AI API Key">
+        </div>
+
+        <div class="status" id="status">准备就绪</div>
+
+        <div class="controls">
+            <button class="start-btn" id="startBtn">🎙️ 开始对话</button>
+            <button class="stop-btn" id="stopBtn" disabled>⏹️ 停止</button>
+        </div>
+
+        <div class="transcript" id="transcript">
+            <div style="text-align: center; color: #999;">对话记录将显示在这里...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Gemini Live API 配置
+        const MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
+        const API_BASE_URL = 'generativelanguage.googleapis.com';
+
+        let ws = null;
+        let mediaStream = null;
+        let audioContext = null;
+        let workletNode = null;
+        let isRunning = false;
+
+        // 音频队列用于播放
+        const audioQueue = [];
+        let isPlaying = false;
+        let nextStartTime = 0;
+
+        // UI 元素
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusEl = document.getElementById('status');
+        const transcriptEl = document.getElementById('transcript');
+        const apiKeyInput = document.getElementById('apiKey');
+
+        // 开始对话
+        startBtn.onclick = async () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert('请先输入 API Key');
+                return;
+            }
+
+            try {
+                startBtn.disabled = true;
+                statusEl.textContent = '正在连接...';
+                statusEl.className = 'status';
+
+                // 1. 获取麦克风权限
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // 2. 建立 WebSocket 连接到 Gemini Live API
+                const wsUrl = `wss://${API_BASE_URL}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.log('WebSocket 连接成功');
+
+                    // 发送初始配置
+                    const setupMessage = {
+                        setup: {
+                            model: `models/${MODEL}`,
+                            generation_config: {
+                                response_modalities: ['AUDIO']
+                            }
+                        }
+                    };
+
+                    ws.send(JSON.stringify(setupMessage));
+
+                    // 启动音频处理
+                    startAudioProcessing();
+
+                    statusEl.textContent = '✅ 已连接 - 开始说话吧！';
+                    statusEl.className = 'status connected';
+                    stopBtn.disabled = false;
+                    isRunning = true;
+                };
+
+                ws.onmessage = async (event) => {
+                    let data = event.data;
+
+                    // 如果收到的是 Blob 或 ArrayBuffer，先转换成文本
+                    if (data instanceof Blob) {
+                        data = await data.text();
+                    } else if (data instanceof ArrayBuffer) {
+                        data = new TextDecoder().decode(data);
+                    }
+
+                    try {
+                        const response = JSON.parse(data);
+                        console.log('收到响应:', response);
+
+                        // 处理服务器内容
+                        if (response.serverContent) {
+                            const content = response.serverContent;
+
+                            // 处理输出转录（AI说的话）
+                            if (content.outputTranscription) {
+                                addMessage('ai', content.outputTranscription.text);
+                            }
+
+                            // 处理音频数据
+                            if (content.modelTurn && content.modelTurn.parts) {
+                                for (const part of content.modelTurn.parts) {
+                                    if (part.inlineData && part.inlineData.data) {
+                                        // 解码 base64 音频数据并播放
+                                        playAudio(part.inlineData.data);
+                                    }
+                                }
+                            }
+
+                            // 处理中断
+                            if (content.interrupted) {
+                                console.log('被中断');
+                                // 清空音频队列
+                                audioQueue.length = 0;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('解析消息失败:', e, '原始数据:', data);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('WebSocket 错误:', error);
+                    statusEl.textContent = '❌ 连接错误';
+                    statusEl.className = 'status error';
+                };
+
+                ws.onclose = () => {
+                    console.log('WebSocket 连接关闭');
+                    if (isRunning) {
+                        statusEl.textContent = '连接已关闭';
+                        statusEl.className = 'status';
+                        stopAll();
+                    }
+                };
+
+            } catch (error) {
+                console.error('启动失败:', error);
+                alert('启动失败: ' + error.message);
+                statusEl.textContent = '❌ 启动失败';
+                statusEl.className = 'status error';
+                startBtn.disabled = false;
+            }
+        };
+
+        // 停止对话
+        stopBtn.onclick = () => {
+            stopAll();
+        };
+
+        // 启动音频处理
+        async function startAudioProcessing() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+
+            // 加载 AudioWorklet
+            await audioContext.audioWorklet.addModule('audio-processor.js');
+
+            const source = audioContext.createMediaStreamSource(mediaStream);
+            workletNode = new AudioWorkletNode(audioContext, 'audio-stream-processor');
+
+            // 接收处理后的音频数据
+            workletNode.port.onmessage = (event) => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // 发送实时音频输入
+                    const audioData = arrayBufferToBase64(event.data);
+                    const message = {
+                        realtimeInput: {
+                            mediaChunks: [{
+                                data: audioData,
+                                mimeType: 'audio/pcm;rate=16000'
+                            }]
+                        }
+                    };
+                    ws.send(JSON.stringify(message));
+                }
+            };
+
+            source.connect(workletNode);
+            workletNode.connect(audioContext.destination);
+        }
+
+        // 播放音频
+        function playAudio(base64Audio) {
+            // 解码 base64 到 ArrayBuffer
+            const binaryString = atob(base64Audio);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            // 转换为 Int16 PCM
+            const pcmData = new Int16Array(bytes.buffer);
+            const floatData = new Float32Array(pcmData.length);
+            for (let i = 0; i < pcmData.length; i++) {
+                floatData[i] = pcmData[i] / 32768.0;
+            }
+
+            // 创建音频缓冲区（24kHz - Gemini 输出格式）
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            const buffer = audioContext.createBuffer(1, floatData.length, 24000);
+            buffer.getChannelData(0).set(floatData);
+
+            // 安排播放
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+
+            const currentTime = audioContext.currentTime;
+            if (nextStartTime < currentTime) {
+                nextStartTime = currentTime;
+            }
+
+            source.start(nextStartTime);
+            nextStartTime += buffer.duration;
+        }
+
+        // ArrayBuffer 转 Base64
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        // 添加消息到对话记录
+        function addMessage(role, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+
+            const label = document.createElement('div');
+            label.className = `message-label ${role}-label`;
+            label.textContent = role === 'user' ? '👤 你' : '🤖 AI';
+
+            const content = document.createElement('div');
+            content.textContent = text;
+
+            messageDiv.appendChild(label);
+            messageDiv.appendChild(content);
+
+            // 清除初始提示
+            if (transcriptEl.querySelector('div[style]')) {
+                transcriptEl.innerHTML = '';
+            }
+
+            transcriptEl.appendChild(messageDiv);
+            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+        }
+
+        // 停止所有
+        function stopAll() {
+            isRunning = false;
+
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            if (workletNode) {
+                workletNode.disconnect();
+                workletNode.port.onmessage = null;
+                workletNode = null;
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            audioQueue.length = 0;
+            nextStartTime = 0;
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            statusEl.textContent = '已停止';
+            statusEl.className = 'status';
+        }
+    </script>
+</body>
+
+</html>

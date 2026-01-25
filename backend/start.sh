@@ -21,4 +21,4 @@ fi
 echo "🐍 Using Python: $(./.venv/bin/python --version)"
 echo "🔌 Starting Uvicorn..."
 
-./.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+./.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

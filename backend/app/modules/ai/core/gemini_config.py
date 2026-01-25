@@ -21,6 +21,11 @@ class GeminiModels:
     # 音频转文字模型 - 用于语音识别
     AUDIO_STT = "gemini-2.5-flash-native-audio-preview-12-2025"
     
+    # Live API 模型
+    NATIVE_AUDIO = "gemini-2.5-flash-native-audio-preview-12-2025"
+
+
+    
     # 情绪分析模型
     EMOTION = "gemini-2.5-flash-lite"
     
@@ -29,9 +34,6 @@ class GeminiModels:
     
     # 数据分析模型
     ANALYTICS = "gemini-2.5-flash-lite"
-    
-    # 原生语音对话模型 (Sustainable Voice)
-    NATIVE_AUDIO = "gemini-2.5-flash-native-audio-preview-12-2025"
     
     # 助手功能模型 (Rewrite, Reply, Topic)
     HELPER = "gemini-2.5-flash-lite"

@@ -5,6 +5,7 @@ import json
 import base64
 from fastapi import WebSocket, WebSocketDisconnect
 from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 from app.modules.ai.core.gemini_config import GeminiClient, GeminiModels
@@ -20,23 +21,19 @@ class GeminiLiveService:
             
         self.model = GeminiModels.NATIVE_AUDIO
         
-        # Configuration matches the user's request
-        self.config = {
-            "response_modalities": ["AUDIO"],
-            "speech_config": {
-                "voice_config": {"prebuilt_voice_config": {"voice_name": "Kore"}} # Default voice
-            },
-            # Enable thinking as per docs for this model
-            "thinking_config": {
-                 "thinking_budget": 1024,
-            },
-             # Enable VAD
-             "realtime_input_config": {
-                "automatic_activity_detection": {
-                    "disabled": False 
-                }
-             }
-        }
+        # 使用 types.LiveConnectConfig 创建配置对象
+        self.config = types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Puck")
+                )
+            ),
+            # 注意：context_window_compression 配置在当前SDK版本中可能不支持或格式错误
+            # 会导致 1007 错误。改用前端自动重连方案来实现持续对话
+            system_instruction="You are SoulSync, a warm and empathetic AI companion. Keep the conversation going naturally."
+        )
+
 
     async def handle_websocket(self, websocket: WebSocket):
         """
@@ -54,6 +51,7 @@ class GeminiLiveService:
                 print(f"[GeminiLive] Connected to Gemini session")
 
                 async def receive_from_client():
+                    """接收来自客户端的消息（文本或音频）"""
                     try:
                         while True:
                             # Check if websocket is still connected
@@ -67,16 +65,20 @@ class GeminiLiveService:
                                     break
                                 raise
                             
-                            # Binary Message -> 16kHz PCM Audio
+                            # Binary Message -> 16kHz PCM Audio (实时语音输入)
                             if "bytes" in message and message["bytes"]:
+                                # 使用 send_realtime_input 而不是 send_client_content
+                                # 这样不会触发 turn_complete，保持会话持续
                                 await session.send_realtime_input(
-                                    audio={"data": message["bytes"], "mime_type": "audio/pcm;rate=16000"}
+                                    audio={"data": message["bytes"], "mime_type": "audio/pcm"}
                                 )
                             
-                            # Text Message -> JSON (text input or control)
+                            # Text Message -> JSON (文本输入或控制)
                             elif "text" in message and message["text"]:
                                 try:
                                     data = json.loads(message["text"])
+                                    
+                                    # 处理文本消息
                                     if "text" in data:
                                         text_content = data["text"]
                                         conversation_log.append({"role": "user", "content": text_content})
@@ -84,7 +86,9 @@ class GeminiLiveService:
                                             turns=[{"role": "user", "parts": [{"text": text_content}]}],
                                             turn_complete=True
                                         )
+                                    
                                 except json.JSONDecodeError:
+                                    # 如果不是JSON，直接当作文本处理
                                     text_content = message["text"]
                                     conversation_log.append({"role": "user", "content": text_content})
                                     await session.send_client_content(
@@ -92,12 +96,14 @@ class GeminiLiveService:
                                         turn_complete=True
                                     )
 
+
                     except (WebSocketDisconnect, asyncio.CancelledError):
                         pass
                     except Exception as e:
                         print(f"[GeminiLive] receive_from_client error: {e}")
 
                 async def send_to_client():
+                    """发送来自Gemini的响应到客户端"""
                     try:
                         current_ai_turn = ""
                         async for response in session.receive():
@@ -105,18 +111,35 @@ class GeminiLiveService:
                             if server_content is None:
                                 continue
 
-                            # 1. Handle Audio & Text Generation
+                            # 1. 处理输出转录（如果有的话，用于调试）
+                            if hasattr(server_content, 'output_transcription') and server_content.output_transcription:
+                                transcription = server_content.output_transcription.text
+                                print(f"[GeminiLive] Output transcription: {transcription}")
+
+                            # 2. 处理音频和文本生成
                             if server_content.model_turn:
                                 for part in server_content.model_turn.parts:
-                                    if part.inline_data and websocket.client_state.value != 3:
-                                        await websocket.send_bytes(part.inline_data.data)
+                                    # 发送音频数据
+                                    if part.inline_data:
+                                        try:
+                                            if websocket.client_state.value != 3:
+                                                # 确保完整发送音频数据
+                                                audio_size = len(part.inline_data.data)
+                                                print(f"[GeminiLive] Sending audio chunk: {audio_size} bytes")
+                                                await websocket.send_bytes(part.inline_data.data)
+                                        except Exception as e:
+                                            print(f"[GeminiLive] Error sending audio: {e}")
                                     
+                                    # 发送文本数据
                                     if part.text:
                                         current_ai_turn += part.text
                                         if websocket.client_state.value != 3:
-                                            await websocket.send_json({"type": "text", "content": part.text})
+                                            try:
+                                                await websocket.send_json({"type": "text", "content": part.text})
+                                            except Exception as e:
+                                                print(f"[GeminiLive] Error sending text: {e}")
 
-                            # 2. Handle Interruption (VAD)
+                            # 3. 处理中断（语音活动检测）
                             if server_content.interrupted:
                                 print("[GeminiLive] Interrupted by user (VAD)")
                                 if current_ai_turn:
@@ -125,15 +148,19 @@ class GeminiLiveService:
                                 if websocket.client_state.value != 3:
                                     await websocket.send_json({"type": "interrupted"})
 
-                            # 3. Handle Turn Complete
+                            # 4. 处理回合完成
                             if server_content.turn_complete:
+                                print("[GeminiLive] Turn complete - ready for next user input")
                                 if current_ai_turn:
                                     conversation_log.append({"role": "ai", "content": current_ai_turn})
                                     current_ai_turn = ""
                                 if websocket.client_state.value != 3:
                                     await websocket.send_json({"type": "turn_complete"})
 
+                        # 如果循环正常结束，打印日志
+                        print("[GeminiLive] session.receive() loop ended")
                     except asyncio.CancelledError:
+                        print("[GeminiLive] send_to_client cancelled")
                         pass
                     except Exception as e:
                         print(f"[GeminiLive] send_to_client error: {e}")
@@ -142,19 +169,20 @@ class GeminiLiveService:
                 receive_task = asyncio.create_task(receive_from_client())
                 send_task = asyncio.create_task(send_to_client())
                 
-                # Wait for either task to complete
-                done, pending = await asyncio.wait(
-                    [receive_task, send_task],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-                
-                # Cancel the other task
-                for task in pending:
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+                # 使用 gather 让两个任务同时运行，直到都完成或WebSocket断开
+                # 这样可以保持会话持续，支持多轮对话
+                try:
+                    await asyncio.gather(receive_task, send_task)
+                except Exception as e:
+                    print(f"[GeminiLive] Task exception: {e}")
+                    # 取消未完成的任务
+                    for task in [receive_task, send_task]:
+                        if not task.done():
+                            task.cancel()
+                            try:
+                                await task
+                            except asyncio.CancelledError:
+                                pass
                 
                 if conversation_log:
                     print(f"[GeminiLive] Session ended. Captured {len(conversation_log)} turns.")
