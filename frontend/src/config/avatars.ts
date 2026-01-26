@@ -14,7 +14,7 @@ export interface Avatar3D {
   shadowIntensity?: number
   skyboxImage?: string // Custom HDRI for specific avatar
   greeting: string
-  voiceName: 'Puck' | 'Charon' | 'Kore' | 'Erinome' | 'Sulafat' | 'Autonoe' | 'Achernar' | 'Algenib' | 'Umbriel'
+  voiceName: 'Rasalgethi' | 'Enceladus' | 'Kore' | 'Erinome' | 'Sulafat' | 'Autonoe' | 'Achernar' | 'Algenib'
 }
 
 export const AVATARS_3D: Avatar3D[] = [
@@ -52,7 +52,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Bluey.gif',
     isLocked: false,
     greeting: 'I feel a bit sad. Do you feel it too?',
-    voiceName: 'Umbriel'
+    voiceName: 'Enceladus'
   },
   {
     id: 'grumpy',
@@ -88,7 +88,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Scaredy.gif',
     isLocked: false,
     greeting: 'I can\'t stop thinking about what might go wrong. Are you stuck in those thoughts too?',
-    voiceName: 'Puck'
+    voiceName: 'Enceladus'
   },
   {
     id: 'snoozy',
@@ -142,7 +142,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Zippy.gif',
     isLocked: false,
     greeting: 'Hello! I\'ve been thinking about how to clear up your thoughts. Why don\'t we start with the thing that\'s on your mind the most?',
-    voiceName: 'Charon'
+    voiceName: 'Rasalgethi'
   },
   {
     id: 'yucky',
