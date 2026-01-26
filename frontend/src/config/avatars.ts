@@ -14,7 +14,7 @@ export interface Avatar3D {
   shadowIntensity?: number
   skyboxImage?: string // Custom HDRI for specific avatar
   greeting: string
-  voiceName: 'Aoede' | 'Charon' | 'Fenrir' | 'Kore' | 'Puck' | 'Lyra' | 'Orion' | 'Hera' | 'Eos' | 'Gaia' | 'Ursa'
+  voiceName: 'Puck' | 'Charon' | 'Kore' | 'Erinome' | 'Sulafat' | 'Autonoe' | 'Achernar' | 'Algenib' | 'Umbriel'
 }
 
 export const AVATARS_3D: Avatar3D[] = [
@@ -34,7 +34,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Blushy.gif',
     isLocked: false,
     greeting: 'Um... hello. If it feels a bit hard to talk right now, that\'s okay... we can take it slow.',
-    voiceName: 'Gaia'
+    voiceName: 'Achernar'
   },
   {
     id: 'bluey',
@@ -52,7 +52,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Bluey.gif',
     isLocked: false,
     greeting: 'I feel a bit sad. Do you feel it too?',
-    voiceName: 'Orion'
+    voiceName: 'Umbriel'
   },
   {
     id: 'grumpy',
@@ -70,7 +70,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Grumpy.gif',
     isLocked: false,
     greeting: 'Who annoyed you today? Tell me all about it, I\'ve got your back.',
-    voiceName: 'Fenrir'
+    voiceName: 'Algenib'
   },
   {
     id: 'scaredy',
@@ -106,7 +106,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Snoozy.gif',
     isLocked: false,
     greeting: 'You\'ve had a long day, haven\'t you? It\'s okay, let\'s just sit here for a while. You can tell me anything.',
-    voiceName: 'Aoede'
+    voiceName: 'Sulafat'
   },
   {
     id: 'sunny',
@@ -124,7 +124,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Sunny.gif',
     isLocked: false,
     greeting: 'Hey! I\'m so happy to see you! Did anything wonderful happen today? I\'d love to hear about it!',
-    voiceName: 'Kore'
+    voiceName: 'Autonoe'
   },
   {
     id: 'zippy',
@@ -142,7 +142,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Zippy.gif',
     isLocked: false,
     greeting: 'Hello! I\'ve been thinking about how to clear up your thoughts. Why don\'t we start with the thing that\'s on your mind the most?',
-    voiceName: 'Eos'
+    voiceName: 'Charon'
   },
   {
     id: 'yucky',
@@ -160,7 +160,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Yucky.gif',
     isLocked: false,
     greeting: 'I understand your feeling of aversion. That feeling is real and important. If you\'re ready, we can talk about the details.',
-    voiceName: 'Hera'
+    voiceName: 'Kore'
   },
   {
     id: 'sparkle',
@@ -181,6 +181,6 @@ export const AVATARS_3D: Avatar3D[] = [
     environmentImage: 'neutral',
     shadowIntensity: 0.8,
     greeting: 'I noticed some subtle shifts in your mood. Sometimes these complex feelings are just reminders to look within. Want to talk about it?',
-    voiceName: 'Lyra'
+    voiceName: 'Erinome'
   }
 ]
