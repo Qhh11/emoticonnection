@@ -168,6 +168,7 @@ export default function CommunityView({
     // 创建帖子
     const newPost = await postApi.createPost({
       author_id: userId,
+      title: data.title,
       content: data.content,
       is_anonymous: data.isAnonymous,
       post_type: mediaUrls.length > 0 ? 'image' : 'text',
@@ -224,6 +225,7 @@ export default function CommunityView({
           activeTab={activeTab}
           onTabChange={handleTabChange}
           onCreatePost={handleOpenCreateModal}
+          userNickname={userNickname}
         />
 
         {/* Error */}

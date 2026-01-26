@@ -123,7 +123,7 @@ export default function PostDetailModal({
   if (!isOpen || !post) return null
 
   const emotion = post.emotion || post.ai_emotion
-  const colors = getMoodColors(emotion)
+  const colors = getMoodColors(emotion, post.emotion_color)
   const hasImage = post.media_urls && post.media_urls.length > 0
   const authorName = post.is_anonymous ? 'Anonymous' : (post.author_name || 'User')
 

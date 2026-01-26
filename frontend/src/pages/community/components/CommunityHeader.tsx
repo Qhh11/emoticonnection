@@ -8,12 +8,14 @@ interface CommunityHeaderProps {
   activeTab: 'following' | 'exploring'
   onTabChange: (tab: 'following' | 'exploring') => void
   onCreatePost: () => void
+  userNickname?: string
 }
 
 export default function CommunityHeader({
   activeTab,
   onTabChange,
   onCreatePost,
+  userNickname,
 }: CommunityHeaderProps) {
   return (
     <div className="flex flex-col space-y-6 mb-8">
@@ -21,8 +23,8 @@ export default function CommunityHeader({
       <div className="flex items-center justify-between">
         {/* 左侧：标题 */}
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tight text-gray-900">
-            Community
+          <h1 className="text-5xl font-black tracking-tighter text-gray-900 uppercase leading-none">
+            Hi, {userNickname || 'Friend'}
           </h1>
           <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mt-1">
             Share Your Vibe

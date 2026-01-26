@@ -9,22 +9,50 @@ const EMOJI_IMAGES: Record<string, string> = {
   calm: '/checkin/安详.png',
 }
 
-// 8x8 网格颜色矩阵
-const COLOR_GRID = [
-  ['#D32F2F', '#DC4545', '#E55A5A', '#EE7070', '#FAD870', '#F9D040', '#E8C020', '#D8B010'],
-  ['#DC4545', '#E55A5A', '#EE7070', '#F58585', '#FBE4A0', '#FAD870', '#F9D040', '#E8C020'],
-  ['#E55A5A', '#EE7070', '#F58585', '#FAA0A0', '#FCF0C0', '#FBE4A0', '#FAD870', '#F9D040'],
-  ['#EE7070', '#F58585', '#FAA0A0', '#FDB5B5', '#FDFAE0', '#FCF0C0', '#FBE4A0', '#FAD870'],
-  ['#5588CC', '#6699D5', '#77AADD', '#88BBE5', '#E0F0D0', '#D0E8C0', '#C0E0B0', '#B0D8A0'],
-  ['#4477BB', '#5588CC', '#6699D5', '#77AADD', '#B0D8A0', '#A0D090', '#90C880', '#80C070'],
-  ['#3266B1', '#4477BB', '#5588CC', '#6699D5', '#90C880', '#80C070', '#70B860', '#66B04C'],
-  ['#2855A0', '#3266B1', '#4477BB', '#5588CC', '#80C070', '#70B860', '#66B04C', '#56A03C'],
-]
+// 四角颜色（使用情绪标准色）
+const CORNER_COLORS = {
+  topLeft: { r: 211, g: 47, b: 47 },      // #D32F2F - Angry (红)
+  topRight: { r: 249, g: 216, b: 73 },    // #F9D849 - Joy (黄)
+  bottomLeft: { r: 50, g: 102, b: 177 },  // #3266B1 - Sad (蓝)
+  bottomRight: { r: 102, g: 176, b: 76 }, // #66B04C - Calm/Disgust (绿)
+}
 
+// 根据坐标计算颜色 - 使用四角颜色双线性插值，混入白色使中心更亮
 function calculateColor(x: number, y: number): string {
-  const col = Math.min(7, Math.max(0, Math.floor((x + 1) / 2 * 8)))
-  const row = Math.min(7, Math.max(0, Math.floor((1 - y) / 2 * 8)))
-  return COLOR_GRID[row][col]
+  // 将 x, y 从 [-1, 1] 映射到 [0, 1]
+  const nx = (x + 1) / 2  // 0 = left, 1 = right
+  const ny = (1 - y) / 2  // 0 = top, 1 = bottom
+
+  // 双线性插值四角颜色
+  const { topLeft, topRight, bottomLeft, bottomRight } = CORNER_COLORS
+
+  // 上边插值 (topLeft -> topRight)
+  const topR = topLeft.r + (topRight.r - topLeft.r) * nx
+  const topG = topLeft.g + (topRight.g - topLeft.g) * nx
+  const topB = topLeft.b + (topRight.b - topLeft.b) * nx
+
+  // 下边插值 (bottomLeft -> bottomRight)
+  const bottomR = bottomLeft.r + (bottomRight.r - bottomLeft.r) * nx
+  const bottomG = bottomLeft.g + (bottomRight.g - bottomLeft.g) * nx
+  const bottomB = bottomLeft.b + (bottomRight.b - bottomLeft.b) * nx
+
+  // 垂直插值 (top -> bottom)
+  let r = topR + (bottomR - topR) * ny
+  let g = topG + (bottomG - topG) * ny
+  let b = topB + (bottomB - topB) * ny
+
+  // 计算到中心的距离 (0 = 角落, 1 = 中心)
+  const distToCenter = 1 - Math.sqrt(x * x + y * y) / Math.sqrt(2)
+
+  // 混入白色使中心更亮（最多混入40%白色）
+  const whiteMix = distToCenter * 0.4
+  r = r + (255 - r) * whiteMix
+  g = g + (255 - g) * whiteMix
+  b = b + (255 - b) * whiteMix
+
+  // 转为十六进制
+  const toHex = (n: number) => Math.round(Math.min(255, Math.max(0, n))).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
 function getEmojiFromCoordinate(x: number, y: number): string {
@@ -199,24 +227,24 @@ export default function CoordinatePickerModal({
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
-          {/* 8x8 渐变色块网格 */}
+          {/* 8x8 渐变色块网格 - 高饱和度版本 */}
           <div className="absolute inset-0 grid grid-cols-8 grid-rows-8">
-            <div className="bg-[#D32F2F]" /><div className="bg-[#DC4545]" /><div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" />
-            <div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" /><div className="bg-[#E8C020]" /><div className="bg-[#D8B010]" />
-            <div className="bg-[#DC4545]" /><div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" /><div className="bg-[#F58585]" />
-            <div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" /><div className="bg-[#E8C020]" />
-            <div className="bg-[#E55A5A]" /><div className="bg-[#EE7070]" /><div className="bg-[#F58585]" /><div className="bg-[#FAA0A0]" />
-            <div className="bg-[#FCF0C0]" /><div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" /><div className="bg-[#F9D040]" />
-            <div className="bg-[#EE7070]" /><div className="bg-[#F58585]" /><div className="bg-[#FAA0A0]" /><div className="bg-[#FDB5B5]" />
-            <div className="bg-[#FDFAE0]" /><div className="bg-[#FCF0C0]" /><div className="bg-[#FBE4A0]" /><div className="bg-[#FAD870]" />
-            <div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" /><div className="bg-[#77AADD]" /><div className="bg-[#88BBE5]" />
-            <div className="bg-[#E0F0D0]" /><div className="bg-[#D0E8C0]" /><div className="bg-[#C0E0B0]" /><div className="bg-[#B0D8A0]" />
-            <div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" /><div className="bg-[#77AADD]" />
-            <div className="bg-[#B0D8A0]" /><div className="bg-[#A0D090]" /><div className="bg-[#90C880]" /><div className="bg-[#80C070]" />
-            <div className="bg-[#3266B1]" /><div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" /><div className="bg-[#6699D5]" />
-            <div className="bg-[#90C880]" /><div className="bg-[#80C070]" /><div className="bg-[#70B860]" /><div className="bg-[#66B04C]" />
-            <div className="bg-[#2855A0]" /><div className="bg-[#3266B1]" /><div className="bg-[#4477BB]" /><div className="bg-[#5588CC]" />
-            <div className="bg-[#80C070]" /><div className="bg-[#70B860]" /><div className="bg-[#66B04C]" /><div className="bg-[#56A03C]" />
+            <div className="bg-[#FF3B3B]" /><div className="bg-[#FF5252]" /><div className="bg-[#FF6B6B]" /><div className="bg-[#FF8585]" />
+            <div className="bg-[#FFE066]" /><div className="bg-[#FFD633]" /><div className="bg-[#FFC800]" /><div className="bg-[#FFB800]" />
+            <div className="bg-[#FF5252]" /><div className="bg-[#FF6B6B]" /><div className="bg-[#FF8585]" /><div className="bg-[#FFA0A0]" />
+            <div className="bg-[#FFF0A0]" /><div className="bg-[#FFE066]" /><div className="bg-[#FFD633]" /><div className="bg-[#FFC800]" />
+            <div className="bg-[#FF6B6B]" /><div className="bg-[#FF8585]" /><div className="bg-[#FFA0A0]" /><div className="bg-[#FFB8B8]" />
+            <div className="bg-[#FFFAD0]" /><div className="bg-[#FFF0A0]" /><div className="bg-[#FFE066]" /><div className="bg-[#FFD633]" />
+            <div className="bg-[#FF8585]" /><div className="bg-[#FFA0A0]" /><div className="bg-[#FFB8B8]" /><div className="bg-[#FFD0D0]" />
+            <div className="bg-[#FFFFE0]" /><div className="bg-[#FFFAD0]" /><div className="bg-[#FFF0A0]" /><div className="bg-[#FFE066]" />
+            <div className="bg-[#5599EE]" /><div className="bg-[#66AAFF]" /><div className="bg-[#77BBFF]" /><div className="bg-[#99CCFF]" />
+            <div className="bg-[#D0F0D0]" /><div className="bg-[#B8E8B8]" /><div className="bg-[#A0E0A0]" /><div className="bg-[#88D888]" />
+            <div className="bg-[#4488DD]" /><div className="bg-[#5599EE]" /><div className="bg-[#66AAFF]" /><div className="bg-[#77BBFF]" />
+            <div className="bg-[#A0E0A0]" /><div className="bg-[#88D888]" /><div className="bg-[#70D070]" /><div className="bg-[#58C858]" />
+            <div className="bg-[#3377CC]" /><div className="bg-[#4488DD]" /><div className="bg-[#5599EE]" /><div className="bg-[#66AAFF]" />
+            <div className="bg-[#88D888]" /><div className="bg-[#70D070]" /><div className="bg-[#58C858]" /><div className="bg-[#40C040]" />
+            <div className="bg-[#2266BB]" /><div className="bg-[#3377CC]" /><div className="bg-[#4488DD]" /><div className="bg-[#5599EE]" />
+            <div className="bg-[#70D070]" /><div className="bg-[#58C858]" /><div className="bg-[#40C040]" /><div className="bg-[#28B828]" />
           </div>
 
           {/* 坐标轴线 */}

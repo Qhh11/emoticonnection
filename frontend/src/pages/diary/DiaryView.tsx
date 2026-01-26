@@ -904,7 +904,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div className="space-y-4">
-          <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">Journal</h2>
+          <h2 className="text-5xl font-black tracking-tighter uppercase leading-none">Journal</h2>
           <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Archive your frequency</p>
         </div>
         <div className="flex bg-white p-1.5 rounded-full border border-black/5 shadow-sm">

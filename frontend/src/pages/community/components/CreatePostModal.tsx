@@ -48,6 +48,7 @@ export default function CreatePostModal({
   const [error, setError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   // Update content when polished content is received
   useEffect(() => {
@@ -101,6 +102,11 @@ export default function CreatePostModal({
 
   const handleSubmit = async () => {
     // 验证
+    if (!title.trim()) {
+      setError('Please add a title')
+      titleInputRef.current?.focus()
+      return
+    }
     if (!content.trim()) {
       setError('Please write something')
       return
@@ -115,7 +121,7 @@ export default function CreatePostModal({
 
     try {
       await onSubmit({
-        title: title.trim() || content.slice(0, 50),
+        title: title.trim(),
         content: content.trim(),
         emotion: selectedVibe,
         emotionColor: selectedVibeColor,  // Pass custom color
@@ -177,9 +183,10 @@ export default function CreatePostModal({
           {/* Title Input */}
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-              Title (optional)
+              Title *
             </label>
             <input
+              ref={titleInputRef}
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -311,7 +318,7 @@ export default function CreatePostModal({
         <div className="p-6 border-t border-gray-100">
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !content.trim() || !selectedVibe}
+            disabled={isSubmitting || !title.trim() || !content.trim() || !selectedVibe}
             className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest
               bg-gradient-to-r from-gray-900 to-gray-700 text-white
               hover:from-gray-800 hover:to-gray-600

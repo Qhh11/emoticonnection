@@ -1,20 +1,18 @@
 /**
  * PostCard - 帖子卡片组件
- * 极致透明玻璃拟态风格
- * 背景: rgba(255, 255, 255, 0.05)
- * 边框: 1px solid rgba(255, 255, 255, 0.15)
- * 模糊: backdrop-filter: blur(25px)
- * 无发光阴影
+ * 使用 TiltedCard 实现 3D 倾斜交互动画
+ * 图片帖子：显示用户上传图片
+ * 文字帖子：显示情绪颜色渐变背景
  */
 
-import { useState } from 'react'
 import { Post, getMediaUrl } from '../../../services/api'
 import { getAvatarUrl } from '../../../config/userAvatars'
+import TiltedCard from '../../../components/TiltedCard'
 
 interface PostCardProps {
   post: Post
   onClick: () => void
-  onLike: (postId: string) => void
+  onLike?: (postId: string) => void
   userId?: string
 }
 
@@ -33,9 +31,7 @@ const MOOD_COLORS: Record<string, { bg: string; text: string }> = {
 
 // 获取情绪颜色 - 优先使用自定义颜色
 function getMoodColors(emotion: string | null, customColor?: string | null) {
-  // If custom color provided, use it
   if (customColor) {
-    // Determine text color based on brightness
     const hex = customColor.replace('#', '')
     const r = parseInt(hex.substr(0, 2), 16)
     const g = parseInt(hex.substr(2, 2), 16)
@@ -44,236 +40,275 @@ function getMoodColors(emotion: string | null, customColor?: string | null) {
     return { bg: customColor, text: brightness > 128 ? '#121212' : '#ffffff' }
   }
 
-  if (!emotion) return { bg: '#9381BA', text: '#ffffff' } // 默认紫色
+  if (!emotion) return { bg: '#9381BA', text: '#ffffff' }
   const normalized = emotion.charAt(0).toUpperCase() + emotion.slice(1).toLowerCase()
   return MOOD_COLORS[normalized] || { bg: '#9381BA', text: '#ffffff' }
 }
 
-export default function PostCard({ post, onClick, onLike, userId }: PostCardProps) {
-  const [isLiking, setIsLiking] = useState(false)
-  const [isLiked, setIsLiked] = useState(post.is_liked)
-  const [likeCount, setLikeCount] = useState(post.like_count)
+// 格式化日期为 MM/DD 格式
+function formatDate(dateString: string) {
+  const date = new Date(dateString)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${month}/${day}`
+}
 
+// 文字帖子统一使用浅灰背景
+const TEXT_POST_BG = '#E8E8E8'
+
+export default function PostCard({ post, onClick }: PostCardProps) {
   const emotion = post.emotion || post.ai_emotion
   const colors = getMoodColors(emotion, post.emotion_color)
   const hasImage = post.media_urls && post.media_urls.length > 0
   const authorName = post.is_anonymous ? 'Anonymous' : (post.author_name || 'User')
   const authorInitial = post.is_anonymous ? '?' : (post.author_name?.charAt(0).toUpperCase() || 'U')
 
-  const handleLike = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (isLiking || !userId) return
+  const captionText = `${post.title || 'Untitled'} - ${emotion || 'Mood'}`
 
-    setIsLiking(true)
-    try {
-      if (isLiked) {
-        setIsLiked(false)
-        setLikeCount(prev => Math.max(0, prev - 1))
-      } else {
-        setIsLiked(true)
-        setLikeCount(prev => prev + 1)
-      }
-      await onLike(post.id)
-    } finally {
-      setIsLiking(false)
-    }
+  // 计算文字帖子高度和行数：基于内容长度
+  const getTextPostConfig = () => {
+    if (!post.content) return { height: '160px', lines: 3 }
+    const len = post.content.length
+    if (len < 50) return { height: '140px', lines: 2 }
+    if (len < 100) return { height: '180px', lines: 4 }
+    if (len < 200) return { height: '220px', lines: 5 }
+    return { height: '280px', lines: 7 }
   }
+
+  const textPostConfig = getTextPostConfig()
+
+  return (
+    <div style={{
+      aspectRatio: hasImage ? '4/5' : undefined,
+      height: hasImage ? undefined : textPostConfig.height,
+    }}>
+      <TiltedCard
+        imageSrc={hasImage ? getMediaUrl(post.media_urls![0]) : undefined}
+        gradientBg={!hasImage ? TEXT_POST_BG : undefined}
+        useGlassmorphism={true}
+        blurContent={false}
+        blurAmount={0}
+        showGrain={true}
+        showBorder={true}
+        showOilPaint={false}
+        captionText={captionText}
+        rotateAmplitude={12}
+        scaleOnHover={1.05}
+        showTooltip
+        displayOverlayContent
+        borderRadius={12}
+        onClick={onClick}
+        overlayContent={
+          <PostOverlay
+            title={post.title ?? undefined}
+            emotionColor={colors.bg}
+            emotionLabel={emotion ?? undefined}
+            content={hasImage ? undefined : post.content}
+            maxLines={hasImage ? undefined : textPostConfig.lines}
+            authorName={authorName}
+            authorAvatar={post.author_avatar ?? undefined}
+            authorInitial={authorInitial}
+            date={formatDate(post.created_at)}
+            hasImage={hasImage ?? false}
+          />
+        }
+      />
+    </div>
+  )
+}
+
+// Post Overlay 内容组件
+interface PostOverlayProps {
+  title?: string
+  emotionColor: string
+  emotionLabel?: string
+  content?: string
+  maxLines?: number
+  authorName: string
+  authorAvatar?: string
+  authorInitial: string
+  date: string
+  hasImage: boolean
+}
+
+function PostOverlay({
+  title,
+  emotionColor,
+  emotionLabel,
+  content,
+  maxLines = 5,
+  authorName,
+  authorAvatar,
+  authorInitial,
+  date,
+  hasImage,
+}: PostOverlayProps) {
+  // 底部信息栏高度（标题 + 用户信息）
+  const bottomBarHeight = 70
+
+  // 文字帖子：浅灰背景用黑色文字；图片帖子：深色渐变背景用白色文字
+  const isTextPost = !hasImage
+  const textColor = isTextPost ? '#121212' : '#ffffff'
+  const textColorSecondary = isTextPost ? 'rgba(18,18,18,0.85)' : 'rgba(255,255,255,0.9)'
+  const textColorTertiary = isTextPost ? 'rgba(18,18,18,0.6)' : 'rgba(255,255,255,0.75)'
 
   return (
     <div
-      onClick={onClick}
-      className="group relative rounded-3xl overflow-hidden cursor-pointer
-        transform transition-all duration-300 ease-out
-        hover:scale-[1.02]
-        active:scale-[0.98]"
       style={{
-        aspectRatio: '4/5',
-        background: 'rgba(255, 255, 255, 0.45)',
-        backdropFilter: 'blur(35px)',
-        WebkitBackdropFilter: 'blur(35px)',
-        border: '1px solid rgba(255, 255, 255, 0.25)',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.1)',
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
       }}
     >
-      {/* 有图模式 */}
-      {hasImage ? (
-        <>
-          {/* 图片区域 */}
-          <div className="relative h-[82%] p-2">
-            <div className="w-full h-full rounded-2xl overflow-hidden relative">
-              <img
-                src={getMediaUrl(post.media_urls![0])}
-                alt=""
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-              {/* 渐变遮罩 */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+      {/* 文字帖子：内容区域 - 模糊效果 */}
+      {!hasImage && content && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: bottomBarHeight,
+            padding: '12px 16px',
+            overflow: 'hidden',
+            filter: 'blur(0px)',
+            transform: 'scale(1.05)',
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: '13px',
+              fontWeight: 500,
+              lineHeight: 1.6,
+              color: '#121212',
+              fontFamily: 'Outfit, system-ui, sans-serif',
+              display: '-webkit-box',
+              WebkitLineClamp: maxLines,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              wordBreak: 'break-word',
+            }}
+          >
+            {content}
+          </p>
+        </div>
+      )}
 
-              {/* 情绪标签 - 纯色背景 */}
-              {emotion && (
+      {/* 底部信息区 - 固定在底部 */}
+      {/* 图片帖子：深色渐变背景；文字帖子：浅色渐变背景 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: '12px 16px',
+          background: isTextPost
+            ? 'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 70%, transparent 100%)'
+            : 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+        }}
+      >
+        {/* 标题 */}
+        <h3
+          style={{
+            margin: 0,
+            marginBottom: '8px',
+            fontSize: '15px',
+            fontWeight: 600,
+            color: textColor,
+            fontFamily: 'Outfit, system-ui, sans-serif',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            textShadow: isTextPost ? 'none' : '0 1px 3px rgba(0,0,0,0.5)'
+          }}
+        >
+          {title || 'Untitled'}
+        </h3>
+
+        {/* 用户信息和日期 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* 用户信息 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                background: '#D9D9D9',
+                flexShrink: 0,
+              }}
+            >
+              {authorAvatar ? (
+                <img
+                  src={getAvatarUrl(authorAvatar)}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
                 <div
-                  className="absolute top-3 left-3 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider"
                   style={{
-                    backgroundColor: colors.bg,
-                    color: colors.text,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    backgroundColor: emotionColor + '80',
+                    color: '#333',
                   }}
                 >
-                  {emotion}
+                  {authorInitial}
                 </div>
               )}
             </div>
+            <span
+              style={{
+                color: textColorSecondary,
+                fontSize: '12px',
+                fontFamily: 'Manrope, sans-serif',
+                fontWeight: 600,
+                maxWidth: '70px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {authorName}
+            </span>
           </div>
 
-          {/* 底部信息区 */}
-          <div
-            className="h-[18%] px-4 flex items-center justify-between"
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-          >
-            <AuthorInfo
-              authorAvatar={post.author_avatar}
-              authorName={authorName}
-              authorInitial={authorInitial}
-              colors={colors}
-            />
-            <InteractionButtons
-              isLiked={isLiked}
-              likeCount={likeCount}
-              commentCount={post.comment_count}
-              isLiking={isLiking}
-              onLike={handleLike}
-            />
-          </div>
-        </>
-      ) : (
-        /* 纯文字模式 */
-        <>
-          {/* 内容区域 */}
-          <div className="relative h-[82%] p-5 flex flex-col">
-            {/* 情绪标签 - 纯色背景 */}
-            {emotion && (
-              <div
-                className="self-start px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider"
+          {/* 日期 + 情绪标签 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                color: textColorTertiary,
+                fontSize: '11px',
+                fontFamily: 'Manrope, sans-serif',
+                fontWeight: 500,
+              }}
+            >
+              {date}
+            </span>
+            {emotionLabel && (
+              <span
                 style={{
-                  backgroundColor: colors.bg,
-                  color: colors.text,
+                  color: emotionColor,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: 'Outfit, system-ui, sans-serif',
+                  textTransform: 'capitalize',
                 }}
               >
-                {emotion}
-              </div>
+                {emotionLabel}
+              </span>
             )}
-
-            {/* 内容 - 居中 */}
-            <div className="flex-1 flex items-center justify-center px-2">
-              <p className="text-xl md:text-2xl font-black leading-snug text-center line-clamp-4 text-gray-800">
-                "{post.content.slice(0, 100)}{post.content.length > 100 ? '...' : ''}"
-              </p>
-            </div>
           </div>
-
-          {/* 底部信息区 */}
-          <div
-            className="h-[18%] px-4 flex items-center justify-between"
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-          >
-            <AuthorInfo
-              authorAvatar={post.author_avatar}
-              authorName={authorName}
-              authorInitial={authorInitial}
-              colors={colors}
-            />
-            <InteractionButtons
-              isLiked={isLiked}
-              likeCount={likeCount}
-              commentCount={post.comment_count}
-              isLiking={isLiking}
-              onLike={handleLike}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// 作者信息子组件
-interface AuthorInfoProps {
-  authorAvatar?: string | null
-  authorName: string
-  authorInitial: string
-  colors: { bg: string; text: string }
-}
-
-function AuthorInfo({ authorAvatar, authorName, authorInitial, colors }: AuthorInfoProps) {
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0"
-        style={{ background: 'rgba(255, 255, 255, 0.2)' }}
-      >
-        {authorAvatar ? (
-          <img src={getAvatarUrl(authorAvatar)} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center text-xs font-black uppercase"
-            style={{
-              backgroundColor: colors.bg + '30',
-              color: colors.bg === '#F9D849' ? '#121212' : colors.bg,
-            }}
-          >
-            {authorInitial}
-          </div>
-        )}
-      </div>
-      <span className="text-sm font-bold text-gray-700 truncate max-w-[80px]">
-        {authorName}
-      </span>
-    </div>
-  )
-}
-
-// 交互按钮子组件
-interface InteractionButtonsProps {
-  isLiked: boolean
-  likeCount: number
-  commentCount: number
-  isLiking: boolean
-  onLike: (e: React.MouseEvent) => void
-}
-
-function InteractionButtons({ isLiked, likeCount, commentCount, isLiking, onLike }: InteractionButtonsProps) {
-  return (
-    <div className="flex items-center gap-3">
-      <button
-        onClick={onLike}
-        className="flex items-center gap-1 text-gray-500 hover:text-pink-500 transition-colors"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill={isLiked ? "currentColor" : "none"}
-          stroke="currentColor"
-          strokeWidth="2"
-          className={`transition-all duration-300 ${isLiked ? 'text-accent' : 'text-gray-400'} ${isLiking ? 'animate-bounce' : ''}`}
-          style={{
-            transform: isLiked ? 'scale(1.1)' : 'scale(1)',
-          }}
-        >
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        </svg>
-        <span className="text-xs font-bold">{likeCount}</span>
-      </button>
-      <div className="flex items-center gap-1 text-gray-500">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-        <span className="text-xs font-bold">{commentCount}</span>
+        </div>
       </div>
     </div>
   )

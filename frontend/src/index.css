@@ -420,4 +420,5 @@
   .animate-float-slower {
     animation: float 10s ease-in-out infinite;
   }
+
 }

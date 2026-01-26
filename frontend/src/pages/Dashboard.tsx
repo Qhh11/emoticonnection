@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+// import FluidBackground from '../components/FluidBackground'
 import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import FisheyeSidebar from '../components/dashboard/FisheyeSidebar'
@@ -242,9 +243,9 @@ export default function Dashboard() {
     }
   }, [activeTab, diaryMode])
 
-  // Show welcome dialogue when entering profile tab with avatar selected
+  // Show welcome dialogue when entering community tab with avatar selected
   useEffect(() => {
-    if (activeTab === 'profile' && selectedAvatar) {
+    if (activeTab === 'community' && selectedAvatar && !communityPostDetailOpen && !communityCreatePostOpen) {
       const dialogue = avatarDialogue[selectedAvatar.name.toUpperCase() as keyof typeof avatarDialogue]
       if (dialogue) {
         if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
@@ -253,13 +254,11 @@ export default function Dashboard() {
           setProfileDialogueText(null)
         }, 4000)
       }
-    } else {
-      setProfileDialogueText(null)
     }
     return () => {
       if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
     }
-  }, [activeTab, selectedAvatar])
+  }, [activeTab, selectedAvatar, communityPostDetailOpen, communityCreatePostOpen])
 
   // Matching Tour - show tour for first-time VIP users when MatchingModal opens
   useEffect(() => {
@@ -740,6 +739,16 @@ export default function Dashboard() {
           setProfileDialogueText(null)
         }, 3000)
       }
+    } else if (activeTab === 'community' && selectedAvatar && !communityPostDetailOpen && !communityCreatePostOpen) {
+      // Show catchphrase on community page (when not in modal)
+      const dialogue = avatarDialogue[selectedAvatar.name.toUpperCase() as keyof typeof avatarDialogue]
+      if (dialogue) {
+        if (profileDialogueTimerRef.current) clearTimeout(profileDialogueTimerRef.current)
+        setProfileDialogueText(dialogue.catchphrase)
+        profileDialogueTimerRef.current = setTimeout(() => {
+          setProfileDialogueText(null)
+        }, 3000)
+      }
     } else if (activeTab === 'soulsync' && hasActiveSession) {
       setShowAssistantBubble(prev => !prev)
     } else if (activeTab === 'diary' && diaryMode === 'manual') {
@@ -935,7 +944,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen text-[#121212] overflow-hidden">
+    <div className="flex h-screen text-[#121212] overflow-hidden relative">
+      {/* 主题色渐变背景 - 匹配当前系统颜色 */}
+      {/* <FluidBackground themeColor={currentTheme.color} /> */}
       <FisheyeSidebar
         items={[
           { id: 'community', icon: <CommunityIcon />, label: 'community', active: activeTab === 'community', onClick: () => setActiveTab('community') },

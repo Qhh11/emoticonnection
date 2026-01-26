@@ -454,7 +454,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
     <div className="space-y-24 pb-32">
       <header className="space-y-8">
         <div className="flex justify-between items-center">
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter leading-none uppercase">Profile</h2>
+          <h2 className="text-5xl font-black tracking-tighter leading-none uppercase">Profile</h2>
           <div className="flex items-center gap-3">
             {/* Theme Selector Button */}
             <div className="relative">
