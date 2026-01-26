@@ -16,33 +16,85 @@ interface PostCardProps {
   userId?: string
 }
 
-// 情绪颜色映射
+// 情绪颜色映射 - 低饱和度柔和色调
 const MOOD_COLORS: Record<string, { bg: string; text: string }> = {
-  'Joy': { bg: '#F9D849', text: '#121212' },
-  'Sad': { bg: '#3266B1', text: '#ffffff' },
-  'Angry': { bg: '#D32F2F', text: '#ffffff' },
-  'Anxious': { bg: '#E67E22', text: '#ffffff' },
-  'Bored': { bg: '#4B4E91', text: '#ffffff' },
-  'Fear': { bg: '#9381BA', text: '#ffffff' },
-  'Disgust': { bg: '#66B04C', text: '#ffffff' },
-  'Awkward': { bg: '#D278A3', text: '#ffffff' },
-  'Envy': { bg: '#2BA8A4', text: '#ffffff' },
+  'Joy': { bg: '#EDE5B4', text: '#5C5832' },        // 柔和米黄
+  'Sad': { bg: '#B8C5D6', text: '#3A4A5C' },        // 柔和灰蓝
+  'Angry': { bg: '#E5C4C4', text: '#6B4444' },      // 柔和粉红
+  'Anxious': { bg: '#E5D4C4', text: '#6B5844' },    // 柔和橙米
+  'Bored': { bg: '#C4C4D6', text: '#4A4A5C' },      // 柔和灰紫
+  'Fear': { bg: '#D4C4D6', text: '#5A4A5C' },       // 柔和淡紫
+  'Disgust': { bg: '#C4D6C4', text: '#4A5C4A' },    // 柔和浅绿
+  'Awkward': { bg: '#E5C4D4', text: '#6B4458' },    // 柔和粉
+  'Envy': { bg: '#B8D6D4', text: '#3A5C5A' },       // 柔和青绿
 }
 
-// 获取情绪颜色 - 优先使用自定义颜色
+// 将颜色转换为低饱和度版本
+function desaturateColor(hex: string): string {
+  const cleanHex = hex.replace('#', '')
+  const r = parseInt(cleanHex.substr(0, 2), 16)
+  const g = parseInt(cleanHex.substr(2, 2), 16)
+  const b = parseInt(cleanHex.substr(4, 2), 16)
+
+  // 转换到 HSL，降低饱和度，提高亮度
+  const max = Math.max(r, g, b) / 255
+  const min = Math.min(r, g, b) / 255
+  let h = 0, s = 0
+  const l = (max + min) / 2
+
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    switch (max) {
+      case r / 255: h = ((g - b) / 255 / d + (g < b ? 6 : 0)) / 6; break
+      case g / 255: h = ((b - r) / 255 / d + 2) / 6; break
+      case b / 255: h = ((r - g) / 255 / d + 4) / 6; break
+    }
+  }
+
+  // 降低饱和度到 25%，亮度提升到 82%
+  const newS = Math.min(s * 0.35, 0.25)
+  const newL = 0.82
+
+  // HSL 转回 RGB
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1
+    if (t > 1) t -= 1
+    if (t < 1/6) return p + (q - p) * 6 * t
+    if (t < 1/2) return q
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6
+    return p
+  }
+
+  const q = newL < 0.5 ? newL * (1 + newS) : newL + newS - newL * newS
+  const p = 2 * newL - q
+  const newR = Math.round(hue2rgb(p, q, h + 1/3) * 255)
+  const newG = Math.round(hue2rgb(p, q, h) * 255)
+  const newB = Math.round(hue2rgb(p, q, h - 1/3) * 255)
+
+  return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`
+}
+
+// 获取情绪颜色 - 优先使用自定义颜色（会转换为低饱和度）
 function getMoodColors(emotion: string | null, customColor?: string | null) {
   if (customColor) {
+    const desaturated = desaturateColor(customColor)
+    // 文字颜色：取原色的深色版本
     const hex = customColor.replace('#', '')
     const r = parseInt(hex.substr(0, 2), 16)
     const g = parseInt(hex.substr(2, 2), 16)
     const b = parseInt(hex.substr(4, 2), 16)
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000
-    return { bg: customColor, text: brightness > 128 ? '#121212' : '#ffffff' }
+    // 深色文字
+    const darkR = Math.round(r * 0.4)
+    const darkG = Math.round(g * 0.4)
+    const darkB = Math.round(b * 0.4)
+    const textColor = `#${darkR.toString(16).padStart(2, '0')}${darkG.toString(16).padStart(2, '0')}${darkB.toString(16).padStart(2, '0')}`
+    return { bg: desaturated, text: textColor }
   }
 
-  if (!emotion) return { bg: '#9381BA', text: '#ffffff' }
+  if (!emotion) return { bg: '#D4C4D6', text: '#5A4A5C' }
   const normalized = emotion.charAt(0).toUpperCase() + emotion.slice(1).toLowerCase()
-  return MOOD_COLORS[normalized] || { bg: '#9381BA', text: '#ffffff' }
+  return MOOD_COLORS[normalized] || { bg: '#D4C4D6', text: '#5A4A5C' }
 }
 
 // 格式化日期为 MM/DD 格式
@@ -86,7 +138,7 @@ export default function PostCard({ post, onClick }: PostCardProps) {
         useGlassmorphism={!!hasImage}
         blurContent={false}
         blurAmount={0}
-        showGrain={true}
+        showGrain={false}
         showBorder={true}
         showOilPaint={false}
         rotateAmplitude={12}
@@ -99,6 +151,7 @@ export default function PostCard({ post, onClick }: PostCardProps) {
           <PostOverlay
             title={post.title ?? undefined}
             emotionColor={colors.bg}
+            emotionTextColor={colors.text}
             emotionLabel={emotion ?? undefined}
             content={hasImage ? undefined : post.content}
             maxLines={hasImage ? undefined : textPostConfig.lines}
@@ -118,6 +171,7 @@ export default function PostCard({ post, onClick }: PostCardProps) {
 interface PostOverlayProps {
   title?: string
   emotionColor: string
+  emotionTextColor?: string
   emotionLabel?: string
   content?: string
   maxLines?: number
@@ -130,6 +184,7 @@ interface PostOverlayProps {
 
 function PostOverlay({
   emotionColor,
+  emotionTextColor = '#121212',
   emotionLabel,
   content,
   maxLines = 5,
@@ -142,9 +197,10 @@ function PostOverlay({
   // 底部信息栏高度（用户信息）
   const bottomBarHeight = 60
 
-  // 统一使用白色底部区域，黑色文字
-  const textColorSecondary = 'rgba(18,18,18,0.85)'
-  const textColorTertiary = 'rgba(18,18,18,0.6)'
+  // 文字帖子：使用与背景匹配的文字颜色
+  const textColorMain = emotionTextColor
+  const textColorSecondary = hasImage ? 'rgba(18,18,18,0.85)' : emotionTextColor
+  const textColorTertiary = hasImage ? 'rgba(18,18,18,0.6)' : `${emotionTextColor}99`
 
   return (
     <div
@@ -155,7 +211,7 @@ function PostOverlay({
         overflow: 'hidden',
       }}
     >
-      {/* 文字帖子：内容区域 - 模糊效果 */}
+      {/* 文字帖子：内容区域 + 点阵效果 */}
       {!hasImage && content && (
         <div
           style={{
@@ -166,23 +222,35 @@ function PostOverlay({
             bottom: bottomBarHeight,
             padding: '12px 16px',
             overflow: 'hidden',
-            filter: 'blur(0px)',
-            transform: 'scale(1.05)',
           }}
         >
+          {/* 点阵纹理层 - 只在文本区域 */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 0,
+              backgroundImage: 'radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px)',
+              backgroundSize: '12px 12px',
+              backgroundPosition: '0 0',
+            }}
+          />
           <p
             style={{
               margin: 0,
               fontSize: '13px',
               fontWeight: 500,
               lineHeight: 1.6,
-              color: '#121212',
+              color: textColorMain,
               fontFamily: 'Outfit, system-ui, sans-serif',
               display: '-webkit-box',
               WebkitLineClamp: maxLines,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               wordBreak: 'break-word',
+              position: 'relative',
+              zIndex: 1,
             }}
           >
             {content}
@@ -190,7 +258,7 @@ function PostOverlay({
         </div>
       )}
 
-      {/* 底部信息区 - 固定在底部，统一透明模糊渐变 */}
+      {/* 底部信息区 - 文字帖子使用同色背景，图片帖子使用白色渐变 */}
       <div
         style={{
           position: 'absolute',
@@ -198,9 +266,11 @@ function PostOverlay({
           right: 0,
           bottom: 0,
           padding: '14px 16px',
-          background: 'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.5) 70%, rgba(255,255,255,0.2) 85%, transparent 100%)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          background: hasImage
+            ? 'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.5) 70%, rgba(255,255,255,0.2) 85%, transparent 100%)'
+            : 'transparent',
+          backdropFilter: hasImage ? 'blur(8px)' : 'none',
+          WebkitBackdropFilter: hasImage ? 'blur(8px)' : 'none',
         }}
       >
         {/* 用户信息和日期 */}
@@ -213,7 +283,7 @@ function PostOverlay({
                 height: '24px',
                 borderRadius: '6px',
                 overflow: 'hidden',
-                background: '#D9D9D9',
+                background: hasImage ? '#E8E8E8' : emotionColor,
                 flexShrink: 0,
               }}
             >
@@ -233,8 +303,8 @@ function PostOverlay({
                     justifyContent: 'center',
                     fontSize: '11px',
                     fontWeight: 600,
-                    backgroundColor: emotionColor + '80',
-                    color: '#333',
+                    backgroundColor: emotionColor,
+                    color: textColorMain,
                   }}
                 >
                   {authorInitial}
@@ -272,11 +342,14 @@ function PostOverlay({
             {emotionLabel && (
               <span
                 style={{
-                  color: emotionColor,
-                  fontSize: '11px',
+                  color: hasImage ? emotionColor : textColorMain,
+                  fontSize: '10px',
                   fontWeight: 700,
                   fontFamily: 'Outfit, system-ui, sans-serif',
                   textTransform: 'capitalize',
+                  backgroundColor: 'rgba(255, 255, 255, 0.6)',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
                 }}
               >
                 {emotionLabel}
