@@ -959,7 +959,7 @@ export default function Dashboard() {
       <FisheyeSidebar
         items={[
           { id: 'community', icon: <CommunityIcon />, label: 'community', active: activeTab === 'community', onClick: () => setActiveTab('community') },
-          { id: 'diary', icon: <DiaryIcon />, label: 'diary', active: activeTab === 'diary', onClick: () => setActiveTab('diary') },
+          { id: 'diary', icon: <DiaryIcon />, label: 'emoti space', active: activeTab === 'diary', onClick: () => setActiveTab('diary') },
           { id: 'soulsync', icon: <ChatIcon />, label: 'chat', active: activeTab === 'soulsync', onClick: () => setActiveTab('soulsync') },
           { id: 'profile', icon: <ProfileIcon />, label: 'profile', active: activeTab === 'profile', onClick: () => setActiveTab('profile') },
         ]}

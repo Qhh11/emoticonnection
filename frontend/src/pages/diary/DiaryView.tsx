@@ -813,7 +813,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
 }
 
 export default function DiaryView({ onInteract, entries, onAddEntry, userId, onRefreshDiaries, onOpenEntryDetail, avatar, onModeChange, onRewriteReady, onOpenAssistantWithRewrite, onSetContentReady, userLevel }: DiaryViewProps) {
-  const [mode, setMode] = useState<DiaryMode>('manual')
+  const [mode, setMode] = useState<DiaryMode>('ai')
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
   const [selectedMood, setSelectedMood] = useState<typeof MOOD_DATA[0] | null>(null)
@@ -903,23 +903,22 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div className="space-y-4">
-          <h2 className="text-5xl font-black tracking-tighter uppercase leading-none">Journal</h2>
+          <h2 className="text-5xl font-black tracking-tighter uppercase leading-none">Emoti Space</h2>
           <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Archive your frequency</p>
         </div>
         <div className="flex bg-white p-1.5 rounded-full border border-black/5 shadow-sm">
-          <button
-            onClick={() => setMode('manual')}
-            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'manual' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
-          >
-            Manual Log
-          </button>
           <button
             onClick={() => setMode('ai')}
             className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'ai' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
           >
             AI Chat
           </button>
-
+          <button
+            onClick={() => setMode('manual')}
+            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'manual' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
+          >
+            Manual Log
+          </button>
         </div>
       </header>
 
