@@ -105,7 +105,7 @@ class AIChatService:
         else:
             import inspect
             system_instruction = inspect.cleandoc(self.system_instruction).strip()
-            system_instruction += "\n\nCRITICAL FORMATTING RULE: Do not use double newlines or empty lines between paragraphs. Use single newlines only for separation to keep chat bubbles compact."
+            system_instruction += "\n\nCRITICAL FORMATTING RULE: Do not use double newlines or empty lines between paragraphs. Use single newlines only for separation to keep chat bubbles compact. Do not use Markdown formatting (like **bold** or *italics*) as the UI renders text as raw strings."
         
         from google.genai import types
         
@@ -146,7 +146,7 @@ class AIChatService:
             if response_text:
                 # Remove all empty lines and whitespace lines, join with single newline
                 lines = [line.strip() for line in response_text.splitlines() if line.strip()]
-                response_text = "\n".join(lines)
+                response_text = "\n".join(lines).replace('**', '')
             else:
                 response_text = "..."
             

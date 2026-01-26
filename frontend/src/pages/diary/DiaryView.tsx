@@ -230,6 +230,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
         .map(line => line.trim())
         .filter(line => line.length > 0)
         .join('\n')
+        .replace(/\*/g, '') // Remove all Markdown asterisks
 
       setTextMessages(prev => [...prev, { role: 'ai', content: cleanResponse }])
 

@@ -162,6 +162,6 @@ def get_persona_instruction(avatar_id: str) -> str:
     instruction = inspect.cleandoc(instruction).strip()
     
     # Add critical formatting rules to prevent UI issues (like double newlines)
-    formatting_rule = "\n\nCRITICAL FORMATTING RULE: Do not use double newlines or empty lines between paragraphs. Use single newlines only for separation to keep chat bubbles compact."
+    formatting_rule = "\n\nCRITICAL FORMATTING RULE: Do not use double newlines or empty lines between paragraphs. Use single newlines only for separation to keep chat bubbles compact. Do not use Markdown formatting (like **bold** or *italics*) as the UI renders text as raw strings."
     
     return instruction + formatting_rule

@@ -191,7 +191,8 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
                                         .split('\n')
                                         .map(l => l.trim())
                                         .filter(l => l.length > 0)
-                                        .join('\n');
+                                        .join('\n')
+                                        .replace(/\*/g, ''); // Remove all Markdown asterisks
                                     setConversation(prev => [...prev, { role: 'ai', content: cleanText }]);
                                     setTranscripts([]); // Clear real-time transcripts
                                     currentAiTurnRef.current = "";
