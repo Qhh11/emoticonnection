@@ -42,11 +42,11 @@ class User(BaseModel):
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     
     # 积分系统
-    points: int = Field(default=0, description="总积分")
-    level: int = Field(default=1, description="用户等级")
+    points: int = Field(default=300, description="总积分")
+    level: int = Field(default=3, description="用户等级")
     
     # 个性化
-    avatar: str = Field(default="sunny_female", description="用户头像 ID")
+    avatar: str = Field(default="blushy_female", description="用户头像 ID")
     avatar_url: Optional[str] = None
     unlocked_avatars: List[str] = Field(default_factory=list)
     unlocked_ai_styles: List[str] = Field(default_factory=list)
