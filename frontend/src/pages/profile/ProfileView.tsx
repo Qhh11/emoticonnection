@@ -973,7 +973,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
         <h4 className="text-3xl font-black tracking-tighter uppercase px-4">My Moments</h4>
         {userPosts.length > 0 ? (
           <div className="card-stack overflow-visible px-4 pt-10">
-            {userPosts.slice(0, 5).map((post, i) => {
+            {userPosts.map((post, i) => {
               const postMood = post.emotion || post.ai_emotion || 'Neutral'
               // Use custom emotion_color if available, otherwise fall back to mood color mapping
               let color: string

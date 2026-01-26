@@ -107,6 +107,11 @@ export default function SoulSyncView({
   const [mutualFriends, setMutualFriends] = useState<FriendWithOnlineStatus[]>([])
   const [isLoadingFriends, setIsLoadingFriends] = useState(false)
 
+  // Snapshot-based sorting: lists don't reorder during active chat
+  const [sortedFriendSessions, setSortedFriendSessions] = useState<PeerSession[]>([])
+  const [sortedNewConnections, setSortedNewConnections] = useState<PeerSession[]>([])
+  const [sortSnapshot, setSortSnapshot] = useState<number>(0)
+
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null)
   const presenceWsRef = useRef<WebSocket | null>(null)
@@ -281,6 +286,16 @@ export default function SoulSyncView({
     onSessionChange?.(!!currentSessionId)
   }, [currentSessionId, onSessionChange])
 
+  // Update sorted snapshots when sortSnapshot changes or initial load
+  useEffect(() => {
+    const friends = sessions.filter(s => !s.isAnonymous && mutualFriends.some(f => f.id === s.partnerId))
+    const connections = sessions.filter(s => s.isAnonymous || !mutualFriends.some(f => f.id === s.partnerId))
+
+    setSortedFriendSessions(sortSessionsByTime(friends))
+    setSortedNewConnections(sortSessionsByTime(connections))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortSnapshot, sessions.length, mutualFriends.length])
+
   const loadUserRooms = async () => {
     if (!userId) return
     try {
@@ -322,7 +337,8 @@ export default function SoulSyncView({
     try {
       const room = await chatApi.createRoom(userId, friend.id, false)
 
-      const existingSession = sessions.find(s => s.roomId === room.id)
+      // Check for existing non-anonymous session to avoid revealing anonymous chat history
+      const existingSession = sessions.find(s => s.roomId === room.id && !s.isAnonymous)
       if (existingSession) {
         setCurrentSessionId(existingSession.id)
         return
@@ -347,6 +363,21 @@ export default function SoulSyncView({
     } catch (err) {
       console.error('Failed to create chat room:', err)
     }
+  }
+
+  // Sort sessions by lastMessageTime (newest first)
+  const sortSessionsByTime = (sessionList: PeerSession[]): PeerSession[] => {
+    return [...sessionList].sort((a, b) => {
+      const timeA = a.lastMessageTime || 0
+      const timeB = b.lastMessageTime || 0
+      return timeB - timeA
+    })
+  }
+
+  // Exit chat and trigger sort update
+  const exitChat = () => {
+    setSortSnapshot(Date.now())
+    setCurrentSessionId(null)
   }
 
   // Enter chat room from session list
@@ -608,8 +639,13 @@ export default function SoulSyncView({
   const currentSession = sessions.find(s => s.id === currentSessionId)
 
   // Separate friends and new connections
-  const friendSessions = sessions.filter(s => !s.isAnonymous && isFriend(s.partnerId))
-  const newConnections = sessions.filter(s => s.isAnonymous || !isFriend(s.partnerId))
+  // When in chat, use snapshot to prevent reordering; otherwise sort in real-time
+  const friendSessions = currentSessionId
+    ? sortedFriendSessions
+    : sortSessionsByTime(sessions.filter(s => !s.isAnonymous && isFriend(s.partnerId)))
+  const newConnections = currentSessionId
+    ? sortedNewConnections
+    : sortSessionsByTime(sessions.filter(s => s.isAnonymous || !isFriend(s.partnerId)))
 
   // AI Handlers - Now delegate to Avatar AssistantBubble
   const handleRewrite = () => {
@@ -632,27 +668,34 @@ export default function SoulSyncView({
   const renderAvatarWithRing = (
     avatar: string | undefined,
     isAnonymous: boolean,
-    bgColor: string = 'bg-blue-50'
-  ) => (
-    <div className="relative">
-      {/* Four-color gradient breathing ring */}
-      <div
-        className="absolute -inset-1 rounded-xl animate-pulse opacity-60 blur-sm"
-        style={{
-          background: 'conic-gradient(from 0deg, #D32F2F, #F9D849, #66B04C, #3266B1, #D32F2F)'
-        }}
-      />
-      <div className={`relative w-12 h-12 rounded-xl overflow-hidden ${bgColor} flex items-center justify-center`}>
-        {isAnonymous ? (
-          <span className="text-2xl">🎭</span>
-        ) : avatar && avatar.length > 2 ? (
-          <img src={getAvatarUrl(avatar)} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-xl">{avatar || '👤'}</span>
-        )}
+    bgColor: string = 'bg-blue-50',
+    size: 'sm' | 'md' = 'md'
+  ) => {
+    const sizeClasses = size === 'sm' ? 'w-9 h-9' : 'w-12 h-12'
+    const emojiSize = size === 'sm' ? 'text-lg' : 'text-2xl'
+    const fallbackSize = size === 'sm' ? 'text-base' : 'text-xl'
+
+    return (
+      <div className="relative">
+        {/* Four-color gradient breathing ring */}
+        <div
+          className="absolute -inset-1 rounded-xl animate-pulse opacity-60 blur-sm"
+          style={{
+            background: 'conic-gradient(from 0deg, #D32F2F, #F9D849, #66B04C, #3266B1, #D32F2F)'
+          }}
+        />
+        <div className={`relative ${sizeClasses} rounded-xl overflow-hidden ${bgColor} flex items-center justify-center`}>
+          {isAnonymous ? (
+            <span className={emojiSize}>🎭</span>
+          ) : avatar && avatar.length > 2 ? (
+            <img src={getAvatarUrl(avatar)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span className={fallbackSize}>{avatar || '👤'}</span>
+          )}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // Render chat sidebar list item (for chat view)
   const renderChatSidebarItem = (
@@ -663,15 +706,15 @@ export default function SoulSyncView({
     <button
       key={session.id}
       onClick={() => enterChatRoom(session)}
-      className={`w-full p-3 flex items-center gap-3 rounded-xl transition-all text-left ${
+      className={`w-full p-2 flex items-center gap-2 rounded-xl transition-all text-left ${
         isActive ? 'bg-accent/10 border-l-2 border-accent' : 'hover:bg-white/40'
       }`}
     >
       <div className="relative">
         {showGradientRing ? (
-          renderAvatarWithRing(session.partnerAvatar, session.isAnonymous, 'bg-gray-100')
+          renderAvatarWithRing(session.partnerAvatar, session.isAnonymous, 'bg-gray-100', 'sm')
         ) : (
-          renderAvatarWithRing(session.partnerAvatar, false, 'bg-blue-50')
+          renderAvatarWithRing(session.partnerAvatar, false, 'bg-blue-50', 'sm')
         )}
         <OnlineIndicator isOnline={session.isOnline || false} />
       </div>
@@ -689,10 +732,10 @@ export default function SoulSyncView({
     <button
       key={friend.id}
       onClick={() => startChatWithFriend(friend)}
-      className="w-full p-3 flex items-center gap-3 rounded-xl hover:bg-white/40 transition-all text-left"
+      className="w-full p-2 flex items-center gap-2 rounded-xl hover:bg-white/40 transition-all text-left"
     >
       <div className="relative">
-        {renderAvatarWithRing(friend.avatar, false, 'bg-blue-50')}
+        {renderAvatarWithRing(friend.avatar, false, 'bg-blue-50', 'sm')}
         <OnlineIndicator isOnline={friend.isOnline} />
       </div>
       <div className="flex-1 min-w-0">
@@ -710,7 +753,7 @@ export default function SoulSyncView({
         <header className="flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setCurrentSessionId(null)}
+              onClick={exitChat}
               className="p-2 hover:bg-gray-100 rounded-xl transition-all"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -726,16 +769,16 @@ export default function SoulSyncView({
 
         {/* Chat View with Sidebar */}
         <section className="h-[600px] bg-white/60 backdrop-blur-xl rounded-3xl border border-white/20 shadow-lg overflow-hidden flex">
-          {/* Left Sidebar: Contact Lists */}
-          <div className="w-72 border-r-2 border-gray-200 flex flex-col bg-white/40">
-            {/* Friends Section */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4 border-b border-black/5 sticky top-0 bg-white/80 backdrop-blur-sm z-10">
+          {/* Left Sidebar: Contact Lists - Two independent scrollable sections */}
+          <div className="w-56 border-r-2 border-gray-200 flex flex-col bg-white/40">
+            {/* Friends Section - Independent scroll area */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="p-4 border-b border-black/5 bg-white/80 backdrop-blur-sm flex-shrink-0">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.25em] text-gray-400">
                   Friends
                 </h3>
               </div>
-              <div className="p-2 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {isLoadingFriends ? (
                   <div className="flex justify-center py-4">
                     <div className="w-5 h-5 border-2 border-gray-200 border-t-accent rounded-full animate-spin" />
@@ -751,14 +794,16 @@ export default function SoulSyncView({
                   </>
                 )}
               </div>
+            </div>
 
-              {/* New Connections Section */}
-              <div className="p-4 border-b border-t border-black/5 sticky top-0 bg-white/80 backdrop-blur-sm z-10">
+            {/* New Connections Section - Independent scroll area */}
+            <div className="flex-1 flex flex-col min-h-0 border-t border-black/5">
+              <div className="p-4 border-b border-black/5 bg-white/80 backdrop-blur-sm flex-shrink-0">
                 <h3 className="font-black text-[10px] uppercase tracking-[0.25em] text-gray-400">
                   New Connections
                 </h3>
               </div>
-              <div className="p-2 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {newConnections.length === 0 ? (
                   <p className="text-center text-gray-400 text-xs py-4">No new connections</p>
                 ) : (

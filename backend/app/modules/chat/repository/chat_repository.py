@@ -50,9 +50,11 @@ class ChatRepository:
             user2_oid = user2_id
 
         # Search for existing session (check both orderings)
+        # Include is_anonymous to ensure anonymous and non-anonymous chats are separate
         session = await self.sessions.find_one({
             "session_type": "peer",
             "status": "active",
+            "is_anonymous": is_anonymous,
             "$or": [
                 {"user_id": user1_oid, "peer_user_id": user2_oid},
                 {"user_id": user2_oid, "peer_user_id": user1_oid}
