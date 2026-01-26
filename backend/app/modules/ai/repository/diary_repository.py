@@ -1,7 +1,7 @@
 """
 Diary Repository - Database operations for AI generated diaries
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, List
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -45,8 +45,8 @@ class DiaryRepository:
             "content": content,
             "mood": mood,
             "color": color,  # Custom mood color
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
 
         result = await self.collection.insert_one(new_diary)

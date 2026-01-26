@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
@@ -238,13 +239,30 @@ def _load_emotion_analytics():
 async def get_daily_report(user_id: str, end_date: Optional[str] = None):
     """Generate daily emotion report for a user"""
     try:
+        db = get_database()
+        utc_today = datetime.now(datetime.UTC).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
+        cache_collection = db.report_cache
+        
+        # Check cache
+        cache_key = f"daily_{user_id}_{utc_today}"
+        cached_report = await cache_collection.find_one({"_id": cache_key})
+        if cached_report:
+            return cached_report["report"]
+
         emotion_analytics = _load_emotion_analytics()
         report = emotion_analytics.generate_daily_emotion_report(
             user_id=user_id,
             end_date=end_date
         )
-        # Convert to JSON-serializable format using static method
-        return emotion_analytics.EmotionAnalytics.to_json(report)
+        report_json = emotion_analytics.EmotionAnalytics.to_json(report)
+        
+        # Save to cache
+        await cache_collection.update_one(
+            {"_id": cache_key},
+            {"$set": {"report": report_json, "created_at": datetime.now(datetime.UTC)}},
+            upsert=True
+        )
+        return report_json
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate daily report: {str(e)}")
 
@@ -252,13 +270,30 @@ async def get_daily_report(user_id: str, end_date: Optional[str] = None):
 async def get_weekly_report(user_id: str, end_date: Optional[str] = None):
     """Generate weekly emotion report for a user"""
     try:
+        db = get_database()
+        utc_today = datetime.now(datetime.UTC).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
+        cache_collection = db.report_cache
+        
+        # Check cache
+        cache_key = f"weekly_{user_id}_{utc_today}"
+        cached_report = await cache_collection.find_one({"_id": cache_key})
+        if cached_report:
+            return cached_report["report"]
+
         emotion_analytics = _load_emotion_analytics()
         report = emotion_analytics.generate_weekly_emotion_report(
             user_id=user_id,
             end_date=end_date
         )
-        # Convert to JSON-serializable format using static method
-        return emotion_analytics.EmotionAnalytics.to_json(report)
+        report_json = emotion_analytics.EmotionAnalytics.to_json(report)
+        
+        # Save to cache
+        await cache_collection.update_one(
+            {"_id": cache_key},
+            {"$set": {"report": report_json, "created_at": datetime.now(datetime.UTC)}},
+            upsert=True
+        )
+        return report_json
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate weekly report: {str(e)}")
 
@@ -266,12 +301,29 @@ async def get_weekly_report(user_id: str, end_date: Optional[str] = None):
 async def get_monthly_report(user_id: str, end_date: Optional[str] = None):
     """Generate monthly emotion report for a user"""
     try:
+        db = get_database()
+        utc_today = datetime.now(datetime.UTC).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
+        cache_collection = db.report_cache
+        
+        # Check cache
+        cache_key = f"monthly_{user_id}_{utc_today}"
+        cached_report = await cache_collection.find_one({"_id": cache_key})
+        if cached_report:
+            return cached_report["report"]
+
         emotion_analytics = _load_emotion_analytics()
         report = emotion_analytics.generate_monthly_emotion_report(
             user_id=user_id,
             end_date=end_date
         )
-        # Convert to JSON-serializable format using static method
-        return emotion_analytics.EmotionAnalytics.to_json(report)
+        report_json = emotion_analytics.EmotionAnalytics.to_json(report)
+        
+        # Save to cache
+        await cache_collection.update_one(
+            {"_id": cache_key},
+            {"$set": {"report": report_json, "created_at": datetime.now(datetime.UTC)}},
+            upsert=True
+        )
+        return report_json
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate monthly report: {str(e)}")

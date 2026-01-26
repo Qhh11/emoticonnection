@@ -45,3 +45,6 @@ mongodb.log
 # test folders
 test/
 tests/
+
+# Configuration guides
+AI_LIVE_CONFIG_ZH.md

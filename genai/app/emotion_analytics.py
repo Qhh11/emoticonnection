@@ -178,39 +178,48 @@ class EmotionAnalytics:
         if not self.gemini_client:
             raise ValueError("Gemini client is required for EmotionAnalytics")
 
-    def _call_llm(self, prompt: str) -> str:
-        """Call the configured LLM provider for text generation."""
-        return self._call_gemini(prompt)
-        
-    def _call_gemini(self, prompt: str) -> str:
-        """Call Gemini API for text generation."""
+    def _call_gemini(self, prompt: str, schema=None) -> str:
+        """Call Gemini API for text generation with optional structured output."""
         
         try:
             config_path = os.path.join(os.path.dirname(__file__), "gemini_config.json")
             if os.path.exists(config_path):
                 with open(config_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
+                gen_cfg_params = cfg.get("generation_config", {}).copy()
+                
+                # Disable AFC (Automatic Function Calling) to reduce latency for pure analytical tasks
+                gen_cfg_params["tools"] = []
+                
+                if schema:
+                    gen_cfg_params["response_mime_type"] = "application/json"
+                    gen_cfg_params["response_schema"] = schema
+
                 gen_cfg = types.GenerateContentConfig(
-                    **cfg.get("generation_config", {}),
+                    **gen_cfg_params,
                     safety_settings=[types.SafetySetting(**s) for s in cfg.get("safety_settings", [])],
                 )
             else:
-                gen_cfg = types.GenerateContentConfig(temperature=0.7)
+                gen_cfg = types.GenerateContentConfig(
+                    temperature=0.1, # Lower temperature for better consistency
+                    tools=[] # Explicitly disable tools for speed
+                )
 
             client = genai.Client()
             response_text = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=prompt
+                contents=prompt,
+                config=gen_cfg
             )
             
             if response_text and response_text.text:
                 return response_text.text.strip()
             
             logger.warning("Empty response from Gemini batch analysis")
-            raise
+            return "{}" if schema else ""
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
-            raise
+            return "{}" if schema else ""
 
     def fetch_user_conversations(
         self, 
@@ -240,17 +249,18 @@ class EmotionAnalytics:
         
         # 1. 从 ChatEmotions 集合获取聊天情感数据 (用户之间的对话情感分析)
         try:
-            collection = self.weaviate_manager.client.collections.get("ChatEmotions")
-            
-            response = collection.query.fetch_objects(
-                filters=(
-                    Filter.by_property("userId").equal(user_id) &
-                    Filter.by_property("timestamp").greater_or_equal(start_date) &
-                    Filter.by_property("timestamp").less_or_equal(end_date)
-                ),
-                limit=1000,
-                sort=wq.Sort.by_property("timestamp", ascending=True)
-            )
+            if self.weaviate_manager.client.collections.exists("ChatEmotions"):
+                collection = self.weaviate_manager.client.collections.get("ChatEmotions")
+                
+                response = collection.query.fetch_objects(
+                    filters=(
+                        Filter.by_property("userId").equal(user_id) &
+                        Filter.by_property("timestamp").greater_or_equal(start_date) &
+                        Filter.by_property("timestamp").less_or_equal(end_date)
+                    ),
+                    limit=1000,
+                    sort=wq.Sort.by_property("timestamp", ascending=True)
+                )
             
             for obj in response.objects:
                 props = obj.properties
@@ -367,7 +377,7 @@ class EmotionAnalytics:
             if not conversations:
                 return []
                 
-            batch_size = 20
+            batch_size = 50 # Increased batch size to reduce network latency
             all_data_points = []
             
             # Enhanced emotion definitions for cross-cultural nuance
@@ -501,7 +511,7 @@ class EmotionAnalytics:
                 """
 
                 try:
-                    response = self._call_llm(prompt)
+                    response = self._call_gemini(prompt)
                     response = response.strip()
                     
                     # Handling Markdown Code Blocks
@@ -696,7 +706,7 @@ class EmotionAnalytics:
                 Return ONLY the JSON object, no other text."""
 
             try:
-                response = self._call_llm(prompt)
+                response = self._call_gemini(prompt)
                 response = response.strip()
                 
                 # Clean Markdown formatting if necessary
@@ -835,7 +845,7 @@ class EmotionAnalytics:
     Use a warm, supportive, and empathetic tone. Provide practical and actionable advice. Return ONLY the JSON object."""
 
             try:
-                response = self._call_llm(prompt)
+                response = self._call_gemini(prompt)
                 response = response.strip()
                 
                 # Remove Markdown code blocks if present

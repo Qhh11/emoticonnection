@@ -14,7 +14,7 @@ export interface Avatar3D {
   shadowIntensity?: number
   skyboxImage?: string // Custom HDRI for specific avatar
   greeting: string
-  voiceName: 'Aoede' | 'Charon' | 'Fenrir' | 'Kore' | 'Puck'
+  voiceName: 'Aoede' | 'Charon' | 'Fenrir' | 'Kore' | 'Puck' | 'Lyra' | 'Orion' | 'Hera' | 'Eos' | 'Gaia' | 'Ursa'
 }
 
 export const AVATARS_3D: Avatar3D[] = [
@@ -34,7 +34,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Blushy.gif',
     isLocked: false,
     greeting: 'Um... hello. If it feels a bit hard to talk right now, that\'s okay... we can take it slow.',
-    voiceName: 'Kore'
+    voiceName: 'Gaia'
   },
   {
     id: 'bluey',
@@ -43,7 +43,7 @@ export const AVATARS_3D: Avatar3D[] = [
     description: 'A quiet little boy who will sit with you and listen to your sadness without judgment.',
     personality: [
       'Prioritize listening',
-      'Short, soft sentences',
+      'soft sentences',
       'Reflect emotions gently',
       'No pressure for solutions'
     ],
@@ -52,7 +52,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Bluey.gif',
     isLocked: false,
     greeting: 'I feel a bit sad. Do you feel it too?',
-    voiceName: 'Puck'
+    voiceName: 'Orion'
   },
   {
     id: 'grumpy',
@@ -78,10 +78,10 @@ export const AVATARS_3D: Avatar3D[] = [
     emotion: 'Fear',
     description: 'An overthinking friend who validates those "what-if" anxieties along with you.',
     personality: [
-      'Relatable overthinker',
-      'Validates "what-if" loops',
-      'Empathetic partner',
-      'Shared anxiety'
+      'Understand anxiety but don\'t amplify it',
+      'Help interrupt recurring worries',
+      'Gently bring us back to the present moment',
+      'Stable, supportive responses'
     ],
     color: '#9381BA',
     modelPath: new URL('../assets/3davatar/Scaredy.glb', import.meta.url).href,
@@ -142,7 +142,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Zippy.gif',
     isLocked: false,
     greeting: 'Hello! I\'ve been thinking about how to clear up your thoughts. Why don\'t we start with the thing that\'s on your mind the most?',
-    voiceName: 'Charon'
+    voiceName: 'Eos'
   },
   {
     id: 'yucky',
@@ -160,7 +160,7 @@ export const AVATARS_3D: Avatar3D[] = [
     videoPath: '/asset/gif/Yucky.gif',
     isLocked: false,
     greeting: 'I understand your feeling of aversion. That feeling is real and important. If you\'re ready, we can talk about the details.',
-    voiceName: 'Charon'
+    voiceName: 'Hera'
   },
   {
     id: 'sparkle',
@@ -181,6 +181,6 @@ export const AVATARS_3D: Avatar3D[] = [
     environmentImage: 'neutral',
     shadowIntensity: 0.8,
     greeting: 'I noticed some subtle shifts in your mood. Sometimes these complex feelings are just reminders to look within. Want to talk about it?',
-    voiceName: 'Aoede'
+    voiceName: 'Lyra'
   }
 ]

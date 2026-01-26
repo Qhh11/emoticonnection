@@ -1,7 +1,7 @@
 """
 AI Chat Repository - Database operations for AI chat sessions
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, List
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -67,7 +67,7 @@ class AIChatRepository:
             "peer_user_id": None,
             "ai_mode": "general",
             "status": "active",
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "ended_at": None,
             "is_anonymous": False,
             # Default fields required by schema but not used by AI chat
@@ -110,7 +110,7 @@ class AIChatRepository:
             "media_url": None,
             "emotion": None,
             "safety_flag": "safe",
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
             "is_deleted": False
         }
 
@@ -131,7 +131,7 @@ class AIChatRepository:
             "peer_user_id": None,
             "ai_mode": "general",
             "status": "active",
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "ended_at": None,
             "is_anonymous": False,
             "match_score": None,
