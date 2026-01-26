@@ -1,7 +1,17 @@
 // API 服务层 - 统一管理所有后端 API 调用
 
-// const BASE_URL = 'http://localhost:8000'
+//const BASE_URL = 'http://localhost:8000'
 const BASE_URL = "https://emoticonnection-backend.onrender.com"
+
+/**
+ * 获取用户本地时区的"昨天"日期（YYYY-MM-DD 格式）
+ * 用于 emotion report API，确保查询的是用户实际的昨天
+ */
+const getLocalYesterday = (): string => {
+  const now = new Date()
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+}
 
 // Token 管理
 export const getToken = (): string | null => {
@@ -674,19 +684,30 @@ export const aiChatApi = {
     }),
 
   // Emotion Reports
-  getDailyReport: (userId: string, endDate?: string) => {
-    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
-    return request<EmotionReport>(`/api/diary/reports/daily${query}`)
+  // 自动计算用户本地时区的"昨天"日期传给后端
+  getDailyReport: (userId: string) => {
+    const yesterday = getLocalYesterday()
+    return request<EmotionReport>(`/api/diary/reports/daily?user_id=${userId}&target_date=${yesterday}`)
   },
 
-  getWeeklyReport: (userId: string, endDate?: string) => {
-    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
-    return request<EmotionReport>(`/api/diary/reports/weekly${query}`)
+  getWeeklyReport: (userId: string) => {
+    const yesterday = getLocalYesterday()
+    return request<EmotionReport>(`/api/diary/reports/weekly?user_id=${userId}&target_date=${yesterday}`)
   },
 
-  getMonthlyReport: (userId: string, endDate?: string) => {
-    const query = endDate ? `?user_id=${userId}&end_date=${endDate}` : `?user_id=${userId}`
-    return request<EmotionReport>(`/api/diary/reports/monthly${query}`)
+  getMonthlyReport: (userId: string) => {
+    const yesterday = getLocalYesterday()
+    return request<EmotionReport>(`/api/diary/reports/monthly?user_id=${userId}&target_date=${yesterday}`)
+  },
+
+  // Sync missing historical reports
+  // 从用户本地昨天开始往前 sync
+  syncHistoryReports: (userId: string, days: number = 7) => {
+    const yesterday = getLocalYesterday()
+    return request<{ synced_dates: string[]; skipped_dates: string[]; count: number }>(
+      `/api/diary/reports/sync-history?user_id=${userId}&days=${days}&start_from=${yesterday}`,
+      { method: 'POST' }
+    )
   },
 
   // Persistent Daily Emotion Scores (consistent across all devices)

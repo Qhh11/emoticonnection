@@ -8,8 +8,6 @@ import {
   ChatMessage as ApiChatMessage,
   FollowUser,
 } from '../../services/api'
-import { markUserActivity } from '../../components/EmotionReportModal'
-
 import { Avatar3D } from '../../config/avatars'
 import EmotionGradientBar from '../../components/chat/EmotionGradientBar'
 import { getAvatarUrl } from '../../config/userAvatars'
@@ -580,7 +578,6 @@ export default function SoulSyncView({
         .catch(err => console.error('Failed to send message:', err))
     }
 
-    markUserActivity(userId)
     setChatInput('')
   }
 

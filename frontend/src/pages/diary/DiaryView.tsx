@@ -4,7 +4,6 @@ import { aiChatApi } from '../../services/api'
 import { AVATARS_3D, Avatar3D } from '../../config/avatars'
 import ModelViewer3D from '../../components/dashboard/ModelViewer3D'
 
-import { markUserActivity } from '../../components/EmotionReportModal'
 import { useGeminiLive } from '../../hooks/useGeminiLive'
 
 // Global Mood-Color Mapping from DESIGN_SYSTEM.md
@@ -233,11 +232,6 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
         .replace(/\*/g, '') // Remove all Markdown asterisks
 
       setTextMessages(prev => [...prev, { role: 'ai', content: cleanResponse }])
-
-      // 标记用户有新活动，用于 Emotion Report 缓存失效
-      if (userId) {
-        markUserActivity(userId)
-      }
     } catch (err) {
       console.error('Failed to get AI response:', err)
       // Show error message to user instead of fake fallback
@@ -267,9 +261,6 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
         try {
           // 调用 AI 生成日记 API - 会基于对话历史生成日记式的 summary
           await aiChatApi.generateDiary(sessionId, userId)
-
-          // 标记用户有新活动，用于 Emotion Report 缓存失效
-          markUserActivity(userId)
 
           if (onRefreshDiaries) {
             onRefreshDiaries()

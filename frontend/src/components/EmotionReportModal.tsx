@@ -85,46 +85,18 @@ const stripMarkdown = (text: string): string => {
     .replace(/`([^`]+)`/g, '$1')         // `code` -> code
 }
 
-// 缓存相关函数
-const getCacheKey = (userId: string, period: string) =>
-  `emotion_report_${userId}_${period}`
-
-const getLastActivityKey = (userId: string) =>
-  `emotion_last_activity_${userId}`
-
-// 记录用户最后活动时间（写日记、聊天等）
-export const markUserActivity = (userId: string) => {
-  try {
-    sessionStorage.setItem(getLastActivityKey(userId), Date.now().toString())
-  } catch {}
-}
-
-// 获取用户最后活动时间
-const getLastActivityTime = (userId: string): number => {
-  try {
-    const time = sessionStorage.getItem(getLastActivityKey(userId))
-    return time ? parseInt(time, 10) : 0
-  } catch {
-    return 0
-  }
+// 简化的会话缓存（仅用于秒开体验，后端已有数据库持久化）
+// 缓存 key 加入日期，确保每天自动使用新的 key（旧数据自动失效）
+const getCacheKey = (userId: string, period: string) => {
+  const today = new Date().toISOString().split('T')[0]  // "2026-01-26"
+  return `emotion_report_${userId}_${period}_${today}`
 }
 
 export const getCachedReport = (userId: string, period: string): EmotionReport | null => {
   try {
     const cached = sessionStorage.getItem(getCacheKey(userId, period))
     if (cached) {
-      const { data, timestamp } = JSON.parse(cached)
-      const lastActivity = getLastActivityTime(userId)
-
-      // 缓存有效条件：
-      // 1. 缓存时间在24小时内
-      // 2. 缓存时间晚于最后活动时间（没有新内容）
-      const isWithin24Hours = Date.now() - timestamp < 24 * 60 * 60 * 1000
-      const noNewContent = timestamp > lastActivity
-
-      if (isWithin24Hours && noNewContent) {
-        return data
-      }
+      return JSON.parse(cached)
     }
   } catch {}
   return null
@@ -132,10 +104,7 @@ export const getCachedReport = (userId: string, period: string): EmotionReport |
 
 export const setCachedReport = (userId: string, period: string, data: EmotionReport) => {
   try {
-    sessionStorage.setItem(getCacheKey(userId, period), JSON.stringify({
-      data,
-      timestamp: Date.now()
-    }))
+    sessionStorage.setItem(getCacheKey(userId, period), JSON.stringify(data))
   } catch {}
 }
 
@@ -238,7 +207,9 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
   const [error, setError] = useState<string | null>(null)
   // Persisted scores for consistent chart display across devices
   const [persistedScores, setPersistedScores] = useState<DailyEmotionScore[] | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  // Sync history state
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -297,33 +268,42 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
     }
   }
 
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
+  // Sync missing historical reports
+  const handleSyncHistory = async () => {
+    if (isSyncing) return
+    setIsSyncing(true)
+    setSyncMessage(null)
     try {
-      // 1. Refresh today's score in MongoDB
-      await aiChatApi.refreshTodayScore(userId)
-
-      // 2. Clear cache to force fresh AI report
-      try {
-        sessionStorage.removeItem(getCacheKey(userId, period))
-      } catch {}
-
-      // 3. Reload persisted scores for charts
-      if (period === 'weekly') {
-        const data = await aiChatApi.getWeeklyEmotionScores(userId)
-        setPersistedScores(data.scores)
-      } else if (period === 'monthly') {
-        const data = await aiChatApi.getMonthlyEmotionScores(userId)
-        setPersistedScores(data.scores)
+      // Daily: only sync yesterday (days=1), Weekly/Monthly: sync 7 days
+      const daysToSync = period === 'daily' ? 1 : 7
+      const result = await aiChatApi.syncHistoryReports(userId, daysToSync)
+      if (result.count > 0) {
+        setSyncMessage(`Synced ${result.count} day${result.count > 1 ? 's' : ''} of data`)
+        // Clear cache and reload
+        try {
+          sessionStorage.removeItem(getCacheKey(userId, period))
+        } catch {}
+        // Reload persisted scores
+        if (period === 'weekly') {
+          const data = await aiChatApi.getWeeklyEmotionScores(userId)
+          setPersistedScores(data.scores)
+        } else if (period === 'monthly') {
+          const data = await aiChatApi.getMonthlyEmotionScores(userId)
+          setPersistedScores(data.scores)
+        }
+        // Reload report
+        await loadReport(true)
+      } else {
+        setSyncMessage(period === 'daily' ? 'Yesterday\'s data up to date' : 'All data up to date')
       }
-
-      // 4. Reload AI report with forceRefresh
-      await loadReport(true)
+      // Clear message after 3 seconds
+      setTimeout(() => setSyncMessage(null), 3000)
     } catch (err) {
-      console.error('Failed to refresh report:', err)
+      console.error('Failed to sync history:', err)
+      setSyncMessage('Failed to sync')
+      setTimeout(() => setSyncMessage(null), 3000)
     } finally {
-      setIsRefreshing(false)
+      setIsSyncing(false)
     }
   }
 
@@ -339,9 +319,19 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
   // Format date range
   const formatDateRange = () => {
     if (!report) return ''
-    const start = new Date(report.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    const end = new Date(report.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    return `${start} - ${end}`
+    // Handle missing or invalid dates
+    if (!report.start_date || !report.end_date) return ''
+    try {
+      const startDate = new Date(report.start_date)
+      const endDate = new Date(report.end_date)
+      // Check for invalid dates
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return ''
+      const start = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const end = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return `${start} - ${end}`
+    } catch {
+      return ''
+    }
   }
 
   return createPortal(
@@ -378,24 +368,37 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                 </button>
               ))}
             </div>
-            {/* Refresh Button */}
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing || isLoading}
-              className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors disabled:opacity-50"
-              title={`Refresh ${period} report`}
-            >
-              <svg
-                className={`w-4 h-4 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
+            {/* Sync History Button - show for all tabs */}
+            <div className="flex flex-col items-center">
+              <button
+                onClick={handleSyncHistory}
+                disabled={isSyncing || isLoading}
+                className="px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                title={period === 'daily' ? "Sync yesterday's report" : "Sync missing historical data"}
               >
-                <path d="M23 4v6h-6M1 20v-6h6" />
-                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-              </svg>
-            </button>
+                {isSyncing ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M23 4v6h-6M1 20v-6h6" />
+                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                    </svg>
+                    <span>Syncing</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M23 4v6h-6M1 20v-6h6" />
+                      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                    </svg>
+                    <span>Sync</span>
+                  </>
+                )}
+              </button>
+              {/* Sync status message - below the button */}
+              {syncMessage && (
+                <p className="text-[9px] font-bold text-gray-500 mt-1 whitespace-nowrap">{syncMessage}</p>
+              )}
+            </div>
             {/* Close Button */}
             <button
               onClick={onClose}
@@ -430,23 +433,23 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-2xl p-4 text-center">
                   <span className="text-3xl">🎯</span>
-                  <p className="text-lg font-black mt-1">{Math.round(report.mood_stability * 100)}%</p>
+                  <p className="text-lg font-black mt-1">{Math.round((report.mood_stability ?? 0) * 100)}%</p>
                   <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Stability</p>
                 </div>
                 <div className="bg-gray-50 rounded-2xl p-4 text-center">
                   <span className="text-3xl">💬</span>
-                  <p className="text-lg font-black mt-1">{report.total_interactions}</p>
+                  <p className="text-lg font-black mt-1">{report.total_interactions ?? 0}</p>
                   <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Chats</p>
                 </div>
               </div>
 
               {/* Mood Trend - 根据 period 显示不同内容 */}
               {period === 'daily' ? (
-                // Daily: 当日情绪卡片（不显示曲线图）
-                report.emotion_trend?.data_points?.[0] && (
+                // Daily: 昨日情绪卡片（不显示曲线图）
+                report.emotion_trend?.data_points?.[0] ? (
                   <div className="bg-gray-50 rounded-2xl p-5">
                     <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-4">
-                      Today's Mood
+                      Yesterday's Mood
                     </h3>
                     <div className="flex items-center justify-center gap-4">
                       <div
@@ -464,6 +467,12 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
                         </p>
                       </div>
                     </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-2xl p-5 text-center">
+                    <span className="text-4xl mb-3 block">😴</span>
+                    <p className="text-sm font-bold text-gray-500">No activity yesterday</p>
+                    <p className="text-[11px] text-gray-400 mt-1">Chat with your companion to track your mood</p>
                   </div>
                 )
               ) : (

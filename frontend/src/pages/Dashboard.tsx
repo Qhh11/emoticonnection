@@ -6,7 +6,7 @@ import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import FisheyeSidebar from '../components/dashboard/FisheyeSidebar'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
-import EmotionReportModal, { markUserActivity, getCachedReport, setCachedReport } from '../components/EmotionReportModal'
+import EmotionReportModal, { getCachedReport, setCachedReport } from '../components/EmotionReportModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D, AVATARS_3D } from '../config/avatars'
 import avatarDialogue from '../config/avatarDialogue.json'
@@ -598,8 +598,6 @@ export default function Dashboard() {
           mood: entry.mood,
           color: entry.color  // Pass custom color for custom emotions
         })
-        // 标记用户活动，用于 Report 缓存判断
-        markUserActivity(user._id)
         // Refresh diaries from backend to get the saved entry with ID
         refreshDiaries()
       } catch (err) {
