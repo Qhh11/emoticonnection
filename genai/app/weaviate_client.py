@@ -4,6 +4,19 @@ from weaviate.classes.init import Auth
 from weaviate.client import WeaviateClient
 from typing import List, Dict, Any, Optional
 from weaviate.classes.query import MetadataQuery 
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load environment variables from project root .env
+_current_dir = Path(__file__).resolve().parent
+_project_root = _current_dir.parent.parent # assumes genai/app/weaviate_client.py
+_env_path = _project_root / ".env"
+
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path)
+else:
+    # Fallback to current directory for local testing
+    load_dotenv()
 
 class WeaviateManager:
     """

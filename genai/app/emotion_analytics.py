@@ -262,24 +262,26 @@ class EmotionAnalytics:
                     sort=wq.Sort.by_property("timestamp", ascending=True)
                 )
             
-            for obj in response.objects:
-                props = obj.properties
-                # 转换为统一格式，包含预标记的情感信息
-                conv = {
-                    'timestamp': props.get('timestamp', ''),
-                    'userQuery': props.get('content', ''),
-                    'llmResponse': '',  # 聊天消息没有AI回复
-                    'userId1': user_id,
-                    'userId2': props.get('sessionId', ''),  # 使用sessionId标识对话
-                    'source': 'chat_emotion',
-                    'primaryEmotion': props.get('primaryEmotion', ''),
-                    'primaryEmotionScore': props.get('primaryEmotionScore', 0),
-                    'secondaryEmotion': props.get('secondaryEmotion', ''),
-                    'secondaryEmotionScore': props.get('secondaryEmotionScore', 0)
-                }
-                all_conversations.append(conv)
-            
-            logger.info(f"Fetched {len(response.objects)} records from ChatEmotions")
+                for obj in response.objects:
+                    props = obj.properties
+                    # 转换为统一格式，包含预标记的情感信息
+                    conv = {
+                        'timestamp': props.get('timestamp', ''),
+                        'userQuery': props.get('content', ''),
+                        'llmResponse': '',  # 聊天消息没有AI回复
+                        'userId1': user_id,
+                        'userId2': props.get('sessionId', ''),  # 使用sessionId标识对话
+                        'source': 'chat_emotion',
+                        'primaryEmotion': props.get('primaryEmotion', ''),
+                        'primaryEmotionScore': props.get('primaryEmotionScore', 0),
+                        'secondaryEmotion': props.get('secondaryEmotion', ''),
+                        'secondaryEmotionScore': props.get('secondaryEmotionScore', 0)
+                    }
+                    all_conversations.append(conv)
+                
+                logger.info(f"Fetched {len(response.objects)} records from ChatEmotions")
+            else:
+                logger.info("ChatEmotions collection does not exist, skipping.")
                 
         except Exception as e:
             logger.warning(f"Error fetching from ChatEmotions: {e}")

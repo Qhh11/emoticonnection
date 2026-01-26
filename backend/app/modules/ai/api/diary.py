@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
@@ -240,7 +240,7 @@ async def get_daily_report(user_id: str, end_date: Optional[str] = None):
     """Generate daily emotion report for a user"""
     try:
         db = get_database()
-        utc_today = datetime.now(datetime.UTC).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
+        utc_today = datetime.now(timezone.utc).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
         cache_collection = db.report_cache
         
         # Check cache
@@ -259,7 +259,7 @@ async def get_daily_report(user_id: str, end_date: Optional[str] = None):
         # Save to cache
         await cache_collection.update_one(
             {"_id": cache_key},
-            {"$set": {"report": report_json, "created_at": datetime.now(datetime.UTC)}},
+            {"$set": {"report": report_json, "created_at": datetime.now(timezone.utc)}},
             upsert=True
         )
         return report_json
@@ -271,7 +271,7 @@ async def get_weekly_report(user_id: str, end_date: Optional[str] = None):
     """Generate weekly emotion report for a user"""
     try:
         db = get_database()
-        utc_today = datetime.now(datetime.UTC).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
+        utc_today = datetime.now(timezone.utc).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
         cache_collection = db.report_cache
         
         # Check cache
@@ -290,7 +290,7 @@ async def get_weekly_report(user_id: str, end_date: Optional[str] = None):
         # Save to cache
         await cache_collection.update_one(
             {"_id": cache_key},
-            {"$set": {"report": report_json, "created_at": datetime.now(datetime.UTC)}},
+            {"$set": {"report": report_json, "created_at": datetime.now(timezone.utc)}},
             upsert=True
         )
         return report_json
@@ -302,7 +302,7 @@ async def get_monthly_report(user_id: str, end_date: Optional[str] = None):
     """Generate monthly emotion report for a user"""
     try:
         db = get_database()
-        utc_today = datetime.now(datetime.UTC).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
+        utc_today = datetime.now(timezone.utc).strftime("%Y-%m-%d") if not end_date else end_date.split("T")[0]
         cache_collection = db.report_cache
         
         # Check cache
@@ -321,7 +321,7 @@ async def get_monthly_report(user_id: str, end_date: Optional[str] = None):
         # Save to cache
         await cache_collection.update_one(
             {"_id": cache_key},
-            {"$set": {"report": report_json, "created_at": datetime.now(datetime.UTC)}},
+            {"$set": {"report": report_json, "created_at": datetime.now(timezone.utc)}},
             upsert=True
         )
         return report_json
