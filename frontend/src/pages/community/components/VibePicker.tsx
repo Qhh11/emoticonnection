@@ -92,7 +92,8 @@ export default function VibePicker({ selectedVibe, onSelect, size = 'medium', cu
               key={vibe.id}
               onClick={() => {
                 setShowCustom(false)
-                onSelect(vibe.id, vibe.color)
+                // 预设情绪不传颜色，使用 MOOD_COLORS 统一显示
+                onSelect(vibe.id)
               }}
               className={`
                 relative flex flex-col items-center gap-1 p-2 rounded-2xl
