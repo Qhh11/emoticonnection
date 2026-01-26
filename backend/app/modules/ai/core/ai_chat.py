@@ -100,7 +100,12 @@ class AIChatService:
              return "AI 服务暂时不可用，请稍后再试。", history
 
         # 动态获取当前机器人的系统指令
-        system_instruction = get_persona_instruction(avatar_id) if avatar_id else self.system_instruction
+        if avatar_id:
+            system_instruction = get_persona_instruction(avatar_id)
+        else:
+            import inspect
+            system_instruction = inspect.cleandoc(self.system_instruction).strip()
+            system_instruction += "\n\nCRITICAL FORMATTING RULE: Do not use double newlines or empty lines between paragraphs. Use single newlines only for separation to keep chat bubbles compact."
         
         from google.genai import types
         
@@ -136,6 +141,15 @@ class AIChatService:
             
             response = chat.send_message(content_parts)
             
+            # Post-process response to remove all empty lines and excessive newlines
+            response_text = response.text
+            if response_text:
+                # Remove all empty lines and whitespace lines, join with single newline
+                lines = [line.strip() for line in response_text.splitlines() if line.strip()]
+                response_text = "\n".join(lines)
+            else:
+                response_text = "..."
+            
             # 获取更新后的历史，google-genai SDK 的 Chat 对象历史属性可能因版本而异
             # 探测可用属性: _curated_history, history, _history
             new_history_objects = []
@@ -151,10 +165,15 @@ class AIChatService:
                     if hasattr(item, 'parts'):
                         for p in item.parts:
                             if hasattr(p, 'text') and p.text:
-                                parts.append(p.text)
+                                text_part = p.text
+                                # Also clean history messages periodically to keep context compact
+                                if item.role == 'model' and text_part:
+                                    h_lines = [line.strip() for line in text_part.splitlines() if line.strip()]
+                                    text_part = "\n".join(h_lines)
+                                parts.append(text_part)
                     serializable_history.append({"role": getattr(item, 'role', 'unknown'), "parts": parts})
 
-            return response.text, serializable_history
+            return response_text, serializable_history
         except Exception as e:
             import traceback
             print(f"❌ Gemini Error: {e}")

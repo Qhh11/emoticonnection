@@ -4,9 +4,9 @@
  * 支持图片或渐变背景
  */
 
-import type { SpringOptions } from 'motion/react';
+import type { SpringOptions } from 'framer-motion';
 import { useRef, useState } from 'react';
-import { motion, useMotionValue, useSpring } from 'motion/react';
+import { motion, useMotionValue, useSpring } from 'framer-motion';
 import './TiltedCard.css';
 
 // SVG 滤镜定义组件 - 油画感效果

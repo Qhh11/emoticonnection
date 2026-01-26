@@ -187,7 +187,12 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
                             // 4. Handle Turn Complete
                             if (content.turnComplete) {
                                 if (currentAiTurnRef.current) {
-                                    setConversation(prev => [...prev, { role: 'ai', content: currentAiTurnRef.current }]);
+                                    const cleanText = currentAiTurnRef.current
+                                        .split('\n')
+                                        .map(l => l.trim())
+                                        .filter(l => l.length > 0)
+                                        .join('\n');
+                                    setConversation(prev => [...prev, { role: 'ai', content: cleanText }]);
                                     setTranscripts([]); // Clear real-time transcripts
                                     currentAiTurnRef.current = "";
                                 }

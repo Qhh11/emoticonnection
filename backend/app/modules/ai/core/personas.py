@@ -150,7 +150,18 @@ Stay within emotional support and reflective conversation. and If the user reque
 
 def get_persona_instruction(avatar_id: str) -> str:
     """Get the system instruction for a specific avatar ID"""
+    import inspect
+    
     persona = AVATAR_PERSONAS.get(avatar_id.lower())
     if persona:
-        return persona["system_instruction"]
-    return DEFAULT_SYSTEM_INSTRUCTION
+        instruction = persona["system_instruction"]
+    else:
+        instruction = DEFAULT_SYSTEM_INSTRUCTION
+        
+    # Standardize formatting: Dedent to remove leading whitespace and strip newlines
+    instruction = inspect.cleandoc(instruction).strip()
+    
+    # Add critical formatting rules to prevent UI issues (like double newlines)
+    formatting_rule = "\n\nCRITICAL FORMATTING RULE: Do not use double newlines or empty lines between paragraphs. Use single newlines only for separation to keep chat bubbles compact."
+    
+    return instruction + formatting_rule

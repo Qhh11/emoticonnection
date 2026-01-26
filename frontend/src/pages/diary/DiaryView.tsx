@@ -224,7 +224,14 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
         avatar_id: activeAvatar?.id
       })
 
-      setTextMessages(prev => [...prev, { role: 'ai', content: response.response }])
+      // Clean response content: remove empty lines and white space lines
+      const cleanResponse = response.response
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .join('\n')
+
+      setTextMessages(prev => [...prev, { role: 'ai', content: cleanResponse }])
 
       // 标记用户有新活动，用于 Emotion Report 缓存失效
       if (userId) {
