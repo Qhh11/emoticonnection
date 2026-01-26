@@ -435,7 +435,7 @@ export default function MatchingModal({
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-black tracking-tight">Find Your Echo</h2>
+              <h2 className="text-2xl font-black tracking-tight">FRIEND MATCHING</h2>
               <button
                 onClick={handleClose}
                 className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-all"
@@ -594,7 +594,7 @@ export default function MatchingModal({
                   disabled={!userId}
                   className="w-full py-4 bg-accent text-white rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl hover:opacity-90 transition-all flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span>Find Echoes</span>
+                  <span>Find Friends</span>
                   <span className="text-xl">⚡</span>
                 </button>
               </div>

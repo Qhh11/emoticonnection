@@ -36,14 +36,14 @@ function getMoodLabelFromCoordinate(x: number, y: number): string {
 
 // 计算动态背景颜色 - 双线性插值实现平滑过渡 (用于流体情绪映射场)
 // 返回十六进制颜色，便于添加透明度后缀
-// 颜色取自 8x8 网格的四个角落
+// 使用明亮鲜艳的颜色，确保中间区域也不会变暗
 function calculateDynamicBackground(x: number, y: number): string {
-  // 四个角的颜色 (RGB) - 取自 COLOR_GRID 的四个角
+  // 四个角的颜色 (RGB) - 使用更明亮鲜艳的颜色
   const colors = {
-    topLeft: { r: 211, g: 47, b: 47 },       // #D32F2F 红色 (愤怒/焦虑)
-    topRight: { r: 216, g: 176, b: 16 },     // #D8B010 金黄 (兴奋/快乐)
-    bottomLeft: { r: 40, g: 85, b: 160 },    // #2855A0 深蓝 (悲伤/疲惫)
-    bottomRight: { r: 86, g: 160, b: 60 },   // #56A03C 绿色 (平静/放松)
+    topLeft: { r: 239, g: 83, b: 80 },       // #EF5350 明亮红色 (愤怒/焦虑)
+    topRight: { r: 255, g: 213, b: 79 },     // #FFD54F 明亮金黄 (兴奋/快乐)
+    bottomLeft: { r: 100, g: 181, b: 246 },  // #64B5F6 明亮蓝色 (悲伤/疲惫)
+    bottomRight: { r: 129, g: 199, b: 132 }, // #81C784 明亮绿色 (平静/放松)
   }
 
   // 归一化坐标 (0-1)
@@ -189,8 +189,11 @@ function DiaryStackItem({ title, date, color, mood, accent, onClick }: DiaryStac
   return (
     <div
       onClick={onClick}
-      className="diary-item-pullable p-8 rounded-[2.5rem] border border-black/[0.05] shadow-xl flex flex-col justify-between cursor-pointer mb-[-60px] hover:scale-[1.02] transition-transform"
-      style={{ backgroundColor: color }}
+      className="diary-item-pullable p-8 rounded-[2.5rem] border border-black/[0.08] flex flex-col justify-between cursor-pointer mb-[-60px] hover:scale-[1.02] transition-transform"
+      style={{
+        backgroundColor: color,
+        boxShadow: '0 12px 32px -4px rgba(0, 0, 0, 0.25), 0 6px 12px -2px rgba(0, 0, 0, 0.15)'
+      }}
     >
       <div className="flex items-center space-x-4">
         <span className="text-[12px] font-black uppercase tracking-widest opacity-60" style={{ color: accent }}>{date}</span>
@@ -243,6 +246,8 @@ interface ProfileViewProps {
   weeklyReport?: EmotionReport | null
   persistedScores?: DailyEmotionScore[] | null
   onRefreshScores?: (scores: DailyEmotionScore[]) => void
+  showFluidBackground?: boolean
+  onToggleFluidBackground?: (show: boolean) => void
 }
 
 // Helper functions for emotion display
@@ -274,7 +279,7 @@ const getTrendLabel = (direction: string): string => {
   return 'Stable'
 }
 
-export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport, persistedScores, onRefreshScores }: ProfileViewProps) {
+export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport, persistedScores, onRefreshScores, showFluidBackground, onToggleFluidBackground }: ProfileViewProps) {
   const [isRefreshingScore, setIsRefreshingScore] = useState(false)
   const [showThemeSelector, setShowThemeSelector] = useState(false)
 
@@ -463,7 +468,21 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
               </button>
               {showThemeSelector && (
                 <div className="absolute right-0 mt-4 bg-white p-6 rounded-[2rem] shadow-2xl border border-black/5 z-[60] w-64 theme-panel-enter">
-                  <p className="text-[12px] font-black uppercase tracking-widest text-gray-300 mb-4 px-2">Atmosphere Sync</p>
+                  <div className="flex items-center justify-between mb-4 px-2">
+                    <p className="text-[12px] font-black uppercase tracking-widest text-gray-300">Atmosphere Sync</p>
+                    {/* Fluid Background Toggle */}
+                    {onToggleFluidBackground && (
+                      <button
+                        onClick={() => onToggleFluidBackground(!showFluidBackground)}
+                        className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${showFluidBackground ? 'bg-black' : 'bg-gray-200'}`}
+                        title={showFluidBackground ? 'Disable fluid background' : 'Enable fluid background'}
+                      >
+                        <div
+                          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${showFluidBackground ? 'translate-x-5' : 'translate-x-0'}`}
+                        />
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-5 gap-3">
                     {THEMES.map(t => (
                       <button key={t.name} onClick={() => { onThemeChange(t); setShowThemeSelector(false) }} className={`w-8 h-8 rounded-full transition-all ${currentTheme.name === t.name ? 'scale-125 ring-2 ring-offset-2 ring-black' : 'hover:scale-110'}`} style={{ backgroundColor: t.color }} title={t.name} />

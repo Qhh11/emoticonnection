@@ -37,7 +37,6 @@ export default function CreatePostModal({
   polishedContent,
   onPolishedContentConsumed,
 }: CreatePostModalProps) {
-  const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [selectedVibe, setSelectedVibe] = useState<string | null>(null)
   const [selectedVibeColor, setSelectedVibeColor] = useState<string | undefined>(undefined)
@@ -48,7 +47,6 @@ export default function CreatePostModal({
   const [error, setError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const titleInputRef = useRef<HTMLInputElement>(null)
 
   // Update content when polished content is received
   useEffect(() => {
@@ -102,11 +100,6 @@ export default function CreatePostModal({
 
   const handleSubmit = async () => {
     // 验证
-    if (!title.trim()) {
-      setError('Please add a title')
-      titleInputRef.current?.focus()
-      return
-    }
     if (!content.trim()) {
       setError('Please write something')
       return
@@ -121,7 +114,7 @@ export default function CreatePostModal({
 
     try {
       await onSubmit({
-        title: title.trim(),
+        title: '',  // 不再需要标题
         content: content.trim(),
         emotion: selectedVibe,
         emotionColor: selectedVibeColor,  // Pass custom color
@@ -130,7 +123,6 @@ export default function CreatePostModal({
       })
 
       // 重置表单
-      setTitle('')
       setContent('')
       setSelectedVibe(null)
       setSelectedVibeColor(undefined)
@@ -180,24 +172,6 @@ export default function CreatePostModal({
 
         {/* Content */}
         <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
-          {/* Title Input */}
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-              Title *
-            </label>
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={50}
-              placeholder="Give your post a title..."
-              className="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-transparent
-                focus:border-black focus:bg-white outline-none transition-all
-                text-sm font-bold placeholder:text-gray-400"
-            />
-          </div>
-
           {/* Content Input */}
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
@@ -318,7 +292,7 @@ export default function CreatePostModal({
         <div className="p-6 border-t border-gray-100">
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !title.trim() || !content.trim() || !selectedVibe}
+            disabled={isSubmitting || !content.trim() || !selectedVibe}
             className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest
               bg-gradient-to-r from-gray-900 to-gray-700 text-white
               hover:from-gray-800 hover:to-gray-600

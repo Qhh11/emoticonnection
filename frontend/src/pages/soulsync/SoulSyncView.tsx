@@ -973,7 +973,7 @@ export default function SoulSyncView({
       <section>
         <MeshGradientButton
           onClick={() => setShowMatchingModal(true)}
-          label="Find your echo"
+          label="FRIEND MATCHING"
           subtitle="Match with someone who vibes with you"
         />
       </section>
@@ -1055,7 +1055,7 @@ export default function SoulSyncView({
                 <span className="text-3xl">🌊</span>
               </div>
               <p className="text-gray-400 font-bold text-sm">No new connections</p>
-              <p className="text-gray-300 text-xs mt-1">Start matching to find your echoes!</p>
+              <p className="text-gray-300 text-xs mt-1">Start matching to find new friends!</p>
             </div>
           ) : (
             <div className="space-y-2">

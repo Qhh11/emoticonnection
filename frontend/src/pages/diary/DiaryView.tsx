@@ -438,14 +438,14 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                   <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                     <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[75%]`}>
                       {msg.role === 'ai' && (
-                        <span className="text-[9px] font-black uppercase text-white/40 mb-1 ml-3 tracking-widest">
+                        <span className="text-[9px] font-black uppercase text-gray-400 mb-1 ml-3 tracking-widest">
                           {activeAvatar.name}
                         </span>
                       )}
                       <div
                         className={`p-4 rounded-2xl ${msg.role === 'user'
-                          ? 'bg-white/20 text-white rounded-br-sm'
-                          : 'bg-white/10 text-white/90 rounded-bl-sm'
+                          ? 'bg-black text-white rounded-br-sm'
+                          : 'bg-white/60 text-gray-800 rounded-bl-sm'
                           }`}
                       >
                         <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -478,17 +478,17 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Share your thoughts..."
-                      className="w-full px-5 py-3 bg-white/10 backdrop-blur-sm rounded-full border border-white/10 focus:outline-none focus:border-white/30 text-white text-sm font-bold placeholder:text-white/30"
+                      className="w-full px-5 py-3 bg-white/80 backdrop-blur-sm rounded-full border border-gray-200 focus:outline-none focus:border-gray-300 text-gray-800 text-sm font-bold placeholder:text-gray-400"
                     />
                   </div>
 
                   {/* Voice button - switches to voice mode */}
                   <button
                     onClick={switchToVoiceMode}
-                    className="w-12 h-12 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-all hover:scale-105 active:scale-95"
+                    className="w-12 h-12 rounded-full flex items-center justify-center bg-white/80 hover:bg-white transition-all hover:scale-105 active:scale-95 shadow-lg"
                     title="Switch to voice mode"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#333">
                       <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
                       <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
                     </svg>
@@ -556,7 +556,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
 
                 {/* Status text */}
                 <div className="text-center mb-6">
-                  <p className="text-white/60 text-sm font-bold uppercase tracking-widest">
+                  <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">
                     {voiceStatus === 'idle' && 'Tap to start conversation'}
                     {voiceStatus === 'connecting' && 'Connecting...'}
                     {voiceStatus === 'connected' && (
@@ -571,10 +571,10 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 {/* Latest AI response (shown during conversation) */}
                 {transcript && voiceStatus === 'connected' && (
                   <div className="w-full max-w-md text-center animate-in fade-in duration-300">
-                    <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
                       {activeAvatar.name}
                     </p>
-                    <p className="text-white text-base font-bold leading-relaxed">
+                    <p className="text-gray-800 text-base font-bold leading-relaxed">
                       {transcript}
                     </p>
                   </div>
@@ -583,10 +583,10 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 {/* Show last message when idle */}
                 {latestAiMessage && voiceStatus === 'idle' && (
                   <div className="w-full max-w-md text-center animate-in fade-in duration-500">
-                    <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
                       {activeAvatar.name}
                     </p>
-                    <p className="text-white text-base font-bold leading-relaxed">
+                    <p className="text-gray-800 text-base font-bold leading-relaxed">
                       {latestAiMessage}
                     </p>
                   </div>
@@ -670,9 +670,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
           <button
             onClick={handleSaveReflection}
             disabled={isSaving || textMessages.length < 2}
-            className={`px-6 py-2 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg ${saveSuccess
-              ? 'bg-green-500 text-white'
-              : 'bg-accent text-accent-inverse'
+            className={`px-8 py-3 rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all ${saveSuccess
+              ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
+              : 'bg-white text-gray-800 shadow-xl border border-gray-200'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save'}
@@ -727,7 +727,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Share your thoughts..."
-                className="flex-1 px-6 py-4 bg-gray-50 rounded-full border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                className="flex-1 px-6 py-4 bg-gray-100 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent text-gray-800 text-sm font-bold placeholder:text-gray-400"
               />
               <button onClick={handleSend} disabled={!input.trim() || isLoading} className="w-12 h-12 bg-accent text-accent-inverse rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

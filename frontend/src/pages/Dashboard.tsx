@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-// import FluidBackground from '../components/FluidBackground'
+import FluidBackground from '../components/FluidBackground'
 import AvatarGallery from '../components/dashboard/AvatarGallery'
 import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import FisheyeSidebar from '../components/dashboard/FisheyeSidebar'
@@ -97,6 +97,12 @@ export default function Dashboard() {
     coordinate_y?: number
     emoji?: string
   } | null>(null)
+
+  // Fluid background toggle state
+  const [showFluidBackground, setShowFluidBackground] = useState(() => {
+    const saved = localStorage.getItem('showFluidBackground')
+    return saved === 'true'
+  })
 
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false)
@@ -871,6 +877,11 @@ export default function Dashboard() {
           weeklyReport={weeklyReport}
           persistedScores={persistedScores}
           onRefreshScores={(scores) => setPersistedScores(scores)}
+          showFluidBackground={showFluidBackground}
+          onToggleFluidBackground={(show) => {
+            setShowFluidBackground(show)
+            localStorage.setItem('showFluidBackground', String(show))
+          }}
         />
       case 'diary':
         return (
@@ -946,7 +957,7 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen text-[#121212] overflow-hidden relative">
       {/* 主题色渐变背景 - 匹配当前系统颜色 */}
-      {/* <FluidBackground themeColor={currentTheme.color} /> */}
+      {showFluidBackground && <FluidBackground themeColor={currentTheme.color} />}
       <FisheyeSidebar
         items={[
           { id: 'community', icon: <CommunityIcon />, label: 'community', active: activeTab === 'community', onClick: () => setActiveTab('community') },

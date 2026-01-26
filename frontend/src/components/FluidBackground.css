@@ -1,0 +1,81 @@
+/* FluidBackground - 流动动画样式 */
+
+.fluid-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  will-change: transform;
+}
+
+/* Blob 1 - 左上 */
+.fluid-blob-1 {
+  width: 60vw;
+  height: 60vh;
+  top: -20%;
+  left: -20%;
+  animation: fluid-flow-1 8s ease-in-out infinite;
+}
+
+/* Blob 2 - 右下 */
+.fluid-blob-2 {
+  width: 50vw;
+  height: 50vh;
+  bottom: -15%;
+  right: -15%;
+  animation: fluid-flow-2 10s ease-in-out infinite;
+}
+
+/* Blob 3 - 右上 */
+.fluid-blob-3 {
+  width: 40vw;
+  height: 40vh;
+  top: 5%;
+  right: -10%;
+  animation: fluid-flow-3 12s ease-in-out infinite;
+}
+
+/* Blob 4 - 左下 */
+.fluid-blob-4 {
+  width: 35vw;
+  height: 35vh;
+  bottom: 10%;
+  left: -5%;
+  animation: fluid-flow-4 9s ease-in-out infinite;
+}
+
+/* 流动动画 - 大幅度移动 */
+@keyframes fluid-flow-1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(50%, 40%) scale(1.15);
+  }
+}
+
+@keyframes fluid-flow-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-45%, -50%) scale(1.2);
+  }
+}
+
+@keyframes fluid-flow-3 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-55%, 35%) scale(1.15);
+  }
+}
+
+@keyframes fluid-flow-4 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(50%, -45%) scale(1.25);
+  }
+}

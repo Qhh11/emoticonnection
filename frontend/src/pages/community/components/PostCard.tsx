@@ -53,9 +53,6 @@ function formatDate(dateString: string) {
   return `${month}/${day}`
 }
 
-// 文字帖子统一使用浅灰背景
-const TEXT_POST_BG = '#E8E8E8'
-
 export default function PostCard({ post, onClick }: PostCardProps) {
   const emotion = post.emotion || post.ai_emotion
   const colors = getMoodColors(emotion, post.emotion_color)
@@ -63,7 +60,8 @@ export default function PostCard({ post, onClick }: PostCardProps) {
   const authorName = post.is_anonymous ? 'Anonymous' : (post.author_name || 'User')
   const authorInitial = post.is_anonymous ? '?' : (post.author_name?.charAt(0).toUpperCase() || 'U')
 
-  const captionText = `${post.title || 'Untitled'} - ${emotion || 'Mood'}`
+  // 文字帖子使用情绪颜色作为背景
+  const textPostBg = colors.bg
 
   // 计算文字帖子高度和行数：基于内容长度
   const getTextPostConfig = () => {
@@ -84,17 +82,16 @@ export default function PostCard({ post, onClick }: PostCardProps) {
     }}>
       <TiltedCard
         imageSrc={hasImage ? getMediaUrl(post.media_urls![0]) : undefined}
-        gradientBg={!hasImage ? TEXT_POST_BG : undefined}
-        useGlassmorphism={true}
+        gradientBg={!hasImage ? textPostBg : undefined}
+        useGlassmorphism={!!hasImage}
         blurContent={false}
         blurAmount={0}
         showGrain={true}
         showBorder={true}
         showOilPaint={false}
-        captionText={captionText}
         rotateAmplitude={12}
         scaleOnHover={1.05}
-        showTooltip
+        showTooltip={false}
         displayOverlayContent
         borderRadius={12}
         onClick={onClick}
@@ -132,7 +129,6 @@ interface PostOverlayProps {
 }
 
 function PostOverlay({
-  title,
   emotionColor,
   emotionLabel,
   content,
@@ -143,14 +139,12 @@ function PostOverlay({
   date,
   hasImage,
 }: PostOverlayProps) {
-  // 底部信息栏高度（标题 + 用户信息）
-  const bottomBarHeight = 70
+  // 底部信息栏高度（用户信息）
+  const bottomBarHeight = 60
 
-  // 文字帖子：浅灰背景用黑色文字；图片帖子：深色渐变背景用白色文字
-  const isTextPost = !hasImage
-  const textColor = isTextPost ? '#121212' : '#ffffff'
-  const textColorSecondary = isTextPost ? 'rgba(18,18,18,0.85)' : 'rgba(255,255,255,0.9)'
-  const textColorTertiary = isTextPost ? 'rgba(18,18,18,0.6)' : 'rgba(255,255,255,0.75)'
+  // 统一使用白色底部区域，黑色文字
+  const textColorSecondary = 'rgba(18,18,18,0.85)'
+  const textColorTertiary = 'rgba(18,18,18,0.6)'
 
   return (
     <div
@@ -196,38 +190,19 @@ function PostOverlay({
         </div>
       )}
 
-      {/* 底部信息区 - 固定在底部 */}
-      {/* 图片帖子：深色渐变背景；文字帖子：浅色渐变背景 */}
+      {/* 底部信息区 - 固定在底部，统一透明模糊渐变 */}
       <div
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
-          padding: '12px 16px',
-          background: isTextPost
-            ? 'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 70%, transparent 100%)'
-            : 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+          padding: '14px 16px',
+          background: 'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.5) 70%, rgba(255,255,255,0.2) 85%, transparent 100%)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
         }}
       >
-        {/* 标题 */}
-        <h3
-          style={{
-            margin: 0,
-            marginBottom: '8px',
-            fontSize: '15px',
-            fontWeight: 600,
-            color: textColor,
-            fontFamily: 'Outfit, system-ui, sans-serif',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            textShadow: isTextPost ? 'none' : '0 1px 3px rgba(0,0,0,0.5)'
-          }}
-        >
-          {title || 'Untitled'}
-        </h3>
-
         {/* 用户信息和日期 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* 用户信息 */}
