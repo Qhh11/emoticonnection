@@ -6,7 +6,7 @@ import AvatarCompanion from '../components/dashboard/AvatarCompanion'
 import FisheyeSidebar from '../components/dashboard/FisheyeSidebar'
 import UserProfileModal from '../components/UserProfileModal'
 import FollowListModal from '../components/FollowListModal'
-import EmotionReportModal, { getCachedReport, setCachedReport } from '../components/EmotionReportModal'
+import EmotionReportModal, { getCachedReport, setCachedReport, getCachedScores, setCachedScores } from '../components/EmotionReportModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { Avatar3D, AVATARS_3D } from '../config/avatars'
 import avatarDialogue from '../config/avatarDialogue.json'
@@ -540,10 +540,18 @@ export default function Dashboard() {
           .catch(err => console.error('Failed to fetch weekly report:', err))
       }
 
-      // 加载持久化的每日情绪分数（用于柱状图，保证跨设备一致）
-      aiChatApi.getWeeklyEmotionScores(user._id)
-        .then(data => setPersistedScores(data.scores))
-        .catch(err => console.error('Failed to fetch emotion scores:', err))
+      // 加载持久化的每日情绪分数（用于柱状图，保证跨设备一致）- 先检查缓存
+      const cachedScores = getCachedScores(user._id, 'weekly')
+      if (cachedScores) {
+        setPersistedScores(cachedScores)
+      } else {
+        aiChatApi.getWeeklyEmotionScores(user._id)
+          .then(data => {
+            setPersistedScores(data.scores)
+            setCachedScores(user._id, 'weekly', data.scores)
+          })
+          .catch(err => console.error('Failed to fetch emotion scores:', err))
+      }
     }
   }, [user?._id])
 
@@ -1058,6 +1066,7 @@ export default function Dashboard() {
           isOpen={showEmotionReport}
           onClose={() => setShowEmotionReport(false)}
           userId={user._id}
+          onRefreshScores={(scores) => setPersistedScores(scores)}
         />
       )}
 

@@ -108,6 +108,48 @@ export const setCachedReport = (userId: string, period: string, data: EmotionRep
   } catch {}
 }
 
+// Scores 缓存（用于 persistedScores，避免重复调用 API）
+const getScoresCacheKey = (userId: string, period: string) => {
+  const today = new Date().toISOString().split('T')[0]
+  return `emotion_scores_${userId}_${period}_${today}`
+}
+
+export const getCachedScores = (userId: string, period: string): DailyEmotionScore[] | null => {
+  try {
+    const cached = sessionStorage.getItem(getScoresCacheKey(userId, period))
+    if (cached) {
+      return JSON.parse(cached)
+    }
+  } catch {}
+  return null
+}
+
+export const setCachedScores = (userId: string, period: string, scores: DailyEmotionScore[]) => {
+  try {
+    sessionStorage.setItem(getScoresCacheKey(userId, period), JSON.stringify(scores))
+  } catch {}
+}
+
+// 清理过期的 sessionStorage 缓存（只保留今天的 key）
+const cleanupOldCaches = () => {
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const keysToRemove: string[] = []
+
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i)
+      if (key && (key.startsWith('emotion_report_') || key.startsWith('emotion_scores_'))) {
+        // 检查 key 是否包含今天的日期
+        if (!key.includes(today)) {
+          keysToRemove.push(key)
+        }
+      }
+    }
+
+    keysToRemove.forEach(key => sessionStorage.removeItem(key))
+  } catch {}
+}
+
 // 生成完整时间轴数据（补全没有数据的日期/周）
 type TimelineDataPoint = { date: string; avg_score: number | null; dominant_emotion: string | null }
 
@@ -196,11 +238,12 @@ interface EmotionReportModalProps {
   isOpen: boolean
   onClose: () => void
   userId: string
+  onRefreshScores?: (scores: DailyEmotionScore[]) => void  // 通知父组件更新 scores
 }
 
 type ReportPeriod = 'daily' | 'weekly' | 'monthly'
 
-export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionReportModalProps) {
+export default function EmotionReportModal({ isOpen, onClose, userId, onRefreshScores }: EmotionReportModalProps) {
   const [period, setPeriod] = useState<ReportPeriod>('weekly')
   const [report, setReport] = useState<EmotionReport | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -213,16 +256,31 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
 
   useEffect(() => {
     if (isOpen && userId) {
+      // 清理过期的缓存 key
+      cleanupOldCaches()
+
       loadReport()
-      // Load persisted scores for weekly/monthly charts
-      if (period === 'weekly') {
-        aiChatApi.getWeeklyEmotionScores(userId)
-          .then(data => setPersistedScores(data.scores))
-          .catch(err => console.error('Failed to fetch persisted scores:', err))
-      } else if (period === 'monthly') {
-        aiChatApi.getMonthlyEmotionScores(userId)
-          .then(data => setPersistedScores(data.scores))
-          .catch(err => console.error('Failed to fetch persisted scores:', err))
+
+      // Load persisted scores for weekly/monthly charts (先检查缓存)
+      if (period === 'weekly' || period === 'monthly') {
+        const cachedScores = getCachedScores(userId, period)
+        if (cachedScores) {
+          // 有缓存直接使用，不调用 API
+          setPersistedScores(cachedScores)
+        } else {
+          // 无缓存才调用 API
+          const fetchScores = period === 'weekly'
+            ? aiChatApi.getWeeklyEmotionScores(userId)
+            : aiChatApi.getMonthlyEmotionScores(userId)
+
+          fetchScores
+            .then(data => {
+              setPersistedScores(data.scores)
+              // 缓存结果
+              setCachedScores(userId, period, data.scores)
+            })
+            .catch(err => console.error('Failed to fetch persisted scores:', err))
+        }
       } else {
         setPersistedScores(null)
       }
@@ -243,19 +301,25 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
     }
 
     // 2. 无缓存或强制刷新时调用 API
+    // forceRefresh 传递给后端，跳过 MongoDB 缓存强制 GenAI 重新生成
     setIsLoading(true)
     try {
       let rawData: EmotionReport | string
       switch (period) {
         case 'daily':
-          rawData = await aiChatApi.getDailyReport(userId)
+          rawData = await aiChatApi.getDailyReport(userId, forceRefresh)
           break
         case 'weekly':
-          rawData = await aiChatApi.getWeeklyReport(userId)
+          rawData = await aiChatApi.getWeeklyReport(userId, forceRefresh)
           break
         case 'monthly':
-          rawData = await aiChatApi.getMonthlyReport(userId)
+          rawData = await aiChatApi.getMonthlyReport(userId, forceRefresh)
           break
+        default: {
+          // Exhaustive check - this should never happen
+          const _exhaustiveCheck: never = period
+          throw new Error(`Unknown period: ${_exhaustiveCheck}`)
+        }
       }
       const data: EmotionReport = typeof rawData === 'string' ? JSON.parse(rawData) : rawData
       setReport(data)
@@ -268,7 +332,7 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
     }
   }
 
-  // Sync missing historical reports
+  // Sync missing historical scores and get report in one API call
   const handleSyncHistory = async () => {
     if (isSyncing) return
     setIsSyncing(true)
@@ -276,25 +340,41 @@ export default function EmotionReportModal({ isOpen, onClose, userId }: EmotionR
     try {
       // Daily: only sync yesterday (days=1), Weekly/Monthly: sync 7 days
       const daysToSync = period === 'daily' ? 1 : 7
-      const result = await aiChatApi.syncHistoryReports(userId, daysToSync)
+      // Pass report_type to get the report directly from sync-history (one API call instead of two)
+      const result = await aiChatApi.syncHistoryReports(userId, daysToSync, period)
+
+      // Clear caches regardless of sync result
+      try {
+        sessionStorage.removeItem(getCacheKey(userId, period))
+        sessionStorage.removeItem(getScoresCacheKey(userId, period))
+      } catch {}
+
+      // Reload persisted scores and update cache
+      if (period === 'weekly' || period === 'monthly') {
+        const fetchScores = period === 'weekly'
+          ? aiChatApi.getWeeklyEmotionScores(userId)
+          : aiChatApi.getMonthlyEmotionScores(userId)
+        const data = await fetchScores
+        setPersistedScores(data.scores)
+        setCachedScores(userId, period, data.scores)
+        // 通知 Dashboard 更新 ProfileView 的 Emotion Insight
+        if (period === 'weekly') {
+          onRefreshScores?.(data.scores)
+        }
+      }
+
+      // Use the report directly returned from sync-history (no extra API call needed!)
+      if (result.report) {
+        const data: EmotionReport = typeof result.report === 'string' ? JSON.parse(result.report) : result.report
+        setReport(data)
+        setCachedReport(userId, period, data)
+      }
+
+      // Show appropriate message
       if (result.count > 0) {
         setSyncMessage(`Synced ${result.count} day${result.count > 1 ? 's' : ''} of data`)
-        // Clear cache and reload
-        try {
-          sessionStorage.removeItem(getCacheKey(userId, period))
-        } catch {}
-        // Reload persisted scores
-        if (period === 'weekly') {
-          const data = await aiChatApi.getWeeklyEmotionScores(userId)
-          setPersistedScores(data.scores)
-        } else if (period === 'monthly') {
-          const data = await aiChatApi.getMonthlyEmotionScores(userId)
-          setPersistedScores(data.scores)
-        }
-        // Reload report
-        await loadReport(true)
       } else {
-        setSyncMessage(period === 'daily' ? 'Yesterday\'s data up to date' : 'All data up to date')
+        setSyncMessage('All data up to date')
       }
       // Clear message after 3 seconds
       setTimeout(() => setSyncMessage(null), 3000)

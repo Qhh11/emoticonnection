@@ -685,27 +685,29 @@ export const aiChatApi = {
 
   // Emotion Reports
   // 自动计算用户本地时区的"昨天"日期传给后端
-  getDailyReport: (userId: string) => {
+  // forceRefresh: 跳过后端 MongoDB 缓存，强制 GenAI 重新生成
+  getDailyReport: (userId: string, forceRefresh: boolean = false) => {
     const yesterday = getLocalYesterday()
-    return request<EmotionReport>(`/api/diary/reports/daily?user_id=${userId}&target_date=${yesterday}`)
+    return request<EmotionReport>(`/api/diary/reports/daily?user_id=${userId}&target_date=${yesterday}&force_refresh=${forceRefresh}`)
   },
 
-  getWeeklyReport: (userId: string) => {
+  getWeeklyReport: (userId: string, forceRefresh: boolean = false) => {
     const yesterday = getLocalYesterday()
-    return request<EmotionReport>(`/api/diary/reports/weekly?user_id=${userId}&target_date=${yesterday}`)
+    return request<EmotionReport>(`/api/diary/reports/weekly?user_id=${userId}&target_date=${yesterday}&force_refresh=${forceRefresh}`)
   },
 
-  getMonthlyReport: (userId: string) => {
+  getMonthlyReport: (userId: string, forceRefresh: boolean = false) => {
     const yesterday = getLocalYesterday()
-    return request<EmotionReport>(`/api/diary/reports/monthly?user_id=${userId}&target_date=${yesterday}`)
+    return request<EmotionReport>(`/api/diary/reports/monthly?user_id=${userId}&target_date=${yesterday}&force_refresh=${forceRefresh}`)
   },
 
   // Sync missing historical reports
   // 从用户本地昨天开始往前 sync
-  syncHistoryReports: (userId: string, days: number = 7) => {
+  // reportType: 直接返回对应类型的 report，避免二次 API 调用
+  syncHistoryReports: (userId: string, days: number = 7, reportType: 'daily' | 'weekly' | 'monthly' = 'daily') => {
     const yesterday = getLocalYesterday()
-    return request<{ synced_dates: string[]; skipped_dates: string[]; count: number }>(
-      `/api/diary/reports/sync-history?user_id=${userId}&days=${days}&start_from=${yesterday}`,
+    return request<{ synced_dates: string[]; skipped_dates: string[]; count: number; report: EmotionReport | null }>(
+      `/api/diary/reports/sync-history?user_id=${userId}&days=${days}&start_from=${yesterday}&report_type=${reportType}`,
       { method: 'POST' }
     )
   },

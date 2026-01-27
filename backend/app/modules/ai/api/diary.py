@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
@@ -264,25 +265,27 @@ def _get_default_yesterday() -> str:
 async def get_daily_report(
     user_id: str,
     target_date: str = Query(default=None, description="Target date in YYYY-MM-DD format (user's local yesterday)"),
+    force_refresh: bool = Query(default=False, description="Force regenerate report, skipping DB cache"),
     report_repo: EmotionReportRepository = Depends(get_emotion_report_repo)
 ):
     """
     获取指定日期的 daily report
 
     - 前端传入用户本地时区的"昨天"日期
-    - 如果报告已存在，直接返回（不调用 GenAI）
-    - 如果不存在，调用 GenAI 生成并持久化存储
+    - 如果报告已存在且 force_refresh=False，直接返回（不调用 GenAI）
+    - 如果不存在或 force_refresh=True，调用 GenAI 生成并持久化存储
     """
     try:
         # 使用前端传入的日期，或默认 UTC 昨天
         report_date = target_date or _get_default_yesterday()
 
-        # 1. 检查报告是否已存在
-        existing = await report_repo.get_report(user_id, "daily", report_date)
-        if existing:
-            return existing["report_data"]
+        # 1. 检查报告是否已存在（仅在非强制刷新时检查）
+        if not force_refresh:
+            existing = await report_repo.get_report(user_id, "daily", report_date)
+            if existing:
+                return existing["report_data"]
 
-        # 2. 不存在 → 调用 GenAI 生成报告
+        # 2. 不存在或强制刷新 → 调用 GenAI 生成报告
         # 使用完整的 ISO 时间范围：目标日 00:00:00Z 到 23:59:59Z
         emotion_analytics = _load_emotion_analytics()
         report = emotion_analytics.generate_daily_emotion_report(
@@ -303,6 +306,7 @@ async def get_daily_report(
 async def get_weekly_report(
     user_id: str,
     target_date: str = Query(default=None, description="End date in YYYY-MM-DD format (user's local yesterday)"),
+    force_refresh: bool = Query(default=False, description="Force regenerate report, skipping DB cache"),
     report_repo: EmotionReportRepository = Depends(get_emotion_report_repo)
 ):
     """
@@ -311,17 +315,19 @@ async def get_weekly_report(
     - 前端传入用户本地时区的"昨天"日期作为 end_date
     - 报告范围：target_date 往前 6 天（共 7 天）
     - 缓存 key 用 target_date，确保每天只生成一次
+    - force_refresh=True 时跳过 DB 缓存，强制调用 GenAI 重新生成
     """
     try:
         # 使用前端传入的日期，或默认 UTC 昨天
         report_date = target_date or _get_default_yesterday()
 
-        # 1. 检查报告是否已存在
-        existing = await report_repo.get_report(user_id, "weekly", report_date)
-        if existing:
-            return existing["report_data"]
+        # 1. 检查报告是否已存在（仅在非强制刷新时检查）
+        if not force_refresh:
+            existing = await report_repo.get_report(user_id, "weekly", report_date)
+            if existing:
+                return existing["report_data"]
 
-        # 2. 不存在 → 调用 GenAI 生成报告
+        # 2. 不存在或强制刷新 → 调用 GenAI 生成报告
         # 使用完整的 ISO 时间范围：end_date = target_date 23:59:59Z
         emotion_analytics = _load_emotion_analytics()
         report = emotion_analytics.generate_weekly_emotion_report(
@@ -341,6 +347,7 @@ async def get_weekly_report(
 async def get_monthly_report(
     user_id: str,
     target_date: str = Query(default=None, description="End date in YYYY-MM-DD format (user's local yesterday)"),
+    force_refresh: bool = Query(default=False, description="Force regenerate report, skipping DB cache"),
     report_repo: EmotionReportRepository = Depends(get_emotion_report_repo)
 ):
     """
@@ -349,17 +356,19 @@ async def get_monthly_report(
     - 前端传入用户本地时区的"昨天"日期作为 end_date
     - 报告范围：target_date 往前 4 周
     - 缓存 key 用 target_date，确保每天只生成一次
+    - force_refresh=True 时跳过 DB 缓存，强制调用 GenAI 重新生成
     """
     try:
         # 使用前端传入的日期，或默认 UTC 昨天
         report_date = target_date or _get_default_yesterday()
 
-        # 1. 检查报告是否已存在
-        existing = await report_repo.get_report(user_id, "monthly", report_date)
-        if existing:
-            return existing["report_data"]
+        # 1. 检查报告是否已存在（仅在非强制刷新时检查）
+        if not force_refresh:
+            existing = await report_repo.get_report(user_id, "monthly", report_date)
+            if existing:
+                return existing["report_data"]
 
-        # 2. 不存在 → 调用 GenAI 生成报告
+        # 2. 不存在或强制刷新 → 调用 GenAI 生成报告
         # 使用完整的 ISO 时间范围：end_date = target_date 23:59:59Z
         emotion_analytics = _load_emotion_analytics()
         report = emotion_analytics.generate_monthly_emotion_report(
@@ -378,63 +387,117 @@ async def get_monthly_report(
 @router.post("/reports/sync-history")
 async def sync_history_reports(
     user_id: str,
-    days: int = Query(default=7, ge=1, le=30),
+    days: int = Query(default=7, ge=1, le=30, description="Deprecated, kept for API compatibility"),
     start_from: str = Query(default=None, description="Start date in YYYY-MM-DD format (user's local yesterday)"),
-    report_repo: EmotionReportRepository = Depends(get_emotion_report_repo)
+    report_type: str = Query(default="weekly", description="Report type: daily, weekly, or monthly"),
+    report_repo: EmotionReportRepository = Depends(get_emotion_report_repo),
+    daily_score_repo: DailyEmotionRepository = Depends(get_daily_emotion_repo)
 ):
+    # Note: 'days' parameter is kept for API compatibility but no longer used
+    # Weekly report automatically covers 7 days, monthly covers ~28 days
+    _ = days  # Suppress unused warning
     """
-    检查并补全过去 N 天缺失的 daily reports
+    高效同步：只调用一次 GenAI 生成 weekly/monthly report，从中提取缺失的 daily scores
 
     逻辑：
-    1. 从 start_from（用户本地昨天）开始往前遍历 N 天
-    2. 检查 emotion_reports 是否已有该日报告
-    3. 如果没有，直接调用 GenAI 生成报告（GenAI 内部会查询 Weaviate）
-    4. 检查 total_interactions > 0，有数据才存储
-    5. 返回补全的日期列表
+    1. 调用一次 GenAI 生成 weekly/monthly report
+    2. 从 report 的 emotion_trend.data_points 提取每日分数
+    3. 将缺失的分数写入 daily_emotion_scores
+    4. 返回 report 供前端直接使用
+
+    这样无论缺多少天数据，都只需要 1 次 GenAI 调用！
     """
     try:
         synced_dates = []
-        skipped_dates = []
+        report_date = start_from or _get_default_yesterday()
+        real_utc_today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-        # 使用前端传入的日期作为起点，或默认 UTC 昨天
-        base_date_str = start_from or _get_default_yesterday()
-        year, month, day = map(int, base_date_str.split("-"))
-        base_date = datetime(year, month, day, tzinfo=timezone.utc)
+        # 1. 生成 report（只调用一次 GenAI）
+        emotion_analytics = _load_emotion_analytics()
 
-        for i in range(days):  # 从 base_date 开始往前
-            target_date = (base_date - timedelta(days=i)).strftime("%Y-%m-%d")
+        if report_type == "daily":
+            report = emotion_analytics.generate_daily_emotion_report(
+                user_id=user_id,
+                start_date=_to_iso_start_of_day(report_date),
+                end_date=_to_iso_end_of_day(report_date)
+            )
+        elif report_type == "weekly":
+            report = emotion_analytics.generate_weekly_emotion_report(
+                user_id=user_id,
+                end_date=_to_iso_end_of_day(report_date)
+            )
+        else:  # monthly
+            report = emotion_analytics.generate_monthly_emotion_report(
+                user_id=user_id,
+                end_date=_to_iso_end_of_day(report_date)
+            )
 
-            # 1. 检查报告是否已存在
-            existing = await report_repo.get_report(user_id, "daily", target_date)
-            if existing:
-                continue  # 已有报告，跳过
+        report_json_str = emotion_analytics.EmotionAnalytics.to_json(report)
+        report_json = json.loads(report_json_str) if isinstance(report_json_str, str) else report_json_str
 
-            # 2. 直接调用 GenAI 生成报告（GenAI 会查询 Weaviate）
-            try:
-                emotion_analytics = _load_emotion_analytics()
-                report = emotion_analytics.generate_daily_emotion_report(
+        # 2. 保存 report 到 DB
+        await report_repo.save_report(user_id, report_type, report_date, report_json)
+
+        # 3. 从 report 提取 daily scores 并同步到 daily_emotion_scores
+        data_points = report_json.get("emotion_trend", {}).get("data_points", [])
+
+        for dp in data_points:
+            if not isinstance(dp, dict):
+                continue
+
+            # 提取日期（支持 "2026-01-26" 或 "2026-01-26T00:00:00Z" 格式）
+            date_str = dp.get("date", "").split("T")[0]
+            if not date_str:
+                continue
+
+            # 检查该日期的 score 是否已存在
+            existing_score = await daily_score_repo.get_score_for_date(user_id, date_str)
+            if existing_score:
+                continue  # 已存在，跳过
+
+            # 提取分数数据
+            avg_score = dp.get("avg_score", 0.0)
+            dominant_emotion = dp.get("dominant_emotion", "neutral")
+            interaction_count = dp.get("count", 1)
+
+            # 写入 daily_emotion_scores
+            await daily_score_repo.bulk_insert_scores(
+                user_id=user_id,
+                scores=[{
+                    "utc_date": date_str,
+                    "avg_score": avg_score,
+                    "dominant_emotion": dominant_emotion,
+                    "interaction_count": interaction_count
+                }],
+                utc_today=real_utc_today
+            )
+            synced_dates.append(date_str)
+
+        # 4. 如果是 daily report，也同步当天的分数
+        if report_type == "daily" and report_json.get("total_interactions", 0) > 0:
+            existing_score = await daily_score_repo.get_score_for_date(user_id, report_date)
+            if not existing_score:
+                avg_score = report_json.get("average_mood_score", 0.0)
+                emotion_dist = report_json.get("emotion_distribution", {})
+                dominant_emotion = max(emotion_dist.keys(), key=lambda k: emotion_dist[k]) if emotion_dist else "neutral"
+                interaction_count = report_json.get("total_interactions", 1)
+
+                await daily_score_repo.bulk_insert_scores(
                     user_id=user_id,
-                    start_date=_to_iso_start_of_day(target_date),
-                    end_date=_to_iso_end_of_day(target_date)
+                    scores=[{
+                        "utc_date": report_date,
+                        "avg_score": avg_score,
+                        "dominant_emotion": dominant_emotion,
+                        "interaction_count": interaction_count
+                    }],
+                    utc_today=real_utc_today
                 )
-                report_json = emotion_analytics.EmotionAnalytics.to_json(report)
-
-                # 3. 检查是否有实际数据（通过 total_interactions）
-                if report_json.get("total_interactions", 0) == 0:
-                    skipped_dates.append(target_date)
-                    continue  # Weaviate 无数据，跳过存储
-
-                # 4. 持久化存储
-                await report_repo.save_report(user_id, "daily", target_date, report_json)
-                synced_dates.append(target_date)
-            except Exception as gen_err:
-                print(f"Failed to generate report for {target_date}: {gen_err}")
-                skipped_dates.append(target_date)
+                synced_dates.append(report_date)
 
         return {
             "synced_dates": synced_dates,
-            "skipped_dates": skipped_dates,
-            "count": len(synced_dates)
+            "count": len(synced_dates),
+            "report": report_json  # 直接返回 report，前端无需再次请求
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to sync history reports: {str(e)}")

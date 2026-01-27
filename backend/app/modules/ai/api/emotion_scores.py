@@ -24,7 +24,10 @@ except ImportError:
     from backports.zoneinfo import ZoneInfo  # Python < 3.9
 
 from app.modules.ai.repository.daily_emotion_repository import DailyEmotionRepository
+from app.modules.ai.repository.emotion_report_repository import EmotionReportRepository
 from config.mongodb_config import get_database
+from datetime import timedelta
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -153,30 +156,43 @@ async def get_weekly_emotion_scores(
         # 2. Get 7 days of scores
         scores = await repo.get_user_scores(user_id, days=7, utc_today=utc_today)
 
-        # 3. If no scores exist, try to migrate from weekly report
+        # 3. If no scores exist, try to extract from existing weekly report (NOT calling GenAI)
         if not scores:
             try:
-                emotion_analytics = _load_emotion_analytics()
-                report = emotion_analytics.generate_weekly_emotion_report(user_id=user_id)
+                # Get report repository to check for existing weekly report
+                report_repo = EmotionReportRepository(repo.db)
 
-                # Extract data_points and migrate to MongoDB
-                if hasattr(report, 'emotion_trend') and report.emotion_trend.data_points:
-                    migration_scores = []
-                    for dp in report.emotion_trend.data_points:
-                        if isinstance(dp, dict):
-                            migration_scores.append({
-                                "utc_date": dp.get("date", "").split("T")[0],
-                                "avg_score": dp.get("avg_score", 0.0),
-                                "dominant_emotion": dp.get("dominant_emotion", "neutral"),
-                                "interaction_count": dp.get("count", 1)
-                            })
+                # Calculate yesterday's date as report key (same logic as frontend)
+                yesterday = (datetime.now(tz.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
-                    if migration_scores:
-                        await repo.bulk_insert_scores(user_id, migration_scores, utc_today=utc_today)
-                        # Fetch the newly inserted scores
-                        scores = await repo.get_user_scores(user_id, days=7, utc_today=utc_today)
+                # Try to get existing weekly report from MongoDB (no GenAI call!)
+                existing_report = await report_repo.get_report(user_id, "weekly", yesterday)
+
+                if existing_report and existing_report.get("report_data"):
+                    report_data = existing_report["report_data"]
+                    # Parse JSON if it's a string
+                    if isinstance(report_data, str):
+                        report_data = json.loads(report_data)
+
+                    # Extract data_points from existing report
+                    data_points = report_data.get("emotion_trend", {}).get("data_points", [])
+                    if data_points:
+                        migration_scores = []
+                        for dp in data_points:
+                            if isinstance(dp, dict):
+                                migration_scores.append({
+                                    "utc_date": dp.get("date", "").split("T")[0],
+                                    "avg_score": dp.get("avg_score", 0.0),
+                                    "dominant_emotion": dp.get("dominant_emotion", "neutral"),
+                                    "interaction_count": dp.get("count", 1)
+                                })
+
+                        if migration_scores:
+                            await repo.bulk_insert_scores(user_id, migration_scores, utc_today=utc_today)
+                            # Fetch the newly inserted scores
+                            scores = await repo.get_user_scores(user_id, days=7, utc_today=utc_today)
             except Exception as e:
-                logger.warning(f"Failed to migrate scores from weekly report: {e}")
+                logger.warning(f"Failed to extract scores from existing report: {e}")
 
         return {"scores": scores}
     except Exception as e:

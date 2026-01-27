@@ -213,6 +213,32 @@ class DailyEmotionRepository:
         })
         return self._score_to_dict(score) if score else None
 
+    async def get_score_for_date(self, user_id: str, target_date: str) -> Optional[Dict]:
+        """
+        Get emotion score for a specific date.
+
+        Args:
+            user_id: User identifier
+            target_date: Target date in YYYY-MM-DD format
+
+        Returns:
+            Score document or None if not exists
+        """
+        try:
+            user_oid = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
+        except:
+            user_oid = user_id
+
+        # Query with utc_date, fallback to old "date" field
+        score = await self.collection.find_one({
+            "user_id": user_oid,
+            "$or": [
+                {"utc_date": target_date},
+                {"date": target_date, "utc_date": {"$exists": False}}
+            ]
+        })
+        return self._score_to_dict(score) if score else None
+
     async def bulk_insert_scores(self, user_id: str, scores: List[Dict], utc_today: Optional[str] = None) -> int:
         """
         Bulk insert historical scores (used for data migration).
