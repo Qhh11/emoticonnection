@@ -3,9 +3,8 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
-  const env = loadEnv(mode, '../', '')
+  // Load env file based on `mode`. Also include OS environment variables.
+  const env = { ...process.env, ...loadEnv(mode, '../', '') };
 
   return {
     plugins: [react()],
@@ -13,9 +12,11 @@ export default defineConfig(({ mode }) => {
     // We want to expose GEMINI_API_KEY and others starting with VITE_ or GEMINI_
     envPrefix: ['VITE_', 'GEMINI_'],
     define: {
-      // If loadEnv fails for some reason, we can manually define it
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
-      'process.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY)
+      // Ensure variables are hard-coded into the bundle during build
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
+      'import.meta.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || ''),
+      // Compatibility for legacy process.env checks
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '')
     },
     resolve: {
       alias: {
