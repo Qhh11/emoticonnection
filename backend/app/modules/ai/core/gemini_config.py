@@ -50,9 +50,11 @@ class GeminiClient:
         if cls._client:
             return cls._client
             
-        api_key = os.getenv("GEMINI_API_KEY")
+        # Try finding the API key from multiple environment variable names
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
+        
         if not api_key:
-            print("⚠️  WARNING: GEMINI_API_KEY not found.")
+            print("⚠️  WARNING: GEMINI_API_KEY or VITE_GEMINI_API_KEY not found.")
             return None
             
         # Initialize the new SDK client
@@ -62,7 +64,8 @@ class GeminiClient:
     @classmethod
     def is_available(cls) -> bool:
         """检查 Gemini API 是否可用"""
-        return os.getenv("GEMINI_API_KEY") is not None
+        return (os.getenv("GEMINI_API_KEY") is not None or 
+                os.getenv("VITE_GEMINI_API_KEY") is not None)
 
 
 # 便捷函数 - 返回模型 ID

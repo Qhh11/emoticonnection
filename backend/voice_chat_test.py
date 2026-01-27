@@ -26,9 +26,9 @@ CHUNK_SIZE = 1024
 
 # API Configuration
 # We use the Gemini Developer API (Google AI Studio) as configured in the project
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
 if not api_key:
-    print("Error: GEMINI_API_KEY not found in environment.")
+    print("Error: GEMINI_API_KEY or VITE_GEMINI_API_KEY not found in environment.")
     sys.exit(1)
 
 client = genai.Client(

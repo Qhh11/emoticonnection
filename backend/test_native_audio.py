@@ -8,13 +8,13 @@ from pathlib import Path
 root_env = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(root_env)
 
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY")
 if not api_key:
     # Try GOOGLE_API_KEY as fallback
     api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    print("❌ No API key found in GEMINI_API_KEY or GOOGLE_API_KEY")
+    print("❌ No API key found in GEMINI_API_KEY, VITE_GEMINI_API_KEY or GOOGLE_API_KEY")
     exit(1)
 
 genai.configure(api_key=api_key)

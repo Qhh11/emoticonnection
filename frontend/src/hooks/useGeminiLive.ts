@@ -54,7 +54,7 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
         setConversation([]); // Reset conversation on new session
 
         try {
-            const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            const apiKey = import.meta.env.GEMINI_API_KEY;
             const model = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
 
             if (!apiKey) {

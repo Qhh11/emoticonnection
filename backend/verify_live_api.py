@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 async def verify_live_api():
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("VITE_GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("❌ GEMINI_API_KEY not found")
+        print("❌ GEMINI_API_KEY, VITE_GEMINI_API_KEY, or GOOGLE_API_KEY not found")
         return
 
     client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
