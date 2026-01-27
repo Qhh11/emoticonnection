@@ -75,19 +75,25 @@ class AIHelperService:
         Suggest replies.
         If styles is provided, returns a JSON string with keys as styles.
         """
-        # Format history for the prompt
+        # Format history for the prompt with clearer roles
         transcript = ""
-        for msg in history[-5:]: # Look at last 5 messages for context
-            role = msg.get("role")
+        for msg in history[-8:]: # Increased context slightly
+            role_raw = msg.get("role", "unknown")
+            # Map standard Gemini roles or custom ones to conversational labels
+            role_label = "Me" if role_raw in ["user", "me"] else "Partner"
             content = " ".join(msg.get("parts", []))
-            transcript += f"{role}: {content}\n"
+            transcript += f"[{role_label}]: {content}\n"
 
         if styles:
             prompt = f"""
-            Based on the conversation transcript below, suggest a reply for the 'user' in each of these styles: {', '.join(styles)}.
+            You are assisting 'Me' in a conversation with 'Partner'.
+            Based on the transcript below, suggest a reply for 'Me' that responds to 'Partner'.
             
             Transcript:
             {transcript}
+            
+            Current Task: Generate 4 distinct replies for 'Me' in these styles: {', '.join(styles)}.
+            Focus on responding to the latest things 'Partner' said. Even if 'Me' was the last one to speak, find a way to follow up or deepen the connection.
             
             Return ONLY a valid JSON object where keys are the style names and values are the suggested replies.
             Do not include Markdown formatting.
@@ -95,15 +101,16 @@ class AIHelperService:
             return await self._generate_text(prompt)
 
         prompt = f"""
-        Based on the following conversation transcript, suggest 4 distinct, natural, and helpful replies that the 'user' could send next.
-        Focus on emotion connection and empathy if appropriate.
+        You are assisting 'Me' in a conversation with 'Partner'.
+        Based on the transcript below, suggest 4 distinct, natural, and helpful replies that 'Me' could send next.
         
         Transcript:
         {transcript}
         
+        Focus on responding to 'Partner' and maintaining a good emotional connection.
         """
         if context:
-            prompt += f"\nAdditional Context: {context}"
+            prompt += f"\nAdditional Context for 'Me': {context}"
             
         prompt += """
         

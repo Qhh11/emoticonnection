@@ -110,14 +110,14 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
   const autoResponse = async () => {
     let historyToUse = chatHistory || []
     if (historyToUse.length === 0 && partnerLastMessage) {
-      historyToUse = [{ role: 'user', text: partnerLastMessage }]
+      historyToUse = [{ role: 'peer', text: partnerLastMessage }]
     }
     if (historyToUse.length === 0) return
 
     setIsThinking(true)
     try {
       const history = historyToUse.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
+        role: m.role === 'user' ? 'user' : 'peer',
         parts: [m.text]
       }))
       const res = await aiHelperApi.suggestReply({
@@ -145,7 +145,7 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
     setIsThinking(true)
     try {
       const history = historyToUse.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
+        role: m.role === 'user' ? 'user' : 'peer',
         parts: [m.text]
       }))
       const res = await aiHelperApi.suggestTopic({ history })
@@ -227,7 +227,7 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
 
     // If no history but we have a partner message (e.g. from props), construct a fake history
     if (historyToUse.length === 0 && partnerLastMessage) {
-      historyToUse = [{ role: 'user', text: partnerLastMessage }]
+      historyToUse = [{ role: 'peer', text: partnerLastMessage }]
     }
 
     if (historyToUse.length === 0) {
@@ -239,7 +239,7 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
     try {
       // Format history
       const history = historyToUse.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
+        role: m.role === 'user' ? 'user' : 'peer',
         parts: [m.text]
       }))
 
@@ -270,7 +270,7 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
     try {
       // Format history
       const history = historyToUse.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
+        role: m.role === 'user' ? 'user' : 'peer',
         parts: [m.text]
       }))
 
@@ -355,9 +355,8 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.8, y: 10 }}
           transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-          className={`absolute bottom-full mb-4 z-[100] w-72 ${
-            bubblePosition === 'left' ? 'right-0' : 'left-0'
-          }`}
+          className={`absolute bottom-full mb-4 z-[100] w-72 ${bubblePosition === 'left' ? 'right-0' : 'left-0'
+            }`}
         >
           {/* Bubble body */}
           <div
@@ -563,9 +562,8 @@ export default function AssistantBubble({ isOpen, onClose, onSelectText, partner
 
             {/* Bubble pointer - points down towards Avatar */}
             <div
-              className={`absolute -bottom-2 w-4 h-4 bg-white/95 rotate-45 border-r border-b border-white/50 ${
-                bubblePosition === 'left' ? 'right-8' : 'left-8'
-              }`}
+              className={`absolute -bottom-2 w-4 h-4 bg-white/95 rotate-45 border-r border-b border-white/50 ${bubblePosition === 'left' ? 'right-8' : 'left-8'
+                }`}
             />
           </div>
         </motion.div>

@@ -58,7 +58,10 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
             const model = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
 
             if (!apiKey) {
+                console.error('[GeminiLive] ERROR: GEMINI_API_KEY is undefined. Check environment variables.');
                 throw new Error('Missing GEMINI_API_KEY in environment');
+            } else {
+                console.log(`[GeminiLive] API Key detected (prefix: ${apiKey.substring(0, 4)}..., length: ${apiKey.length})`);
             }
 
             const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
@@ -207,9 +210,10 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
 
                 ws.onerror = (e) => {
                     clearTimeout(timeout);
-                    console.error('[GeminiLive] WebSocket Error:', e);
+                    console.error('[GeminiLive] WebSocket Error Handle:', e);
                     setStatus('error');
-                    onError?.('WebSocket connection error');
+                    onError?.('WebSocket connection error. Check if API Key is valid and region is supported.');
+                    reject(new Error('WebSocket connection error'));
                 };
 
                 ws.onclose = (e) => {
@@ -217,13 +221,18 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
                     setIsConnected(false);
                     setStatus('disconnected');
                     stopStreaming();
+
+                    if (e.code !== 1000) {
+                        console.error(`[GeminiLive] Connection closed abnormally (${e.code}). Reason: ${e.reason || 'Unknown'}. Common causes: Invalid API Key, exceeded quota, or region restriction.`);
+                    }
                 };
             });
 
         } catch (error) {
             console.error('[GeminiLive] Connection Failed:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
             setStatus('error');
-            throw error;
+            throw new Error(`Gemini Live Connection Failed: ${errorMsg}. Hint: Check Render Env Vars for GEMINI_API_KEY.`);
         }
     }, [onTranscript, onError, onTurnComplete]);
 
