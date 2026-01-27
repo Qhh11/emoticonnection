@@ -54,19 +54,29 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
         setConversation([]); // Reset conversation on new session
 
         try {
-            const apiKey = import.meta.env.GEMINI_API_KEY;
+            console.log('[GeminiLive] Checking environment variables...');
+            const viteApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+            const geminiApiKey = import.meta.env.GEMINI_API_KEY;
+            const processApiKey = (window as any).process?.env?.GEMINI_API_KEY;
+
+            console.log('[GeminiLive] VITE_GEMINI_API_KEY present:', !!viteApiKey);
+            console.log('[GeminiLive] GEMINI_API_KEY present:', !!geminiApiKey);
+            console.log('[GeminiLive] window.process.env.GEMINI_API_KEY present:', !!processApiKey);
+
+            const apiKey = viteApiKey || geminiApiKey || processApiKey;
             const model = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-native-audio-preview-12-2025';
 
             if (!apiKey) {
-                console.error('[GeminiLive] ERROR: GEMINI_API_KEY is undefined. Check environment variables.');
-                throw new Error('Missing GEMINI_API_KEY in environment');
+                console.error('[GeminiLive] ERROR: No API Key found in any known environment variable.');
+                console.warn('[GeminiLive] Available import.meta.env keys:', Object.keys(import.meta.env));
+                throw new Error('Missing GEMINI_API_KEY in environment. Hint: Use VITE_GEMINI_API_KEY for Vite.');
             } else {
-                console.log(`[GeminiLive] API Key detected (prefix: ${apiKey.substring(0, 4)}..., length: ${apiKey.length})`);
+                console.log(`[GeminiLive] API Key found (ends with: ...${apiKey.substring(apiKey.length - 4)}), length: ${apiKey.length}`);
             }
 
             const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
-            console.log('[GeminiLive] Connecting directly to Gemini API...');
+            console.log('[GeminiLive] Attempting connection to:', url.split('?')[0] + '?key=***');
 
             return new Promise<void>((resolve, reject) => {
                 const ws = new WebSocket(url);
@@ -210,20 +220,26 @@ export const useGeminiLive = ({ onTranscript, onError, onTurnComplete, systemIns
 
                 ws.onerror = (e) => {
                     clearTimeout(timeout);
-                    console.error('[GeminiLive] WebSocket Error Handle:', e);
+                    console.error('[GeminiLive] WebSocket Error Event:', e);
+                    // Detailed error info if available
+                    if ((e as any).message) console.error('[GeminiLive] Error details:', (e as any).message);
+
                     setStatus('error');
                     onError?.('WebSocket connection error. Check if API Key is valid and region is supported.');
                     reject(new Error('WebSocket connection error'));
                 };
 
                 ws.onclose = (e) => {
-                    console.log('[GeminiLive] WebSocket Closed:', e.code, e.reason);
+                    console.log(`[GeminiLive] WebSocket Closed: code=${e.code}, reason=${e.reason || 'none'}, clean=${e.wasClean}`);
                     setIsConnected(false);
                     setStatus('disconnected');
                     stopStreaming();
 
                     if (e.code !== 1000) {
-                        console.error(`[GeminiLive] Connection closed abnormally (${e.code}). Reason: ${e.reason || 'Unknown'}. Common causes: Invalid API Key, exceeded quota, or region restriction.`);
+                        console.error(`[GeminiLive] Connection closed abnormally (${e.code}).`);
+                        if (e.code === 1006) {
+                            console.error('[GeminiLive] Tip: 1006 usually means the connection was lost or failed to start (API Key/Network/CORS).');
+                        }
                     }
                 };
             });
