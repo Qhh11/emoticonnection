@@ -5,10 +5,11 @@
  */
 
 interface CommunityHeaderProps {
-  activeTab: 'following' | 'exploring'
-  onTabChange: (tab: 'following' | 'exploring') => void
+  activeTab: 'following' | 'exploring' | 'myposts'
+  onTabChange: (tab: 'following' | 'exploring' | 'myposts') => void
   onCreatePost: () => void
   userNickname?: string
+  myPostsBadge?: number
 }
 
 export default function CommunityHeader({
@@ -16,6 +17,7 @@ export default function CommunityHeader({
   onTabChange,
   onCreatePost,
   userNickname,
+  myPostsBadge,
 }: CommunityHeaderProps) {
   return (
     <div className="flex flex-col space-y-6 mb-8">
@@ -58,6 +60,25 @@ export default function CommunityHeader({
             `}
           >
             Exploring
+          </button>
+          <button
+            onClick={() => onTabChange('myposts')}
+            className={`
+              relative px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider
+              transition-all duration-300
+              ${activeTab === 'myposts'
+                ? 'bg-accent text-white shadow-lg'
+                : 'text-gray-500 hover:text-accent'
+              }
+            `}
+          >
+            My Posts
+            {/* Notification badge */}
+            {myPostsBadge !== undefined && myPostsBadge > 0 && activeTab !== 'myposts' && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md">
+                {myPostsBadge > 99 ? '99+' : myPostsBadge}
+              </span>
+            )}
           </button>
         </div>
 

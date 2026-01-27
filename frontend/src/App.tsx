@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -22,6 +23,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>
+}
+
+// Notification wrapper - gets userId from AuthContext
+function NotificationWrapper({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  return (
+    <NotificationProvider userId={user?.user_id || ''}>
+      {children}
+    </NotificationProvider>
+  )
 }
 
 // 公开路由组件 - 已登录用户重定向到 Dashboard
@@ -67,7 +78,9 @@ function AppRoutes() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <NotificationWrapper>
+              <Dashboard />
+            </NotificationWrapper>
           </ProtectedRoute>
         }
       />

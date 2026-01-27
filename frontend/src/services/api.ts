@@ -996,3 +996,39 @@ export const getMediaUrl = (url: string | undefined | null): string => {
   }
   return `${BASE_URL}${url}`
 }
+
+// ============ 通知 API ============
+
+export interface NotificationCounts {
+  profile_total: number
+  chat_total: number
+  community_total: number
+  new_followers: number
+  unread_comments: number
+  unread_comments_by_post: Record<string, number>
+  unread_chats_by_room: Record<string, number>
+}
+
+export const notificationApi = {
+  getCounts: (userId: string) =>
+    request<NotificationCounts>(`/api/notifications/counts?user_id=${userId}`),
+
+  markRead: (userId: string, type: string, sourceId?: string) =>
+    request<{ success: boolean }>('/api/notifications/mark-read', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        notification_type: type,
+        source_id: sourceId,
+      }),
+    }),
+
+  markAllRead: (userId: string, type?: string) =>
+    request<{ success: boolean }>('/api/notifications/mark-all-read', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        notification_type: type,
+      }),
+    }),
+}

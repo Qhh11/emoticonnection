@@ -14,6 +14,7 @@ interface PostCardProps {
   onClick: () => void
   onLike?: (postId: string) => void
   userId?: string
+  unreadCount?: number
 }
 
 // 情绪颜色映射 - 低饱和度柔和色调
@@ -105,7 +106,7 @@ function formatDate(dateString: string) {
   return `${month}/${day}`
 }
 
-export default function PostCard({ post, onClick }: PostCardProps) {
+export default function PostCard({ post, onClick, unreadCount }: PostCardProps) {
   const emotion = post.emotion || post.ai_emotion
   const colors = getMoodColors(emotion, post.emotion_color)
   const hasImage = post.media_urls && post.media_urls.length > 0
@@ -131,7 +132,33 @@ export default function PostCard({ post, onClick }: PostCardProps) {
     <div style={{
       aspectRatio: hasImage ? '4/5' : undefined,
       height: hasImage ? undefined : textPostConfig.height,
+      position: 'relative',
     }}>
+      {/* Unread comments badge */}
+      {unreadCount !== undefined && unreadCount > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '-6px',
+            right: '-6px',
+            zIndex: 10,
+            minWidth: '22px',
+            height: '22px',
+            padding: '0 6px',
+            backgroundColor: '#EF4444',
+            color: 'white',
+            fontSize: '11px',
+            fontWeight: 700,
+            borderRadius: '11px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+          }}
+        >
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </div>
+      )}
       <TiltedCard
         imageSrc={hasImage ? getMediaUrl(post.media_urls![0]) : undefined}
         gradientBg={!hasImage ? textPostBg : undefined}

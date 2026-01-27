@@ -15,6 +15,7 @@ interface PostGridProps {
   hasMore: boolean
   isLoading: boolean
   userId?: string
+  unreadCommentsByPost?: Record<string, number>
 }
 
 export default function PostGrid({
@@ -25,6 +26,7 @@ export default function PostGrid({
   hasMore,
   isLoading,
   userId,
+  unreadCommentsByPost,
 }: PostGridProps) {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -91,6 +93,7 @@ export default function PostGrid({
               onClick={() => onPostClick(post)}
               onLike={onLike}
               userId={userId}
+              unreadCount={unreadCommentsByPost?.[post.id] || 0}
             />
           </div>
         ))}

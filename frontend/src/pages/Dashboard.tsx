@@ -19,6 +19,7 @@ import DiaryView, { DiaryEntry } from './diary/DiaryView'
 import SoulSyncView, { PeerSession } from './soulsync/SoulSyncView'
 import ProfileView, { Theme, THEMES, CheckInData } from './profile/ProfileView'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotification } from '../contexts/NotificationContext'
 import { userApi, aiChatApi, postApi, SocialStats, Diary, Post, User, EmotionReport, MBTIProfile, UserPreferences, DailyEmotionScore } from '../services/api'
 
 type Tab = 'profile' | 'diary' | 'chat' | 'community' | 'soulsync'
@@ -39,6 +40,7 @@ const MOOD_DATA = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user: AuthUser, logout } = useAuth()
+  const { profileBadge, chatBadge, communityBadge, markFollowersRead } = useNotification()
   const [user, setUser] = useState<User | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('community')
   const [points, setPoints] = useState(0)
@@ -567,6 +569,13 @@ export default function Dashboard() {
     }
   }, [showSettings])
 
+  // Mark followers as read when opening followers list
+  useEffect(() => {
+    if (followListType === 'followers') {
+      markFollowersRead()
+    }
+  }, [followListType, markFollowersRead])
+
   // Helper function to get mood color
   const getMoodColor = (mood: string | undefined): string => {
     if (!mood) return '#4B4E91'
@@ -966,10 +975,10 @@ export default function Dashboard() {
       {showFluidBackground && <FluidBackground themeColor={currentTheme.color} />}
       <FisheyeSidebar
         items={[
-          { id: 'community', icon: <CommunityIcon />, label: 'community', active: activeTab === 'community', onClick: () => setActiveTab('community') },
+          { id: 'community', icon: <CommunityIcon />, label: 'community', active: activeTab === 'community', onClick: () => setActiveTab('community'), badge: communityBadge },
           { id: 'diary', icon: <DiaryIcon />, label: 'emoti space', active: activeTab === 'diary', onClick: () => setActiveTab('diary') },
-          { id: 'soulsync', icon: <ChatIcon />, label: 'chat', active: activeTab === 'soulsync', onClick: () => setActiveTab('soulsync') },
-          { id: 'profile', icon: <ProfileIcon />, label: 'profile', active: activeTab === 'profile', onClick: () => setActiveTab('profile') },
+          { id: 'soulsync', icon: <ChatIcon />, label: 'chat', active: activeTab === 'soulsync', onClick: () => setActiveTab('soulsync'), badge: chatBadge },
+          { id: 'profile', icon: <ProfileIcon />, label: 'profile', active: activeTab === 'profile', onClick: () => setActiveTab('profile'), badge: profileBadge },
         ]}
         onLogout={handleLogout}
         logoutIcon={<LogoutIcon />}

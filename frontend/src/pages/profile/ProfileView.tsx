@@ -3,6 +3,7 @@ import { Avatar3D } from '../../config/avatars'
 import { getAvatarUrl } from '../../config/userAvatars'
 import { SocialStats, Post, User, EmotionReport, DailyEmotionScore, getMediaUrl, userApi, CheckInHistoryItem, utcDateToLocalDate } from '../../services/api'
 import { DiaryEntry } from '../diary/DiaryView'
+import { useNotification } from '../../contexts/NotificationContext'
 
 // 表情图片映射 - 使用 public 目录下的透明图片
 const EMOJI_IMAGES: Record<string, string> = {
@@ -115,15 +116,23 @@ interface StatItemProps {
   label: string
   value: string
   onClick?: () => void
+  badge?: number
 }
 
-function StatItem({ label, value, onClick }: StatItemProps) {
+function StatItem({ label, value, onClick, badge }: StatItemProps) {
   return (
     <div
-      className={`space-y-0.5 ${onClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`}
+      className={`space-y-0.5 relative ${onClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`}
       onClick={onClick}
     >
-      <p className="text-xl font-black tracking-tighter text-gray-800">{value}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-xl font-black tracking-tighter text-gray-800">{value}</p>
+        {badge !== undefined && badge > 0 && (
+          <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </div>
       <p className="text-[12px] font-black uppercase tracking-widest text-gray-300">{label}</p>
     </div>
   )
@@ -281,6 +290,15 @@ const getTrendLabel = (direction: string): string => {
 
 export default function ProfileView({ points, level, avatar, onCheckIn, onUpdateCheckIn, onThemeChange, currentTheme, onOpenAvatarGallery, selectedAvatar: _selectedAvatar, user, socialStats, diaryEntries, userPosts, onOpenJournalDetail, onOpenPostDetail, todayCheckIn, onOpenSettings, onViewFollowing, onViewFollowers, onOpenEmotionReport, weeklyReport, persistedScores, onRefreshScores: _onRefreshScores, showFluidBackground, onToggleFluidBackground }: ProfileViewProps) {
   const [showThemeSelector, setShowThemeSelector] = useState(false)
+
+  // Get notification counts for followers badge
+  const { newFollowersCount, markFollowersRead } = useNotification()
+
+  // Handler for viewing followers - marks notifications as read
+  const handleViewFollowers = () => {
+    markFollowersRead()
+    onViewFollowers?.()
+  }
 
   // 坐标轴打卡相关状态
   const [showCoordinatePicker, setShowCoordinatePicker] = useState(false)
@@ -534,7 +552,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
             </p>
             <div className="flex space-x-10 pt-2">
               <StatItem label="Posts" value={String(userPosts.length)} />
-              <StatItem label="Followers" value={socialStats?.followers_count?.toString() || '0'} onClick={onViewFollowers} />
+              <StatItem label="Followers" value={socialStats?.followers_count?.toString() || '0'} onClick={handleViewFollowers} badge={newFollowersCount} />
               <StatItem label="Following" value={socialStats?.following_count?.toString() || '0'} onClick={onViewFollowing} />
             </div>
           </div>

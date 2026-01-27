@@ -289,4 +289,30 @@ class ConnectionManager:
                 except:
                     pass
 
+    async def send_notification_update(self, target_user_id: str, notification_type: str, source_id: str = None) -> None:
+        """
+        Send notification update to a specific user's all connections
+
+        This triggers the frontend to refresh notification counts.
+
+        Args:
+            target_user_id: The user to notify
+            notification_type: Type of notification (new_follower, chat_message, post_comment)
+            source_id: Optional source ID (room_id, post_id, follower_id)
+        """
+        if target_user_id not in self.user_sockets:
+            return  # User not online
+
+        for websocket in self.user_sockets[target_user_id][:]:
+            try:
+                await websocket.send_json({
+                    "event_type": "notification_update",
+                    "data": {
+                        "notification_type": notification_type,
+                        "source_id": source_id
+                    }
+                })
+            except:
+                pass
+
 

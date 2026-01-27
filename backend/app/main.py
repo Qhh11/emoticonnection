@@ -36,6 +36,7 @@ from app.modules.post.api import post_http
 from app.modules.auth.api import auth
 from app.modules.social.api import following
 from app.modules.user.api import user_http, points_http
+from app.modules.notification.api import notification_http
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -114,6 +115,8 @@ app.include_router(following.router, prefix="/api")
 app.include_router(user_http.router, prefix="/api")
 # Points / Check-in routes
 app.include_router(points_http.router, prefix="/api")
+# Notification routes
+app.include_router(notification_http.router, prefix="/api")
 # static path
 BASE_DIR = Path(__file__).resolve().parent.parent          
 STATIC_DIR = BASE_DIR / "static"                         

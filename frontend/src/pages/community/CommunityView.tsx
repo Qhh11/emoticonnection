@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { postApi, Post, mediaApi } from '../../services/api'
+import { useNotification } from '../../contexts/NotificationContext'
 
 // 导入子组件
 import CommunityHeader from './components/CommunityHeader'
@@ -41,8 +42,11 @@ export default function CommunityView({
   polishedContent,
   onPolishedContentConsumed,
 }: CommunityViewProps) {
+  // Notification context for showing unread comment badges
+  const { unreadCommentsByPost, communityBadge } = useNotification()
+
   // Tab 状态
-  const [activeTab, setActiveTab] = useState<'following' | 'exploring'>('exploring')
+  const [activeTab, setActiveTab] = useState<'following' | 'exploring' | 'myposts'>('exploring')
 
   // 帖子数据
   const [posts, setPosts] = useState<Post[]>([])
@@ -67,7 +71,10 @@ export default function CommunityView({
       const currentPage = reset ? 1 : page
       let response
 
-      if (activeTab === 'following' && userId) {
+      if (activeTab === 'myposts' && userId) {
+        // Load user's own posts
+        response = await postApi.getUserPosts(userId, { page: currentPage, include_anonymous: true })
+      } else if (activeTab === 'following' && userId) {
         response = await postApi.getFollowingPosts({
           user_id: userId,
           page: currentPage,
@@ -104,7 +111,7 @@ export default function CommunityView({
   }, [activeTab, userId])
 
   // Tab 切换
-  const handleTabChange = (tab: 'following' | 'exploring') => {
+  const handleTabChange = (tab: 'following' | 'exploring' | 'myposts') => {
     setActiveTab(tab)
     setPosts([])
     setPage(1)
@@ -226,6 +233,7 @@ export default function CommunityView({
           onTabChange={handleTabChange}
           onCreatePost={handleOpenCreateModal}
           userNickname={userNickname}
+          myPostsBadge={communityBadge}
         />
 
         {/* Error */}
@@ -247,6 +255,7 @@ export default function CommunityView({
           hasMore={hasMore}
           isLoading={isLoading}
           userId={userId}
+          unreadCommentsByPost={activeTab === 'myposts' ? unreadCommentsByPost : undefined}
         />
       </main>
 

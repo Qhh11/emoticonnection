@@ -7,6 +7,7 @@ interface NavItemData {
   label: string
   active: boolean
   onClick: () => void
+  badge?: number
 }
 
 interface FisheyeSidebarProps {
@@ -124,6 +125,18 @@ function FisheyeNavItem({ item, mouseY }: FisheyeNavItemProps) {
           layoutId="activeIndicator"
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         />
+      )}
+
+      {/* Notification badge */}
+      {item.badge !== undefined && item.badge > 0 && (
+        <motion.span
+          className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-md"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+        >
+          {item.badge > 99 ? '99+' : item.badge}
+        </motion.span>
       )}
     </motion.button>
   )

@@ -14,6 +14,7 @@ import { getAvatarUrl } from '../../config/userAvatars'
 import OnlineIndicator from './components/OnlineIndicator'
 import MeshGradientButton from './components/MeshGradientButton'
 import MatchingModal, { MatchResult } from './components/MatchingModal'
+import { useNotification } from '../../contexts/NotificationContext'
 
 // Extended FollowUser with online status
 interface FriendWithOnlineStatus extends FollowUser {
@@ -90,6 +91,9 @@ export default function SoulSyncView({
   // Check if user is VIP (level >= 3) for AI assistant features
   const isVip = (userLevel ?? 0) >= 3
 
+  // Notification context for marking chats as read and user status updates
+  const { markChatRead, unreadChatsByRoom, setActiveRoomId, subscribeToUserStatus } = useNotification()
+
   // Matching modal state
   const [showMatchingModal, setShowMatchingModal] = useState(false)
 
@@ -97,6 +101,13 @@ export default function SoulSyncView({
   useEffect(() => {
     onMatchingModalChange?.(showMatchingModal)
   }, [showMatchingModal, onMatchingModalChange])
+
+  // Clear active room when component unmounts (e.g., switching to another page)
+  useEffect(() => {
+    return () => {
+      setActiveRoomId(null)
+    }
+  }, [setActiveRoomId])
 
   // Sessions and chat states
   const [sessions, setSessions] = useState<PeerSession[]>([])
@@ -114,7 +125,6 @@ export default function SoulSyncView({
 
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null)
-  const presenceWsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Connect WebSocket when session changes
@@ -178,72 +188,30 @@ export default function SoulSyncView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
-  // Presence WebSocket for real-time friend status updates
+  // Subscribe to user status updates from NotificationContext
+  // This replaces the duplicate presence WebSocket - NotificationContext handles the connection
   useEffect(() => {
-    if (!userId) return
+    const unsubscribe = subscribeToUserStatus((statusUserId, isOnline) => {
+      console.log('[SoulSyncView] User status update:', statusUserId, isOnline ? 'online' : 'offline')
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.host}`
-    const presenceWs = new WebSocket(`${wsHost}/ws/presence/${userId}`)
+      // Update sessions
+      setSessions(prev =>
+        prev.map(s => (s.partnerId === statusUserId ? { ...s, isOnline } : s))
+      )
 
-    presenceWs.onopen = () => {
-      console.log('[Presence WS] Connected')
-    }
+      // Update mutual friends list
+      setMutualFriends(prev => {
+        const updated = prev.map(f => (f.id === statusUserId ? { ...f, isOnline } : f))
+        return updated.sort((a, b) => {
+          if (a.isOnline && !b.isOnline) return -1
+          if (!a.isOnline && b.isOnline) return 1
+          return 0
+        })
+      })
+    })
 
-    presenceWs.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        console.log('[Presence WS] Received:', data)
-
-        if (data.event_type === 'user_status') {
-          const { user_id: statusUserId, status } = data.data
-          const isOnline = status === 'online'
-          console.log('[Presence WS] Friend status update:', statusUserId, status)
-
-          // Update sessions
-          setSessions(prev =>
-            prev.map(s => (s.partnerId === statusUserId ? { ...s, isOnline } : s))
-          )
-
-          // Update mutual friends list
-          setMutualFriends(prev => {
-            const updated = prev.map(f => (f.id === statusUserId ? { ...f, isOnline } : f))
-            return updated.sort((a, b) => {
-              if (a.isOnline && !b.isOnline) return -1
-              if (!a.isOnline && b.isOnline) return 1
-              return 0
-            })
-          })
-        }
-      } catch (err) {
-        console.error('[Presence WS] Parse error:', err)
-      }
-    }
-
-    presenceWs.onerror = (err) => {
-      console.error('[Presence WS] Error:', err)
-    }
-
-    presenceWs.onclose = () => {
-      console.log('[Presence WS] Disconnected')
-    }
-
-    presenceWsRef.current = presenceWs
-
-    const pingInterval = setInterval(() => {
-      if (presenceWs.readyState === WebSocket.OPEN) {
-        presenceWs.send('ping')
-      }
-    }, 30000)
-
-    return () => {
-      clearInterval(pingInterval)
-      if (presenceWsRef.current) {
-        presenceWsRef.current.close()
-        presenceWsRef.current = null
-      }
-    }
-  }, [userId])
+    return unsubscribe
+  }, [subscribeToUserStatus])
 
   // Load mutual friends with online status
   const loadMutualFriends = async () => {
@@ -304,9 +272,8 @@ export default function SoulSyncView({
         chatApi.getOnlineUsers(),
       ])
 
-      const matchingRooms = rooms.filter((room: UserRoom) => room.source === 'matching')
-
-      const sessionsFromRooms: PeerSession[] = matchingRooms.map((room: UserRoom) => ({
+      // Load all rooms (both 'matching' and 'direct' chats) to show notifications correctly
+      const sessionsFromRooms: PeerSession[] = rooms.map((room: UserRoom) => ({
         id: room.room_id,
         roomId: room.room_id,
         partnerName: room.is_anonymous ? 'Anonymous' : (room.other_user_name || 'User'),
@@ -316,7 +283,7 @@ export default function SoulSyncView({
         isRevealed: !room.is_anonymous,
         lastMessage: room.last_message || 'Start chatting...',
         lastMessageTime: room.last_message_time ? new Date(room.last_message_time).getTime() : undefined,
-        moodColor: '#9381BA',
+        moodColor: room.source === 'matching' ? '#9381BA' : '#4B4E91',
         messages: [],
         isOnline: onlineUsers.includes(room.other_user_id),
       }))
@@ -378,11 +345,17 @@ export default function SoulSyncView({
   const exitChat = () => {
     setSortSnapshot(Date.now())
     setCurrentSessionId(null)
+    // Clear active room so notifications will show again
+    setActiveRoomId(null)
   }
 
   // Enter chat room from session list
   const enterChatRoom = (session: PeerSession) => {
     setCurrentSessionId(session.id)
+    // Set active room to suppress notifications while in this chat
+    setActiveRoomId(session.roomId)
+    // Mark chat notifications as read for this room
+    markChatRead(session.roomId)
   }
 
   const loadRoomMessages = async (roomId: string) => {
@@ -422,44 +395,23 @@ export default function SoulSyncView({
           const data = JSON.parse(event.data)
           console.log('[WS] Received message:', data)
 
-          if (data.event_type === 'user_status') {
-            const { user_id: statusUserId, status } = data.data
-            const isOnline = status === 'online'
-            console.log('[WS] User status update:', statusUserId, status)
-
-            setSessions(prev =>
-              prev.map(s => (s.partnerId === statusUserId ? { ...s, isOnline } : s))
-            )
-
-            setMutualFriends(prev => {
-              const updated = prev.map(f => (f.id === statusUserId ? { ...f, isOnline } : f))
-              return updated.sort((a, b) => {
-                if (a.isOnline && !b.isOnline) return -1
-                if (!a.isOnline && b.isOnline) return 1
-                return 0
-              })
-            })
-            return
-          }
-
+          // Ignore peer_disconnected and user_status - handled by NotificationContext presence WebSocket
           if (data.type === 'peer_disconnected') {
-            const sysMsg: ChatMessage = {
-              id: `sys-${Date.now()}`,
-              role: 'peer',
-              text: '⚠️ The other user disconnected.',
-              timestamp: Date.now(),
-              emotion: 'Neutral',
-              emotion_color: '#808080',
-            }
-            setSessions(prev =>
-              prev.map(s =>
-                s.roomId === roomId ? { ...s, messages: [...s.messages, sysMsg], isOnline: false } : s
-              )
-            )
             return
           }
 
           if (data.sender_id === userId) {
+            return
+          }
+
+          // Skip notification_update events - they don't contain chat messages
+          if (data.event_type === 'notification_update') {
+            return
+          }
+
+          // Skip if no content (not a chat message)
+          if (!data.content) {
+            console.log('[WS] Skipping message without content:', data)
             return
           }
 
@@ -480,6 +432,10 @@ export default function SoulSyncView({
                 : s
             )
           )
+
+          // Mark this chat as read immediately since we're actively viewing it
+          // This prevents the badge from appearing when we're already in the chat
+          markChatRead(roomId)
         } catch (err) {
           console.error('Failed to parse WebSocket message:', err)
         }
@@ -702,30 +658,39 @@ export default function SoulSyncView({
     session: PeerSession,
     isActive: boolean,
     showGradientRing: boolean = false
-  ) => (
-    <button
-      key={session.id}
-      onClick={() => enterChatRoom(session)}
-      className={`w-full p-2 flex items-center gap-2 rounded-xl transition-all text-left ${
-        isActive ? 'bg-accent/10 border-l-2 border-accent' : 'hover:bg-white/40'
-      }`}
-    >
-      <div className="relative">
-        {showGradientRing ? (
-          renderAvatarWithRing(session.partnerAvatar, session.isAnonymous, 'bg-gray-100', 'sm')
-        ) : (
-          renderAvatarWithRing(session.partnerAvatar, false, 'bg-blue-50', 'sm')
-        )}
-        <OnlineIndicator isOnline={session.isOnline || false} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-black text-xs truncate">
-          {session.isAnonymous ? 'Anonymous' : `@${session.partnerName}`}
-        </p>
-        <p className="text-[10px] text-gray-400 truncate">{session.lastMessage}</p>
-      </div>
-    </button>
-  )
+  ) => {
+    const unreadCount = unreadChatsByRoom[session.roomId] || 0
+    return (
+      <button
+        key={session.id}
+        onClick={() => enterChatRoom(session)}
+        className={`w-full p-2 flex items-center gap-2 rounded-xl transition-all text-left ${
+          isActive ? 'bg-accent/10 border-l-2 border-accent' : 'hover:bg-white/40'
+        }`}
+      >
+        <div className="relative">
+          {showGradientRing ? (
+            renderAvatarWithRing(session.partnerAvatar, session.isAnonymous, 'bg-gray-100', 'sm')
+          ) : (
+            renderAvatarWithRing(session.partnerAvatar, false, 'bg-blue-50', 'sm')
+          )}
+          <OnlineIndicator isOnline={session.isOnline || false} />
+          {/* Unread message badge */}
+          {unreadCount > 0 && !isActive && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-xs truncate">
+            {session.isAnonymous ? 'Anonymous' : `@${session.partnerName}`}
+          </p>
+          <p className="text-[10px] text-gray-400 truncate">{session.lastMessage}</p>
+        </div>
+      </button>
+    )
+  }
 
   // Render friend sidebar item (for chat view)
   const renderChatFriendSidebarItem = (friend: FriendWithOnlineStatus) => (
@@ -1043,24 +1008,33 @@ export default function SoulSyncView({
           ) : (
             <div className="space-y-2">
               {/* Show friends with existing chats first */}
-              {friendSessions.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => enterChatRoom(session)}
-                  className="w-full p-3 flex items-center gap-3 rounded-2xl hover:bg-white/40 transition-all text-left"
-                >
-                  <div className="relative">
-                    {renderAvatarWithRing(session.partnerAvatar, false, 'bg-blue-50')}
-                    <OnlineIndicator isOnline={session.isOnline || false} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-black text-sm truncate">@{session.partnerName}</p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {formatLastContact(session.lastMessageTime)}
-                    </p>
-                  </div>
-                </button>
-              ))}
+              {friendSessions.map(session => {
+                const unreadCount = unreadChatsByRoom[session.roomId] || 0
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => enterChatRoom(session)}
+                    className="w-full p-3 flex items-center gap-3 rounded-2xl hover:bg-white/40 transition-all text-left"
+                  >
+                    <div className="relative">
+                      {renderAvatarWithRing(session.partnerAvatar, false, 'bg-blue-50')}
+                      <OnlineIndicator isOnline={session.isOnline || false} />
+                      {/* Unread message badge */}
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-sm truncate">@{session.partnerName}</p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {formatLastContact(session.lastMessageTime)}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
 
               {/* Then show friends without chats */}
               {mutualFriends
@@ -1101,26 +1075,35 @@ export default function SoulSyncView({
             </div>
           ) : (
             <div className="space-y-2">
-              {newConnections.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => enterChatRoom(session)}
-                  className="w-full p-3 flex items-center gap-3 rounded-2xl hover:bg-white/40 transition-all text-left"
-                >
-                  <div className="relative">
-                    {renderAvatarWithRing(session.partnerAvatar, session.isAnonymous, 'bg-gray-100')}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-black text-sm truncate">
-                      {session.isAnonymous ? 'Anonymous' : `@${session.partnerName}`}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">{session.lastMessage}</p>
-                  </div>
-                  {session.isOnline && (
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  )}
-                </button>
-              ))}
+              {newConnections.map(session => {
+                const unreadCount = unreadChatsByRoom[session.roomId] || 0
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => enterChatRoom(session)}
+                    className="w-full p-3 flex items-center gap-3 rounded-2xl hover:bg-white/40 transition-all text-left"
+                  >
+                    <div className="relative">
+                      {renderAvatarWithRing(session.partnerAvatar, session.isAnonymous, 'bg-gray-100')}
+                      {/* Unread message badge */}
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-sm truncate">
+                        {session.isAnonymous ? 'Anonymous' : `@${session.partnerName}`}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">{session.lastMessage}</p>
+                    </div>
+                    {session.isOnline && (
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>

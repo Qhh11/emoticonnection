@@ -25,6 +25,7 @@ database_path = Path(__file__).resolve().parents[5] / "database"
 sys.path.insert(0, str(database_path))
 from config.mongodb_config import get_database  # type: ignore
 from crud.following_crud import get_mutual_following  # type: ignore
+from crud.notification_crud import create_notification  # type: ignore
 
 # ============================================================================
 # Initialize Router and ConnectionManager
@@ -264,6 +265,38 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str, user_id: s
                     message=message_dict
                 )
 
+                # ============================================================
+                # STEP 4: Create notification for the recipient
+                # ============================================================
+                # Get the session to find the other user
+                try:
+                    session = await repo.get_session_by_id(room_id)
+                    if session:
+                        sender_id_str = str(message_create.sender_id)
+                        # Determine recipient (the other user in the room)
+                        recipient_id = None
+                        if session.get("user1_id") == sender_id_str:
+                            recipient_id = session.get("user2_id")
+                        elif session.get("user2_id") == sender_id_str:
+                            recipient_id = session.get("user1_id")
+
+                        if recipient_id and recipient_id != sender_id_str:
+                            # Create/update chat notification for recipient
+                            create_notification(
+                                user_id=recipient_id,
+                                notification_type="chat_message",
+                                source_id=room_id_str,  # room_id as source
+                                actor_id=sender_id_str
+                            )
+                            # Send real-time notification update via WebSocket
+                            await manager.send_notification_update(
+                                target_user_id=recipient_id,
+                                notification_type="chat_message",
+                                source_id=room_id_str
+                            )
+                except Exception as e:
+                    print(f"[Notification] Failed to create chat notification: {e}")
+
             except json.JSONDecodeError:
                 # Invalid JSON
                 await websocket.send_json({
@@ -281,32 +314,11 @@ async def websocket_chat_endpoint(websocket: WebSocket, room_id: str, user_id: s
                 })
 
     except WebSocketDisconnect:
-        # Disconnect first, then check if user has other connections
+        # Disconnect from chat room WebSocket
         await manager.disconnect(room_id_str, websocket)
-
-        # Broadcast user offline status after disconnecting
-        # Only broadcast offline if user has no other active connections
-        if user_id_str and not manager.is_user_online(user_id_str):
-            await manager.broadcast_user_status_to_room(room_id_str, user_id_str, "offline")
-            # Notify mutual friends that this user is offline
-            try:
-                mutual_friends = get_mutual_following(user_id_str)
-                if mutual_friends:
-                    await manager.broadcast_user_status_to_users(mutual_friends, user_id_str, "offline")
-            except Exception as e:
-                print(f"[WebSocket] Failed to notify friends of offline status: {e}")
         print(f"[WebSocket] Client disconnected from room {room_id}")
-
-        try:
-            await manager.broadcast(
-                room_id=room_id_str,
-                message={
-                    "type": "peer_disconnected",
-                    "room_id": room_id_str,
-                }
-            )
-        except Exception as e:
-            print(f"[WebSocket] Failed to broadcast disconnect: {e}")
+        # Note: Online status is now managed by the presence WebSocket (/ws/presence/{user_id})
+        # so we don't broadcast peer_disconnected or offline status here
 
 
 @router.websocket("/ws/presence/{user_id}")

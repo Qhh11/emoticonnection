@@ -30,6 +30,13 @@ from config.mongodb_config import get_database  # type: ignore
 
 # Import points system
 from crud.check_in_crud import add_points_to_user  # type: ignore
+# Import notification system
+from crud.notification_crud import create_notification  # type: ignore
+
+# Import WebSocket manager for real-time notifications
+def get_ws_manager():
+    from app.modules.chat.api.chat_ws import manager
+    return manager
 
 # ============================================================================
 # Initialize Router
@@ -462,6 +469,34 @@ async def create_comment(
         print(f"[Points] User {comment_data.author_id} earned 5 points for commenting")
     except Exception as e:
         print(f"[Points] Failed to award points: {e}")
+
+    # Create notification for post author (if commenter is not the author)
+    try:
+        post = await repo.get_post_by_id(post_id)
+        if post:
+            post_author_id = str(post.get("author_id"))
+            commenter_id = str(comment_data.author_id)
+            # Only notify if commenter is not the post author
+            if post_author_id != commenter_id:
+                create_notification(
+                    user_id=post_author_id,
+                    notification_type="post_comment",
+                    source_id=post_id,  # post_id as source
+                    actor_id=commenter_id
+                )
+                print(f"[Notification] Created comment notification for user {post_author_id}")
+                # Send real-time notification update via WebSocket
+                try:
+                    ws_manager = get_ws_manager()
+                    await ws_manager.send_notification_update(
+                        target_user_id=post_author_id,
+                        notification_type="post_comment",
+                        source_id=post_id
+                    )
+                except Exception as ws_err:
+                    print(f"[Notification] Failed to send WebSocket notification: {ws_err}")
+    except Exception as e:
+        print(f"[Notification] Failed to create comment notification: {e}")
 
     return CommentOut(**comment)
 

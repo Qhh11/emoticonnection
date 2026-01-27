@@ -11,6 +11,7 @@ import CommentBubble from './CommentBubble'
 import { getMoodColors } from './PostCard'
 import { getAvatarUrl } from '../../../config/userAvatars'
 import ConfirmModal from '../../../components/ConfirmModal'
+import { useNotification } from '../../../contexts/NotificationContext'
 
 // 默认紫色渐变（无情绪时使用）
 const DEFAULT_GRADIENT = 'linear-gradient(135deg, #9381BA 0%, #6B5B95 100%)'
@@ -46,14 +47,19 @@ export default function PostDetailModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const commentInputRef = useRef<HTMLInputElement>(null)
+  const { markPostCommentsRead } = useNotification()
 
   useEffect(() => {
     if (post && isOpen) {
       setIsLiked(post.is_liked)
       setLikeCount(post.like_count)
       loadComments()
+      // Mark post comment notifications as read if this is the user's own post
+      if (userId && post.author_id === userId) {
+        markPostCommentsRead(post.id)
+      }
     }
-  }, [post, isOpen])
+  }, [post, isOpen, userId, markPostCommentsRead])
 
   const loadComments = async () => {
     if (!post) return

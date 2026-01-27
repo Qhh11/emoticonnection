@@ -2,9 +2,10 @@
 Following API endpoints
 Handles user following relationships
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List, Dict
 from pydantic import BaseModel
+import asyncio
 
 # Database imports
 import sys
@@ -25,6 +26,7 @@ try:
         get_following_stats
     )
     from crud.user_crud import get_all_users
+    from crud.notification_crud import create_notification, delete_notification
 except ImportError:
     from database.crud.following_crud import (
         follow_user,
@@ -36,6 +38,15 @@ except ImportError:
         get_following_stats
     )
     from database.crud.user_crud import get_all_users
+    from database.crud.notification_crud import create_notification, delete_notification
+
+# Import WebSocket manager for real-time notifications
+from app.modules.chat.services.ws_manager import ConnectionManager
+
+# Get the global WebSocket manager instance
+def get_ws_manager():
+    from app.modules.chat.api.chat_ws import manager
+    return manager
 
 
 router = APIRouter(
@@ -74,7 +85,7 @@ class UserInfo(BaseModel):
 # ============================================================================
 
 @router.post("/follow")
-def follow(request: FollowRequest, user_id: str):
+async def follow(request: FollowRequest, user_id: str):
     """
     Follow a user
 
@@ -93,6 +104,29 @@ def follow(request: FollowRequest, user_id: str):
 
     if result is None:
         raise HTTPException(status_code=400, detail="Already following this user")
+
+    # Create notification for the followed user (target_user_id gets notified)
+    # source_id = follower's user_id (who followed them)
+    try:
+        create_notification(
+            user_id=request.target_user_id,  # Recipient: the user being followed
+            notification_type="new_follower",
+            source_id=user_id,  # Source: the follower
+            actor_id=user_id
+        )
+        # Send real-time notification update via WebSocket
+        try:
+            ws_manager = get_ws_manager()
+            await ws_manager.send_notification_update(
+                target_user_id=request.target_user_id,
+                notification_type="new_follower",
+                source_id=user_id
+            )
+        except Exception as ws_err:
+            print(f"[Notification] Failed to send WebSocket notification: {ws_err}")
+    except Exception as e:
+        # Don't fail the follow operation if notification fails
+        print(f"[Notification] Failed to create follow notification: {e}")
 
     return {
         "success": True,
@@ -113,6 +147,16 @@ def unfollow(request: UnfollowRequest, user_id: str):
 
     if not success:
         raise HTTPException(status_code=400, detail="Not following this user")
+
+    # Delete the follower notification (optional: keep or remove)
+    try:
+        delete_notification(
+            user_id=request.target_user_id,
+            notification_type="new_follower",
+            source_id=user_id
+        )
+    except Exception as e:
+        print(f"[Notification] Failed to delete follow notification: {e}")
 
     return {
         "success": True,
