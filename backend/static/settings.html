@@ -174,13 +174,6 @@
   <section class="card">
     <h2>⚙️ Preferences</h2>
 
-    <label>Chat duration preferred</label>
-    <select id="chatDuration">
-      <option value="short">short</option>
-      <option value="medium">medium</option>
-      <option value="long">long</option>
-    </select>
-
     <label>Match age preference</label>
     <div class="card">
       <span>from</span>
@@ -246,7 +239,6 @@ async function loadUser() {
   }
 
   const p = user.preferences || {}
-  document.getElementById('chatDuration').value = p.chat_duration_preference || 'medium'
   document.getElementById('ageMin').value = p.age_range_min || 18
   document.getElementById('ageMax').value = p.age_range_max || 35
   document.getElementById('notificationEnabled').checked = p.notification_enabled ?? true
@@ -273,7 +265,6 @@ async function saveSettings() {
       ? { type: document.getElementById('mbtiType').value, completed_at: new Date().toISOString() }
       : null,
     preferences: {
-      chat_duration_preference: document.getElementById('chatDuration').value,
       age_range_min: Number(document.getElementById('ageMin').value),
       age_range_max: Number(document.getElementById('ageMax').value),
       notification_enabled: document.getElementById('notificationEnabled').checked,

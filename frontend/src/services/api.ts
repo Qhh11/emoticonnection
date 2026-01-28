@@ -103,7 +103,6 @@ export type MBTIProfile = {
 }
 
 export type UserPreferences = {
-  chat_duration_preference?: 'short' | 'medium' | 'long'
   age_range_min?: number
   age_range_max?: number
   notification_enabled?: boolean

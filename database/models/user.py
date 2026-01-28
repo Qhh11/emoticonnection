@@ -15,7 +15,6 @@ class MBTIProfile(BaseModel):
 
 class UserPreferences(BaseModel):
     """用户偏好设置"""
-    chat_duration_preference: str = Field(default="medium", description="短聊/中聊/长聊")
     age_range_min: Optional[int] = Field(default=18, ge=13, le=100)
     age_range_max: Optional[int] = Field(default=35, ge=13, le=100)
     notification_enabled: bool = Field(default=True)

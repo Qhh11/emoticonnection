@@ -1364,36 +1364,20 @@ export default function Dashboard() {
                   </select>
                 </div>
 
-                {/* Preferences Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
-                      Chat Duration
-                    </label>
-                    <select
-                      value={settingsPreferences?.chat_duration_preference || 'medium'}
-                      onChange={(e) => setSettingsPreferences({ ...settingsPreferences, chat_duration_preference: e.target.value as 'short' | 'medium' | 'long' })}
-                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
-                    >
-                      <option value="short">Short</option>
-                      <option value="medium">Medium</option>
-                      <option value="long">Long</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
-                      Theme
-                    </label>
-                    <select
-                      value={settingsPreferences?.theme || 'default'}
-                      onChange={(e) => setSettingsPreferences({ ...settingsPreferences, theme: e.target.value as 'light' | 'dark' | 'system' })}
-                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
-                    >
-                      <option value="default">Default</option>
-                      <option value="dark">Dark</option>
-                      <option value="soft">Soft</option>
-                    </select>
-                  </div>
+                {/* Theme Selection */}
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    Theme
+                  </label>
+                  <select
+                    value={settingsPreferences?.theme || 'default'}
+                    onChange={(e) => setSettingsPreferences({ ...settingsPreferences, theme: e.target.value as 'light' | 'dark' | 'system' })}
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                  >
+                    <option value="default">Default</option>
+                    <option value="dark">Dark</option>
+                    <option value="soft">Soft</option>
+                  </select>
                 </div>
 
                 {/* Notifications Toggle */}
