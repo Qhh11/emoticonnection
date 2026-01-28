@@ -323,19 +323,31 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
   // VIP Immersive View - Dark background with Text/Voice mode switching
   // Only show VIP interface if user is VIP AND has avatar
   if (isVip && activeAvatar) {
+    // Check if dark mode is active
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark'
+    
+    // Background gradient - use dark colors in dark mode, avatar color in light mode
+    const backgroundGradient = isDarkMode
+      ? 'linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 40%, var(--bg-card) 100%)'
+      : `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, ${activeAvatar.color}20 40%, ${activeAvatar.color}35 100%)`
+    
+    const ambientGlow = isDarkMode
+      ? 'radial-gradient(ellipse at center, rgba(100,100,150,0.2) 0%, transparent 70%)'
+      : `radial-gradient(ellipse at center, ${activeAvatar.color}40 0%, transparent 70%)`
+    
     return (
       <LayoutGroup>
         <div
           className="h-full flex flex-col relative overflow-hidden backdrop-blur-xl"
           style={{
-            background: `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, ${activeAvatar.color}20 40%, ${activeAvatar.color}35 100%)`
+            background: backgroundGradient
           }}
         >
           {/* Ambient glow effect */}
           <motion.div
             className="absolute inset-0 opacity-30"
             animate={{
-              background: `radial-gradient(ellipse at center, ${activeAvatar.color}40 0%, transparent 70%)`
+              background: ambientGlow
             }}
             transition={{ duration: 0.5 }}
           />
@@ -349,17 +361,18 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                   <button
                     key={a.id}
                     onClick={() => setActiveAvatar(a)}
-                    className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'border-gray-200 opacity-50'}`}
+                    className={`flex-shrink-0 w-8 h-8 rounded-full border-2 transition-all ${activeAvatar.id === a.id ? 'border-yellow-400 scale-110 shadow-[0_0_10px_rgba(250,204,21,0.5)]' : 'opacity-50'}`}
+                    style={{ borderColor: activeAvatar.id === a.id ? undefined : 'var(--border-color)' }}
                   >
                     <img src={a.videoPath || ''} alt={a.name} className="w-full h-full object-contain" />
                   </button>
                 ))}
               </div>
               <div className="flex flex-col">
-                <span className="text-gray-800 text-[16px] font-black uppercase tracking-widest">
+                <span className="text-[16px] font-black uppercase tracking-widest" style={{ color: 'var(--text-primary)' }}>
                   {activeAvatar.name}
                 </span>
-                <span className="text-gray-500 text-[11px] font-medium leading-relaxed">
+                <span className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   {activeAvatar.description}
                 </span>
               </div>
@@ -370,13 +383,14 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
               {chatMode === 'voice' && (
                 <button
                   onClick={switchToTextMode}
-                  className="px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-all flex items-center space-x-2"
+                  className="px-4 py-2 rounded-full transition-all flex items-center space-x-2"
+                  style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
                   title="Switch to text mode"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#374151">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
                   </svg>
-                  <span className="text-gray-700 text-[10px] font-black uppercase tracking-widest">Text</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Text</span>
                 </button>
               )}
 
@@ -385,8 +399,9 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 disabled={isSaving || textMessages.length < 2}
                 className={`px-5 py-2 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${saveSuccess
                   ? 'bg-green-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : ''
                   } disabled:opacity-30 disabled:cursor-not-allowed`}
+                style={saveSuccess ? {} : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
               >
                 {isSaving ? '...' : saveSuccess ? 'Saved!' : 'Save'}
               </button>
@@ -437,15 +452,16 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                   <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                     <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[75%]`}>
                       {msg.role === 'ai' && (
-                        <span className="text-[9px] font-black uppercase text-gray-400 mb-1 ml-3 tracking-widest">
+                        <span className="text-[9px] font-black uppercase mb-1 ml-3 tracking-widest" style={{ color: 'var(--text-muted)' }}>
                           {activeAvatar.name}
                         </span>
                       )}
                       <div
                         className={`p-4 rounded-2xl ${msg.role === 'user'
-                          ? 'bg-black text-white rounded-br-sm'
-                          : 'bg-white/60 text-gray-800 rounded-bl-sm'
+                          ? 'bg-accent text-accent-inverse rounded-br-sm'
+                          : 'rounded-bl-sm'
                           }`}
+                        style={msg.role === 'ai' ? { backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' } : {}}
                       >
                         <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                       </div>
@@ -454,11 +470,11 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 ))}
                 {isLoading && (
                   <div className="flex justify-start">
-                    <div className="p-4 rounded-2xl bg-white/10 rounded-bl-sm">
+                    <div className="p-4 rounded-2xl rounded-bl-sm" style={{ backgroundColor: 'var(--bg-card)' }}>
                       <div className="flex space-x-2">
-                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: activeAvatar.color, animationDelay: '300ms' }}></div>
+                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--text-muted)', animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--text-muted)', animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--text-muted)', animationDelay: '300ms' }}></div>
                       </div>
                     </div>
                   </div>
@@ -467,7 +483,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
               </div>
 
               {/* Bottom input area with voice button */}
-              <div className="relative z-10 p-4 border-t border-white/5">
+              <div className="relative z-10 p-4" style={{ borderTopColor: 'var(--border-color)', borderTopWidth: '1px' }}>
                 <div className="flex items-center space-x-3 max-w-2xl mx-auto">
                   {/* Text input */}
                   <div className="flex-1 relative">
@@ -477,17 +493,19 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Share your thoughts..."
-                      className="w-full px-5 py-3 bg-white/80 backdrop-blur-sm rounded-full border border-gray-200 focus:outline-none focus:border-gray-300 text-gray-800 text-sm font-bold placeholder:text-gray-400"
+                      className="w-full px-5 py-3 backdrop-blur-sm rounded-full focus:outline-none text-sm font-bold"
+                      style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                     />
                   </div>
 
                   {/* Voice button - switches to voice mode */}
                   <button
                     onClick={switchToVoiceMode}
-                    className="w-12 h-12 rounded-full flex items-center justify-center bg-white/80 hover:bg-white transition-all hover:scale-105 active:scale-95 shadow-lg"
+                    className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg"
+                    style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)' }}
                     title="Switch to voice mode"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#333">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
                       <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
                     </svg>
@@ -497,11 +515,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="w-12 h-12 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-                    style={{
-                      background: `linear-gradient(135deg, ${activeAvatar.color} 0%, ${activeAvatar.color}80 100%)`,
-                      boxShadow: `0 0 20px ${activeAvatar.color}40`
-                    }}
+                    className="w-12 h-12 rounded-full flex items-center justify-center bg-accent transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95 shadow-lg"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                       <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -555,7 +569,7 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
 
                 {/* Status text */}
                 <div className="text-center mb-6">
-                  <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">
+                  <p className="text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     {voiceStatus === 'idle' && 'Tap to start conversation'}
                     {voiceStatus === 'connecting' && 'Connecting...'}
                     {voiceStatus === 'connected' && (
@@ -570,10 +584,10 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 {/* Latest AI response (shown during conversation) */}
                 {transcript && voiceStatus === 'connected' && (
                   <div className="w-full max-w-md text-center animate-in fade-in duration-300">
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: 'var(--text-muted)' }}>
                       {activeAvatar.name}
                     </p>
-                    <p className="text-gray-800 text-base font-bold leading-relaxed">
+                    <p className="text-base font-bold leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                       {transcript}
                     </p>
                   </div>
@@ -582,10 +596,10 @@ function ChatAIView({ userId, onRefreshDiaries, avatar: initialAvatar, userLevel
                 {/* Show last message when idle */}
                 {latestAiMessage && voiceStatus === 'idle' && (
                   <div className="w-full max-w-md text-center animate-in fade-in duration-500">
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: 'var(--text-muted)' }}>
                       {activeAvatar.name}
                     </p>
-                    <p className="text-gray-800 text-base font-bold leading-relaxed">
+                    <p className="text-base font-bold leading-relaxed" style={{ color: 'var(--text-primary)' }}>
                       {latestAiMessage}
                     </p>
                   </div>
@@ -903,19 +917,21 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div className="space-y-4">
-          <h2 className="text-5xl font-black tracking-tighter uppercase leading-none">Emoti Space</h2>
-          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Archive your frequency</p>
+          <h2 className="text-5xl font-black tracking-tighter uppercase leading-none" style={{ color: 'var(--text-primary)' }}>Emoti Space</h2>
+          <p className="font-bold uppercase tracking-widest text-xs" style={{ color: 'var(--text-muted)' }}>Archive your frequency</p>
         </div>
-        <div className="flex bg-white p-1.5 rounded-full border border-black/5 shadow-sm">
+        <div className="flex p-1.5 rounded-full shadow-sm" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
           <button
             onClick={() => setMode('ai')}
-            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'ai' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
+            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'ai' ? 'bg-accent text-accent-inverse shadow-lg' : ''}`}
+            style={mode === 'ai' ? {} : { color: 'var(--text-muted)' }}
           >
             AI Chat
           </button>
           <button
             onClick={() => setMode('manual')}
-            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'manual' ? 'bg-accent text-accent-inverse shadow-lg' : 'text-gray-400 hover:text-black'}`}
+            className={`px-8 py-3 rounded-full text-[13px] font-black uppercase tracking-widest transition-all ${mode === 'manual' ? 'bg-accent text-accent-inverse shadow-lg' : ''}`}
+            style={mode === 'manual' ? {} : { color: 'var(--text-muted)' }}
           >
             Manual Log
           </button>
@@ -925,22 +941,23 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
       {mode === 'manual' ? (
         <div className="grid lg:grid-cols-12 gap-12">
           <div className="lg:col-span-8 space-y-10">
-            <div className="bg-white p-12 rounded-[3rem] border border-black/[0.03] shadow-xl space-y-10">
+            <div className="p-12 rounded-[3rem] shadow-xl space-y-10" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
               <div className="flex flex-col space-y-6">
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Give your entry a title..."
-                  className="w-full text-3xl font-black tracking-tight bg-transparent border-none focus:ring-0 focus:outline-none outline-none placeholder:text-gray-100 p-0"
+                  className="w-full text-3xl font-black tracking-tight bg-transparent border-none focus:ring-0 focus:outline-none outline-none p-0"
+                  style={{ color: 'var(--text-primary)' }}
                 />
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-black/5 flex items-center justify-center overflow-hidden">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
                     <span className="text-2xl">{selectedMood ? '🎭' : '✨'}</span>
                   </div>
                   <div>
-                    <h3 className="font-black text-sm uppercase">Private entry</h3>
-                    <p className="text-[12px] font-black uppercase text-gray-300 tracking-widest">{new Date().toLocaleDateString()}</p>
+                    <h3 className="font-black text-sm uppercase" style={{ color: 'var(--text-primary)' }}>Private entry</h3>
+                    <p className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{new Date().toLocaleDateString()}</p>
                   </div>
                 </div>
 
@@ -952,7 +969,8 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                         setSelectedMood(m)
                         setShowCustomMood(false)
                       }}
-                      className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${selectedMood?.label === m.label && !showCustomMood ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                      className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${selectedMood?.label === m.label && !showCustomMood ? 'bg-accent text-accent-inverse shadow-lg' : ''}`}
+                      style={selectedMood?.label === m.label && !showCustomMood ? {} : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }}
                     >
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }}></div>
                       <span className="text-[13px] font-black uppercase tracking-widest">{m.label}</span>
@@ -964,7 +982,8 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                       setShowCustomMood(true)
                       setSelectedMood(null)
                     }}
-                    className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${showCustomMood ? 'border-black bg-black text-white shadow-lg' : 'border-black/5 bg-gray-50 text-gray-400 hover:border-black/10'}`}
+                    className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${showCustomMood ? 'bg-accent text-accent-inverse shadow-lg' : ''}`}
+                    style={showCustomMood ? {} : { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }}
                   >
                     <span className="text-[13px]">+</span>
                     <span className="text-[13px] font-black uppercase tracking-widest">Custom</span>
@@ -973,7 +992,7 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
 
                 {/* Custom mood input panel */}
                 {showCustomMood && (
-                  <div className="mt-4 p-6 bg-gray-50 rounded-2xl border border-black/5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="mt-4 p-6 rounded-2xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
                     <div className="flex items-center gap-4">
                       <div
                         className="w-10 h-10 rounded-xl flex-shrink-0 shadow-inner"
@@ -985,11 +1004,12 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                         onChange={(e) => setCustomMoodLabel(e.target.value)}
                         placeholder="Enter emotion name..."
                         maxLength={20}
-                        className="flex-1 px-4 py-2 bg-white rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                        className="flex-1 px-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                        style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                         Choose Color
                       </label>
                       <div className="relative">
@@ -1022,7 +1042,8 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What's your current frequency? Write anything, and I'll help you capture the essence..."
-                className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 focus:outline-none outline-none text-xl font-bold leading-relaxed placeholder:text-gray-200 resize-none"
+                className="w-full min-h-[300px] bg-transparent border-none focus:ring-0 focus:outline-none outline-none text-xl font-bold leading-relaxed resize-none"
+                style={{ color: 'var(--text-primary)' }}
               />
               <div className="flex justify-end">
                 <button onClick={handleSave} className="px-12 py-4 bg-accent text-accent-inverse rounded-full font-black text-[13px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">Save</button>
@@ -1031,8 +1052,8 @@ export default function DiaryView({ onInteract, entries, onAddEntry, userId, onR
 
           </div>
           <div className="lg:col-span-4 relative">
-            <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-8">
-              <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-gray-300">Previous Logs</h4>
+            <div className="p-10 rounded-[2.5rem] space-y-8" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
+              <h4 className="font-black text-[13px] uppercase tracking-[0.25em]" style={{ color: 'var(--text-muted)' }}>Previous Logs</h4>
               <div className="diary-stack">
                 {entries.slice(0, 5).map((item, i) => (
                   <div

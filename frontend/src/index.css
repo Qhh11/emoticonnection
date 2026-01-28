@@ -4,9 +4,17 @@
 
 @layer base {
   body {
-    @apply bg-paper text-text-dark font-sans antialiased;
+    @apply font-sans antialiased;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.04' /%3E%3C/svg%3E");
     background-repeat: repeat;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Dark theme removes noise pattern for cleaner look */
+  :root[data-theme="dark"] body {
+    background-image: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -25,6 +33,65 @@
     --accent-soft: #F5F5F5;
     --accent-text: #ffffff;
     --accent-inverse: #ffffff;
+    /* Theme mode colors */
+    --bg-primary: #FAFAF7;
+    --bg-secondary: #F5F5F5;
+    --bg-card: #FFFFFF;
+    --text-primary: #2D3436;
+    --text-secondary: #636E72;
+    --text-muted: #B2BEC3;
+    --border-color: rgba(0, 0, 0, 0.05);
+  }
+
+  /* Dark Theme - 深灰色调，非纯黑 */
+  :root[data-theme="dark"] {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #252542;
+    --bg-card: #2d2d4a;
+    --text-primary: #e8e8f0;
+    --text-secondary: #a0a0b8;
+    --text-muted: #6a6a82;
+    --border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Soft Theme (light pastel) */
+  :root[data-theme="soft"] {
+    --bg-primary: #F8F4F0;
+    --bg-secondary: #EDE8E3;
+    --bg-card: #FFFFFF;
+    --text-primary: #4A4A4A;
+    --text-secondary: #7A7A7A;
+    --text-muted: #AAAAAA;
+    --border-color: rgba(0, 0, 0, 0.05);
+  }
+
+  /* Theme-aware utility classes */
+  .bg-theme-primary {
+    background-color: var(--bg-primary);
+  }
+
+  .bg-theme-secondary {
+    background-color: var(--bg-secondary);
+  }
+
+  .bg-theme-card {
+    background-color: var(--bg-card);
+  }
+
+  .text-theme-primary {
+    color: var(--text-primary);
+  }
+
+  .text-theme-secondary {
+    color: var(--text-secondary);
+  }
+
+  .text-theme-muted {
+    color: var(--text-muted);
+  }
+
+  .border-theme {
+    border-color: var(--border-color);
   }
 
   .bg-accent {

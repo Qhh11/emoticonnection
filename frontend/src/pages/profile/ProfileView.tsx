@@ -126,14 +126,14 @@ function StatItem({ label, value, onClick, badge }: StatItemProps) {
       onClick={onClick}
     >
       <div className="flex items-center gap-2">
-        <p className="text-xl font-black tracking-tighter text-gray-800">{value}</p>
+        <p className="text-xl font-black tracking-tighter" style={{ color: 'var(--text-primary)' }}>{value}</p>
         {badge !== undefined && badge > 0 && (
           <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1">
             {badge > 99 ? '99+' : badge}
           </span>
         )}
       </div>
-      <p className="text-[12px] font-black uppercase tracking-widest text-gray-300">{label}</p>
+      <p className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{label}</p>
     </div>
   )
 }
@@ -491,7 +491,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
     <div className="space-y-24 pb-32">
       <header className="space-y-8">
         <div className="flex justify-between items-center">
-          <h2 className="text-5xl font-black tracking-tighter leading-none uppercase">Profile</h2>
+          <h2 className="text-5xl font-black tracking-tighter leading-none uppercase" style={{ color: 'var(--text-primary)' }}>Profile</h2>
           <div className="flex items-center gap-3">
             {/* Theme Selector Button */}
             <div className="relative">
@@ -499,9 +499,9 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                 <span className="text-white text-[13px]">🎨</span>
               </button>
               {showThemeSelector && (
-                <div className="absolute right-0 mt-4 bg-white p-6 rounded-[2rem] shadow-2xl border border-black/5 z-[60] w-64 theme-panel-enter">
+                <div className="absolute right-0 mt-4 p-6 rounded-[2rem] shadow-2xl z-[60] w-64 theme-panel-enter" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
                   <div className="flex items-center justify-between mb-4 px-2">
-                    <p className="text-[12px] font-black uppercase tracking-widest text-gray-300">Atmosphere Sync</p>
+                    <p className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Atmosphere Sync</p>
                     {/* Fluid Background Toggle */}
                     {onToggleFluidBackground && (
                       <button
@@ -526,10 +526,10 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
           </div>
         </div>
 
-        <div className="bg-white p-10 rounded-[2.5rem] border border-black/[0.03] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-center gap-10">
+        <div className="p-10 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-center gap-10" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
           {/* User Profile Avatar */}
           <div className="relative group">
-            <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] bg-gray-50 flex items-center justify-center shadow-inner border-4 border-white group-hover:scale-105 transition-transform duration-700 overflow-hidden">
+            <div className="w-32 h-32 md:w-36 md:h-36 rounded-[3rem] flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform duration-700 overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--bg-card)', borderWidth: '4px' }}>
               <img src={getAvatarUrl(avatar)} alt="" className="w-full h-full object-cover" />
             </div>
             <div className="absolute -bottom-1 -right-1 bg-accent text-accent-inverse px-3 py-1 rounded-full text-[14px] font-black uppercase tracking-widest border-2 border-white transition-colors">Lv.{level}</div>
@@ -537,8 +537,8 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
           <div className="flex-1 space-y-4 w-full">
             <div className="flex justify-between items-start">
               <div className="space-y-0.5">
-                <h3 className="text-xl font-black text-gray-800">{user?.nickname || user?.username || 'User'}</h3>
-                <p className="text-gray-400 font-bold text-[13px] uppercase tracking-[0.2em]">Energy: <span className="text-accent transition-colors">{points.toLocaleString()}</span></p>
+                <h3 className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>{user?.nickname || user?.username || 'User'}</h3>
+                <p className="font-bold text-[13px] uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)' }}>Energy: <span className="text-accent transition-colors">{points.toLocaleString()}</span></p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -550,7 +550,8 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                 {onOpenSettings && (
                   <button
                     onClick={onOpenSettings}
-                    className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all flex items-center gap-2 shadow-md"
+                    className="px-4 py-2 rounded-xl transition-all flex items-center gap-2 shadow-md"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <circle cx="12" cy="12" r="3"></circle>
@@ -562,7 +563,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
               </div>
             </div>
             {/* Bio - inline display */}
-            <p className="text-gray-500 text-sm leading-relaxed">
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
               {user?.bio || "This soul hasn't written a bio yet."}
             </p>
             <div className="flex space-x-10 pt-2">
@@ -575,28 +576,28 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
       </header>
 
       <section className="grid lg:grid-cols-5 gap-8">
-        <div className="lg:col-span-3 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] space-y-6 flex flex-col justify-between h-[420px]">
+        <div className="lg:col-span-3 p-10 rounded-[2.5rem] space-y-6 flex flex-col justify-between h-[420px]" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
           <div className="flex justify-between items-center">
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-black">Emotion Insights</h4>
-            <span className="text-[12px] font-bold text-black/20">Weekly</span>
+            <h4 className="font-black text-[13px] uppercase tracking-[0.25em]" style={{ color: 'var(--text-primary)' }}>Emotion Insights</h4>
+            <span className="text-[12px] font-bold" style={{ color: 'var(--text-muted)' }}>Weekly</span>
           </div>
 
           {/* Quick Stats - Using real data from weeklyReport */}
           <div className="flex justify-around">
             <div className="text-center">
               <span className="text-3xl">{getMoodEmoji(weeklyReport?.average_mood_score ?? 0)}</span>
-              <p className="text-lg font-black mt-1">{getMoodLabel(weeklyReport?.average_mood_score ?? 0)}</p>
-              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Mood</p>
+              <p className="text-lg font-black mt-1" style={{ color: 'var(--text-primary)' }}>{getMoodLabel(weeklyReport?.average_mood_score ?? 0)}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Mood</p>
             </div>
             <div className="text-center">
               <span className="text-3xl">{getTrendIcon(weeklyReport?.emotion_trend?.trend_direction || 'stable')}</span>
-              <p className="text-lg font-black mt-1">{getTrendLabel(weeklyReport?.emotion_trend?.trend_direction || 'stable')}</p>
-              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Trend</p>
+              <p className="text-lg font-black mt-1" style={{ color: 'var(--text-primary)' }}>{getTrendLabel(weeklyReport?.emotion_trend?.trend_direction || 'stable')}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Trend</p>
             </div>
             <div className="text-center">
               <span className="text-3xl">🎯</span>
-              <p className="text-lg font-black mt-1">{Math.round((weeklyReport?.mood_stability ?? 1) * 100)}%</p>
-              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Stable</p>
+              <p className="text-lg font-black mt-1" style={{ color: 'var(--text-primary)' }}>{Math.round((weeklyReport?.mood_stability ?? 1) * 100)}%</p>
+              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Stable</p>
             </div>
           </div>
 
@@ -682,7 +683,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
               })
             })()}
           </div>
-          <div className="flex justify-between text-[12px] font-black uppercase tracking-widest text-gray-400 px-4">
+          <div className="flex justify-between text-[12px] font-black uppercase tracking-widest px-4" style={{ color: 'var(--text-muted)' }}>
             <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
           </div>
 
@@ -700,7 +701,7 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: item.color }}
                 />
-                <span className="text-[10px] font-bold text-gray-500">{item.label}</span>
+                <span className="text-[10px] font-bold" style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
               </div>
             ))}
           </div>
@@ -713,7 +714,8 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
               e.stopPropagation()
               onOpenEmotionReport?.()
             }}
-            className="w-full py-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-600 transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+            style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
           >
             <span>View Full Report</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -722,21 +724,21 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
           </button>
         </div>
 
-        <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-black/[0.03] flex flex-col shadow-sm relative">
+        <div className="lg:col-span-2 p-10 rounded-[2.5rem] flex flex-col shadow-sm relative" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
           <div className="flex justify-between items-center mb-4">
-            <h4 className="font-black text-[13px] uppercase tracking-[0.25em] text-black">Check-in</h4>
+            <h4 className="font-black text-[13px] uppercase tracking-[0.25em]" style={{ color: 'var(--text-primary)' }}>Check-in</h4>
             <span className="text-[13px] font-black tracking-widest text-accent">STREAK: {todayCheckIn?.streak ?? 0}</span>
           </div>
           <div className="mb-3">
-            <p className="text-[14px] font-black tracking-wider text-gray-800">{currentMonth}</p>
+            <p className="text-[14px] font-black tracking-wider" style={{ color: 'var(--text-primary)' }}>{currentMonth}</p>
           </div>
 
           {/* 坐标轴打卡组件 */}
           {showCoordinatePicker && (
-            <div className="mb-4 bg-gray-50 p-4 rounded-2xl border border-black/5">
+            <div className="mb-4 p-4 rounded-2xl" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
               {/* 标题 + Help Dropdown */}
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-500">
+                <p className="text-[12px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)' }}>
                   How are you feeling?
                 </p>
                 {/* Help Dropdown 触发按钮 */}
@@ -750,12 +752,12 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
 
                   {/* Help Dropdown Panel */}
                   {showHelpModal && (
-                    <div className="absolute right-0 top-7 w-64 bg-white rounded-2xl shadow-xl border border-black/5 z-50 p-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                    <div className="absolute right-0 top-7 w-64 rounded-2xl shadow-xl z-50 p-4 animate-in fade-in slide-in-from-bottom-4 duration-200" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderWidth: '1px' }}>
                       {/* Arrow */}
-                      <div className="absolute -top-2 right-2 w-4 h-4 bg-white rotate-45 border-l border-t border-black/5" />
+                      <div className="absolute -top-2 right-2 w-4 h-4 rotate-45" style={{ backgroundColor: 'var(--bg-card)', borderLeftColor: 'var(--border-color)', borderTopColor: 'var(--border-color)', borderLeftWidth: '1px', borderTopWidth: '1px' }} />
 
                       {/* Title */}
-                      <h4 className="text-[13px] font-black text-gray-800 mb-3">Emotion Coordinate Guide</h4>
+                      <h4 className="text-[13px] font-black mb-3" style={{ color: 'var(--text-primary)' }}>Emotion Coordinate Guide</h4>
 
                       {/* Coordinate diagram */}
                       <div className="relative aspect-square bg-gray-50 rounded-xl overflow-hidden mb-3">

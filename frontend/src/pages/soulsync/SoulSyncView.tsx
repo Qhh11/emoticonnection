@@ -971,7 +971,7 @@ export default function SoulSyncView({
       {/* Header */}
       <header className="flex justify-between items-center">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black tracking-tighter uppercase leading-none">SoulSync</h1>
+          <h1 className="text-5xl font-black tracking-tighter uppercase leading-none" style={{ color: 'var(--text-primary)' }}>SoulSync</h1>
           <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Connect with your echoes</p>
         </div>
       </header>

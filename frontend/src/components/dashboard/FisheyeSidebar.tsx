@@ -34,7 +34,8 @@ export default function FisheyeSidebar({ items, onLogout, logoutIcon }: FisheyeS
   return (
     <aside
       ref={sidebarRef}
-      className="fixed left-0 top-0 h-screen w-20 md:w-24 bg-white/80 backdrop-blur-xl border-r border-black/[0.03] flex flex-col items-center py-12 z-50 shadow-sm"
+      className="fixed left-0 top-0 h-screen w-20 md:w-24 backdrop-blur-xl flex flex-col items-center py-12 z-50 shadow-sm"
+      style={{ backgroundColor: 'var(--bg-card)', borderRightColor: 'var(--border-color)', borderRightWidth: '1px' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -101,11 +102,13 @@ function FisheyeNavItem({ item, mouseY }: FisheyeNavItemProps) {
       className={`relative group flex items-center justify-center rounded-2xl transition-colors ${
         item.active
           ? 'bg-accent text-accent-inverse shadow-xl'
-          : 'text-gray-300 hover:text-accent bg-transparent hover:bg-gray-50'
+          : 'hover:text-accent'
       }`}
       style={{
         width: size,
         height: size,
+        color: item.active ? undefined : 'var(--text-muted)',
+        backgroundColor: item.active ? undefined : 'transparent',
       }}
       whileTap={{ scale: 0.95 }}
     >

@@ -25,7 +25,7 @@ export default function CommunityHeader({
       <div className="flex items-center justify-between">
         {/* 左侧：标题 */}
         <div>
-          <h1 className="text-5xl font-black tracking-tighter text-gray-900 uppercase leading-none">
+          <h1 className="text-5xl font-black tracking-tighter uppercase leading-none" style={{ color: 'var(--text-primary)' }}>
             Hi, {userNickname || 'Friend'}
           </h1>
           <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mt-1">
