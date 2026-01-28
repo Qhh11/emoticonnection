@@ -123,8 +123,14 @@ async def check_in(user_id: str, request: CheckInRequest):
         "total_points": 160
     }
     """
-    # Use today's date if not provided
-    check_date = request.date or date.today().isoformat()
+    # Use today's date if not provided; otherwise validate YYYY-MM-DD
+    if request.date:
+        try:
+            check_date = date.fromisoformat(request.date).isoformat()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="date 必须是 YYYY-MM-DD") from exc
+    else:
+        check_date = date.today().isoformat()
 
     result = create_check_in(
         user_id,

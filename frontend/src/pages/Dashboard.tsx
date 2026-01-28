@@ -669,6 +669,7 @@ export default function Dashboard() {
     try {
       const response = await userApi.checkIn(user._id, {
         mood: data.mood,
+        date: data.date,  // 补签时传入日期
         coordinate_x: data.coordinate.x,
         coordinate_y: data.coordinate.y,
         color: data.color,

@@ -221,6 +221,7 @@ export interface CheckInData {
   color: string
   emoji: string
   mood: string
+  date?: string  // 用于补签，YYYY-MM-DD 格式，不传则默认今天
 }
 
 interface ProfileViewProps {
@@ -305,6 +306,8 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
   const [coordinate, setCoordinate] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  // 补签选中的日期 (null 表示今天签到，YYYY-MM-DD 表示补签)
+  const [makeupDate, setMakeupDate] = useState<string | null>(null)
 
   // 计算当前颜色和表情
   const currentColor = calculateColor(coordinate.x, coordinate.y)
@@ -445,30 +448,42 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
       coordinate: coordinate,
       color: currentColor,
       emoji: currentEmoji,
-      mood: getMoodLabelFromCoordinate(coordinate.x, coordinate.y)
+      mood: getMoodLabelFromCoordinate(coordinate.x, coordinate.y),
+      date: makeupDate || undefined,  // 补签时传入日期
     }
 
     let success: boolean
-    if (effectiveCheckIn) {
-      // Already checked in today, update
+    if (!makeupDate && effectiveCheckIn) {
+      // Already checked in today, update (not makeup)
       success = await onUpdateCheckIn(data)
     } else {
-      // First check-in of the day
+      // First check-in (today or makeup)
       success = await onCheckIn(data)
     }
 
     if (success) {
       setShowCoordinatePicker(false)
       // Update calendar to reflect new check-in
+      const targetDay = makeupDate
+        ? parseInt(makeupDate.split('-')[2], 10)
+        : null
       setCalendarData(prev => ({
         ...prev,
-        dates: prev.dates.map(d => d.isToday ? {
-          ...d,
-          mood: null,
-          customColor: currentColor,
-          emoji: currentEmoji
-        } : d)
+        dates: prev.dates.map(d => {
+          // 如果是补签，更新对应日期；否则更新今天
+          if ((makeupDate && d.day === targetDay) || (!makeupDate && d.isToday)) {
+            return {
+              ...d,
+              mood: null,
+              customColor: currentColor,
+              emoji: currentEmoji
+            }
+          }
+          return d
+        })
       }))
+      // 清空补签日期
+      setMakeupDate(null)
     }
   }
 
@@ -881,12 +896,19 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                 <span>P: {coordinate.x >= 0 ? '+' : ''}{(coordinate.x * 10).toFixed(1)}</span>
               </div>
 
+              {/* 补签日期提示 */}
+              {makeupDate && (
+                <div className="mt-2 text-center text-[11px] font-bold text-amber-600 bg-amber-50 rounded-lg py-1 px-2">
+                  补签日期: {makeupDate}
+                </div>
+              )}
+
               {/* 确认按钮 */}
               <button
                 onClick={handleConfirmCheckIn}
                 className="mt-3 w-full py-2.5 bg-black text-white rounded-xl text-[12px] font-black uppercase tracking-widest hover:bg-gray-800 transition-colors"
               >
-                Confirm Check-in
+                {makeupDate ? 'Confirm Makeup' : 'Confirm Check-in'}
               </button>
             </div>
           )}
@@ -914,6 +936,8 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                   <button
                     key={i}
                     onClick={() => {
+                      // 今天签到，清空补签日期
+                      setMakeupDate(null)
                       // 如果已打卡，从上次位置初始化；否则从中心开始
                       if (effectiveCheckIn?.coordinate_x !== undefined && effectiveCheckIn?.coordinate_y !== undefined) {
                         setCoordinate({ x: effectiveCheckIn.coordinate_x, y: effectiveCheckIn.coordinate_y })
@@ -966,11 +990,25 @@ export default function ProfileView({ points, level, avatar, onCheckIn, onUpdate
                     </div>
                   )
                 }
-                // 没有签到记录，显示灰色数字
+                // 没有签到记录 - 可补签，点击打开签到弹窗
+                const today = new Date()
+                const year = today.getFullYear()
+                const month = String(today.getMonth() + 1).padStart(2, '0')
+                const dayStr = String(dateInfo.day).padStart(2, '0')
+                const dateStr = `${year}-${month}-${dayStr}`
                 return (
-                  <div key={i} className="aspect-square rounded-xl border border-black/5 flex items-center justify-center text-[12px] font-black text-black/10 transition-all duration-500">
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setMakeupDate(dateStr)
+                      setCoordinate({ x: 0, y: 0 })
+                      setShowCoordinatePicker(true)
+                    }}
+                    className="aspect-square rounded-xl border-2 border-dashed border-black/10 flex items-center justify-center text-[12px] font-black text-black/30 transition-all duration-300 hover:border-accent hover:text-accent hover:bg-accent/5 hover:scale-105"
+                    title={`补签 ${dateStr}`}
+                  >
                     {dateInfo.day}
-                  </div>
+                  </button>
                 )
               }
 
