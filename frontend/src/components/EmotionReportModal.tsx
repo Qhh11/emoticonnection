@@ -494,8 +494,34 @@ export default function EmotionReportModal({ isOpen, onClose, userId, onRefreshS
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-black"></div>
+            <div className="flex flex-col items-center justify-center py-16 space-y-6">
+              {/* Loading animation */}
+              <div className="relative w-20 h-20">
+                {/* Outer spinning ring */}
+                <div className="absolute inset-0 rounded-full border-4 border-gray-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-black animate-spin"></div>
+                {/* Inner emoji pulse */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-3xl animate-pulse">🧠</span>
+                </div>
+              </div>
+              
+              {/* Loading text */}
+              <div className="text-center space-y-2">
+                <p className="text-sm font-black text-gray-800">Analyzing your emotions...</p>
+                <p className="text-[11px] text-gray-400 max-w-[200px]">
+                  {period === 'daily' && 'Reviewing yesterday\'s conversations'}
+                  {period === 'weekly' && 'Processing the past 7 days of data'}
+                  {period === 'monthly' && 'Generating your monthly insights'}
+                </p>
+              </div>
+
+              {/* Loading progress dots */}
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
             </div>
           ) : error ? (
             <div className="text-center py-20">
