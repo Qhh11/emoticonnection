@@ -230,6 +230,31 @@ export default function Dashboard() {
     sessionStorage.setItem('currentTheme', JSON.stringify(currentTheme))
   }, [currentTheme])
 
+  // Apply theme mode (dark/soft/default) based on user preferences
+  useEffect(() => {
+    const root = document.documentElement
+    const themeMode = user?.preferences?.theme || 'default'
+    
+    // Remove any existing theme attribute
+    root.removeAttribute('data-theme')
+    
+    // Apply the theme if it's not default
+    if (themeMode === 'dark' || themeMode === 'soft') {
+      root.setAttribute('data-theme', themeMode)
+    }
+    
+    // Save to sessionStorage for persistence across page navigation
+    sessionStorage.setItem('themeMode', themeMode)
+  }, [user?.preferences?.theme])
+
+  // Also apply theme on initial load from sessionStorage (before user data loads)
+  useEffect(() => {
+    const savedThemeMode = sessionStorage.getItem('themeMode')
+    if (savedThemeMode && (savedThemeMode === 'dark' || savedThemeMode === 'soft')) {
+      document.documentElement.setAttribute('data-theme', savedThemeMode)
+    }
+  }, [])
+
   // Close AssistantBubble when switching away from tabs that support it
   useEffect(() => {
     // AssistantBubble is supported on soulsync and diary (manual mode) tabs
@@ -849,6 +874,15 @@ export default function Dashboard() {
         if (updateData.avatar) {
           setUserAvatar(updateData.avatar)
         }
+        // Apply theme immediately if changed
+        if (updateData.preferences?.theme) {
+          const root = document.documentElement
+          root.removeAttribute('data-theme')
+          if (updateData.preferences.theme === 'dark' || updateData.preferences.theme === 'soft') {
+            root.setAttribute('data-theme', updateData.preferences.theme)
+          }
+          sessionStorage.setItem('themeMode', updateData.preferences.theme)
+        }
         setShowSettings(false)
         // Only reload if nickname or password changed (to update auth context)
         if (updateData.nickname || updateData.password) {
@@ -971,7 +1005,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen text-[#121212] overflow-hidden relative">
+    <div className="flex h-screen overflow-hidden relative" style={{ color: 'var(--text-primary)' }}>
       {/* 主题色渐变背景 - 匹配当前系统颜色 */}
       {showFluidBackground && <FluidBackground themeColor={currentTheme.color} />}
       <FisheyeSidebar
@@ -1194,15 +1228,17 @@ export default function Dashboard() {
           onClick={() => setShowSettings(false)}
         >
           <div
-            className="w-full max-w-4xl bg-white rounded-[2.5rem] p-8 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500"
+            className="w-full max-w-4xl rounded-[2.5rem] p-8 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500"
+            style={{ backgroundColor: 'var(--bg-card)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-black tracking-tight">Settings</h3>
+              <h3 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>Settings</h3>
               <button
                 onClick={() => setShowSettings(false)}
-                className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1215,24 +1251,25 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-8">
               {/* Left Column - Account Info */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-gray-300 mb-4">Account</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-muted)' }}>Account</h4>
 
                 {/* Username (read-only) */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     Username
                   </label>
                   <input
                     type="text"
                     value={user?.username || ''}
                     readOnly
-                    className="w-full px-4 py-3 bg-gray-100 rounded-xl border border-black/5 text-sm font-bold text-gray-500 cursor-not-allowed"
+                    className="w-full px-4 py-3 rounded-xl text-sm font-bold cursor-not-allowed"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   />
                 </div>
 
                 {/* Nickname */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     Display Name
                   </label>
                   <input
@@ -1240,13 +1277,14 @@ export default function Dashboard() {
                     value={settingsNickname}
                     onChange={(e) => setSettingsNickname(e.target.value)}
                     placeholder="Enter your display name"
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                    className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   />
                 </div>
 
                 {/* Password */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     New Password
                   </label>
                   <input
@@ -1254,13 +1292,14 @@ export default function Dashboard() {
                     value={settingsPassword}
                     onChange={(e) => setSettingsPassword(e.target.value)}
                     placeholder="Leave empty to keep current"
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                    className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   />
                 </div>
 
                 {/* Email */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     Email
                   </label>
                   <input
@@ -1268,25 +1307,27 @@ export default function Dashboard() {
                     value={settingsEmail}
                     onChange={(e) => setSettingsEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                    className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   />
                 </div>
 
                 {/* Avatar Selection - Grid layout */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     Avatar
                   </label>
-                  <div className="grid grid-cols-6 gap-2">
+                  <div className="grid grid-cols-7 gap-3 py-2">
                     {USER_AVATARS.map(avatarId => (
                       <button
                         key={avatarId}
                         type="button"
                         onClick={() => setSettingsAvatar(avatarId)}
-                        className={`w-10 h-10 rounded-xl overflow-hidden transition-all duration-200 ${settingsAvatar === avatarId
-                          ? 'ring-2 ring-accent scale-110 shadow-lg'
-                          : 'bg-gray-100 hover:scale-150 hover:z-10 hover:shadow-xl'
+                        className={`relative w-10 h-10 rounded-xl overflow-hidden transition-all duration-300 ease-out ${settingsAvatar === avatarId
+                          ? 'ring-2 ring-accent scale-110 shadow-lg z-20'
+                          : 'hover:scale-[2] hover:z-30 hover:shadow-2xl hover:rounded-2xl'
                           }`}
+                        style={{ backgroundColor: 'var(--bg-secondary)' }}
                       >
                         <img src={getAvatarUrl(avatarId)} alt="" className="w-full h-full object-cover" />
                       </button>
@@ -1297,12 +1338,12 @@ export default function Dashboard() {
 
               {/* Right Column - Profile Info */}
               <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-gray-300 mb-4">Profile</h4>
+                <h4 className="text-xs font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-muted)' }}>Profile</h4>
 
                 {/* Age & Gender Row */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                       Age
                     </label>
                     <input
@@ -1310,17 +1351,19 @@ export default function Dashboard() {
                       value={settingsAge || ''}
                       onChange={(e) => setSettingsAge(Number(e.target.value))}
                       placeholder="Age"
-                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300"
+                      className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                      style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                    <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                       Gender
                     </label>
                     <select
                       value={settingsGender || ''}
                       onChange={(e) => setSettingsGender(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                      className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                      style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                     >
                       <option value="">Select</option>
                       <option value="male">Male</option>
@@ -1333,26 +1376,28 @@ export default function Dashboard() {
 
                 {/* Bio - Larger textarea */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     Bio
                   </label>
                   <textarea
                     value={settingsBio}
                     onChange={(e) => setSettingsBio(e.target.value)}
                     placeholder="Tell us about yourself..."
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold placeholder:text-gray-300 resize-none h-28"
+                    className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold resize-none h-28"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   />
                 </div>
 
                 {/* MBTI */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     MBTI Type
                   </label>
                   <select
                     value={settingsMbti?.type || ''}
                     onChange={(e) => setSettingsMbti({ type: e.target.value, completed_at: new Date().toISOString() })}
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   >
                     <option value="">Unknown</option>
                     {[
@@ -1366,13 +1411,14 @@ export default function Dashboard() {
 
                 {/* Theme Selection */}
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-black uppercase tracking-widest text-gray-400">
+                  <label className="text-[12px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     Theme
                   </label>
                   <select
                     value={settingsPreferences?.theme || 'default'}
                     onChange={(e) => setSettingsPreferences({ ...settingsPreferences, theme: e.target.value as 'light' | 'dark' | 'system' })}
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-black/5 focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent text-sm font-bold"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', borderWidth: '1px' }}
                   >
                     <option value="default">Default</option>
                     <option value="dark">Dark</option>
@@ -1381,8 +1427,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* Notifications Toggle */}
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer select-none">
-                  <span className="text-sm font-bold text-gray-600">Notifications</span>
+                <label className="flex items-center justify-between p-3 rounded-xl cursor-pointer select-none" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                  <span className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>Notifications</span>
                   <div className="relative">
                     <input
                       type="checkbox"
@@ -1401,7 +1447,8 @@ export default function Dashboard() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowSettings(false)}
-                className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-xl font-black text-[13px] uppercase tracking-widest hover:bg-gray-200 transition-all"
+                className="flex-1 py-3.5 rounded-xl font-black text-[13px] uppercase tracking-widest transition-all"
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
               >
                 Cancel
               </button>
