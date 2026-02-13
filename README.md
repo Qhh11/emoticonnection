@@ -1,229 +1,238 @@
 # 📘 EmotionConnect 
 
-EmotionConnect 是一个面向年轻人与学生群体的 **情绪支持应用**。
-通过 AI 与 Peer（真人）双聊天系统、情绪分析、匿名树洞社区、积分体系等模块，为用户提供安全、匿名、温暖的在线情绪陪伴体验。
+EmotionConnect is an **emotional support application designed for young people and students**.  
+
+Through a dual support system of **AI + Peer (real human) chat**, emotion analytics, anonymous community features, and a gamified points system, the app provides users with a safe, anonymous, and warm online emotional companionship experience.
 
 
 
 ---
 
-# � 目录
+# 📂 Table of Contents
 
-1. [项目简介](#项目简介)
-2. [核心功能模块](#核心功能模块)
-   * [情绪记录 Emotion Diary](#情绪记录-emotion-diary)
-   * [AI 聊天 aiChat](#ai-聊天-aichat)
-   * [匹配聊天 Peer Chat](#匹配聊天-peer-chat)
-   * [匿名树洞社区 Emotion Hub](#匿名树洞社区-emotion-hub)
-   * [情绪分析与可视化 Emotion Insight](#情绪分析与可视化-emotion-insight)
-   * [积分体系与个性化 Personalization](#积分体系与个性化-personalization)
-   * [VIP 体系](#vip-体系)
-3. [用户系统](#用户系统)
-4. [安全与伦理设计](#安全与伦理设计)
-5. [推荐产品流程（User Journey）](#推荐产品流程user-journey)
-6. [技术架构（前端/后端/AI）](#技术架构前端后端ai)
-7. [后续开发路线图](#后续开发路线图)
-
----
-
-# 🧭 项目简介
-
-EmotionConnect 旨在构建一个：
-
-* **安全、匿名、无评判**
-* **AI + Peer 双模式支持**
-* **有结构化情绪教育意义**
-* **具备用户成长体系**
-
-的情绪陪伴平台。
-
-核心理念：
-
-> “让每个人都能被倾听，也能成为他人的光。”
-
-App 通过引导用户表达、记录、反思与分析情绪，从而在日常生活中持续提升情绪识别能力（Emotional Literacy）。
+1. [Project Overview](#project-overview)
+2. [Core Feature Modules](#core-feature-modules)
+   * [Emotion Diary](#1-emotion-diary)
+   * [AI Chat](#2-ai-chat)
+   * [Peer Chat](#3-peer-chat)
+   * [Anonymous Community – Emotion Hub](#4-anonymous-community--emotion-hub)
+   * [Emotion Insight & Visualization](#5-emotion-insight--visualization)
+   * [Points & Personalization System](#6-points--personalization-system)
+   * [VIP System](#vip-system)
+3. [User System](#user-system)
+4. [Safety & Ethical Design](#safety--ethical-design)
+5. [Recommended User Journey](#recommended-user-journey)
+6. [Technical Architecture](#technical-architecture)
+7. [Development Roadmap](#development-roadmap)
 
 ---
 
-# 🧩 核心功能模块
+# 🧭 Project Overview
 
-## 1. 情绪记录 Emotion Diary
+EmotionConnect aims to build a platform that is:
 
-每日记录用户的情绪状态与背后触发事件。
+* **Safe, anonymous, and judgment-free**
+* Powered by both **AI and real peer support**
+* Structured with emotional education value
+* Equipped with a user growth and progression system
 
-### 🔹 功能点
+Core philosophy:
 
-* **三种输入方式**：文本、语音、图片
-* **标签系统（主情绪 + 副情绪 + 身体感受 + 事件类型）**
-  * 主情绪：开心/悲伤/焦虑
-  * 副情绪：愉悦、紧张、无助、暴躁
-  * 身体感受：疲惫、轻松、头胀
-  * 事件类型：人际 / 学习 / 恋爱 / 家庭
-* **理想陪伴方式**：记录用户当下需要“倾听/建议/陪伴”
-* 支持当日回顾、未来情绪趋势预测（依赖 AI）
+> "Let everyone be heard — and become a light for others."
+
+The app guides users to express, record, reflect on, and analyze their emotions, helping improve emotional literacy in daily life.
 
 ---
 
-## 2. AI 聊天 aiChat
+# 🧩 Core Feature Modules
 
-提供五种专业化情绪应对模式：
+## 1. Emotion Diary
 
-### 🔹 2.1 倾诉模式（Venting）
+Allows users to record their emotional states and triggering events daily.
 
-* AI 不评价、不建议
-* 只倾听
-* 遵循人本主义倾听技巧（反映情绪、复述感受）
+### 🔹 Features
 
-### 🔹 2.2 分析模式（Analytic）
-
-* 提供结构化分析，包括：
-  * 触发因素
-  * 情绪链路
-  * 需求推断
-  * 可控与不可控因素
-
-### 🔹 2.3 陪伴模式（Chill）
-
-* 更轻松的闲聊语气
-* 作为用户的“陪伴者，而非顾问”
-
-### 🔹 2.4 稳定模式（Stabilize）
-
-* 帮助用户在情绪高 arousal 状态下平稳下来
-* 包含：呼吸引导、grounding 技巧、短时注意力切换方法
-
-### 🔹 2.5 正念模式（Mindfulness）
-
-* 1–3 分钟练习
-* 呼吸、身体扫描、自我慈悲练习
+* **Three input methods**: text, voice, image
+* **Tagging system** (primary emotion + secondary emotion + physical sensation + event type)
+  * Primary emotions: happy / sad / anxious
+  * Secondary emotions: relieved, tense, helpless, irritable
+  * Physical sensations: tired, relaxed, headache
+  * Event types: relationships / academics / romantic / family
+* **Preferred support type**: listening / advice / companionship
+* Daily review and future emotion trend prediction (AI-powered)
 
 ---
 
-## 3. 匹配聊天 Peer Chat
+## 2. AI Chat
 
-提供用户与真实用户之间的匿名一对一聊天。
+Provides five structured emotional support modes:
 
-### 🔹 匹配参数
+### 🔹 2.1 Venting Mode
 
-* 情绪相似度（主权重）
-* 当前需求（想倾诉 / 想倾听）
-* 聊天偏好（短聊 / 长聊）
-* 年龄区间（可选）
+* No judgment or advice
+* Pure listening
+* Uses person-centered listening techniques (emotion reflection & paraphrasing)
 
-### 🔹 匹配后功能
+### 🔹 2.2 Analytic Mode
 
-* 匿名聊天
-* AI 自动分析聊天内容并提示安全边界
-* 聊天结束后可选择：
-  * 👍 点赞
-  * ⭐ 收藏
-  * 🚫 屏蔽
-  * 🔄 继续匹配
+Provides structured emotional analysis:
 
----
+* Trigger factors
+* Emotion chain mapping
+* Need inference
+* Controllable vs. uncontrollable elements
 
-## 4. 匿名树洞社区 Emotion Hub
+### 🔹 2.3 Chill Mode
 
-一个沉浸式匿名情绪社区。
+* Casual and light conversation tone
+* Acts as a companion rather than a counselor
 
-### 🔹 功能点
+### 🔹 2.4 Stabilize Mode
 
-* 发布匿名情绪动态
-* 浏览他人动态
-* 情绪分类：
-  * 焦虑、人际、学业压力、开心、失眠、失落
-* 支持评论、点赞
-* 系统每天推荐一条“需要你回应的树洞”
+Helps users calm down during high-arousal emotional states.
 
-### 🔹 “反向树洞”
+Includes:
 
-* 用户被动收到“别人需要帮助”的动态
-* 强化“我也可以支援别人”的意义感
-* 积极心理学的助人结构设计
+* Breathing guidance
+* Grounding techniques
+* Short attention-shifting exercises
 
----
+### 🔹 2.5 Mindfulness Mode
 
-## 5. 情绪分析与可视化 Emotion Insight
+1–3 minute guided exercises:
 
-基于用户一段时间的输入自动生成：
-
-### 🔹 周/月度总结
-
-* 情绪波动曲线
-* 高频情绪词云
-* 常见触发情境
-* 心情平均得分
-* 建议与趋势预测
+* Breathing practice
+* Body scan
+* Self-compassion practice
 
 ---
 
-## 6. 积分体系与个性化 Personalization
+## 3. Peer Chat
 
-通过游戏化机制帮助用户坚持使用。
+Anonymous one-on-one matching between real users.
 
-### 🔹 积分来源
+### 🔹 Matching Parameters
 
-* 每天完成情绪记录
-* 回复他人树洞
-* 使用正念练习
-* 完成每日任务
+* Emotional similarity (primary weight)
+* Current need (vent / listen)
+* Chat preference (short / long conversation)
+* Age range (optional)
 
-### 🔹 积分用途
+### 🔹 After Matching
 
-* 兑换头像
-* 兑换 AI 风格（如：温柔型、理性型）
-* 个性化个人主页主题
-
----
-
-# 👤 用户系统
-
-* First Login：设置基本档案
-* MBTI 测试
-* 个人主页
-* 账号设置
+* Anonymous chat
+* AI monitors for safety boundary reminders
+* After chat options:
+  * 👍 Like
+  * ⭐ Favorite
+  * 🚫 Block
+  * 🔄 Rematch
 
 ---
 
-# 🛡️ 安全与伦理设计
+## 4. Anonymous Community – Emotion Hub
 
-EmotionConnect 将情绪安全作为最高优先级。
+An immersive anonymous emotional sharing space.
 
-### 🔹 对话安全边界提示
+### 🔹 Features
 
-AI 识别高风险内容并提醒：
+* Post anonymous emotional updates
+* Browse others' posts
+* Emotion categories:
+  * Anxiety, relationships, academic stress, happiness, insomnia, loss
+* Like and comment system
+* Daily recommendation: “Someone who needs your support”
 
-* 不提供诊断
-* 不提供自残方法
-* 鼓励用户寻求专业帮助
-* 提供危机热线信息（需本地化）
+### 🔹 Reverse Tree Hole Feature
 
-### 🔹 内容审核机制
+Users receive posts from others who need help.
 
-* 社区内容自动审核
-* 敏感词识别
-* 举报系统
-
-### 🔹 数据与隐私
-
-* 全程匿名
-* 所有数据本地加密
-* 用户可选择自动清除历史记录
+* Encourages helping behavior
+* Builds meaning and positive psychology reinforcement
+* Designed with prosocial engagement principles
 
 ---
 
-# 🌈 推荐产品流程（User Journey）
+## 5. Emotion Insight & Visualization
 
-1. **登录 → 设置心情 → 选择模式（AI / Peer）**
-2. **聊天或记录 → 系统自动分析 → 积分奖励**
-3. **浏览树洞 → 回应他人 → 获得成就感**
-4. **每周生成情绪报告 → 引导下一周目标**
+AI-generated summaries based on user activity:
+
+### 🔹 Weekly / Monthly Reports
+
+* Emotion fluctuation graph
+* High-frequency emotion word cloud
+* Common trigger situations
+* Average mood score
+* Suggestions & trend predictions
 
 ---
 
-# 🛠 技术架构（前端 / 后端 / AI）
+## 6. Points & Personalization System
 
-通用架构：
+Gamification mechanisms to encourage consistency.
+
+### 🔹 Earn Points By:
+
+* Completing daily emotion logs
+* Responding to community posts
+* Practicing mindfulness
+* Completing daily tasks
+
+### 🔹 Use Points To:
+
+* Unlock avatars
+* Unlock AI styles (gentle, rational, etc.)
+* Customize profile themes
+
+---
+
+# 👤 User System
+
+* First login profile setup
+* MBTI test
+* Personal homepage
+* Account settings
+
+---
+
+# 🛡️ Safety & Ethical Design
+
+EmotionConnect prioritizes emotional safety.
+
+### 🔹 Safety Boundaries in Conversations
+
+AI detects high-risk content and:
+
+* Avoids medical diagnosis
+* Does not provide self-harm instructions
+* Encourages seeking professional help
+* Provides crisis hotline information (localized)
+
+### 🔹 Content Moderation
+
+* Automated community content review
+* Sensitive keyword detection
+* Reporting system
+
+### 🔹 Data & Privacy
+
+* Fully anonymous
+* Encrypted data storage
+* Optional automatic deletion of history
+
+
+---
+
+# 🌈 Recommended User Journey
+
+1. **Login → Set mood → Choose AI or Peer mode**
+2. **Chat or record → System analysis → Earn points**
+3. **Browse community → Respond to others → Gain meaning**
+4. **Weekly emotion report → Set next week's goals**
+
+---
+
+# 🛠 Technical Architecture
 
 ```plaintext
 EmotionConnect/
@@ -258,76 +267,80 @@ EmotionConnect/
 
 ---
 
-# 🗓️ 后续开发路线图（Roadmap）
+# 🗓️ Development Roadmap
 
-### 🟢 Phase 1（基础核心）
+## 🟢 Phase 1 – Core Foundation
 
-* 情绪记录
-* AI 倾诉与分析模式
-* 树洞基础浏览 & 发布
-* 匹配算法 V1（情绪标签 + 偏好）
+- Emotion Diary
+- AI Venting & Analytic Modes
+- Basic Anonymous Community (Browse & Post)
+- Matching Algorithm V1 (Emotion Tags + Preferences)
 
-### 🟡 Phase 2（进阶体验）
+## 🟡 Phase 2 – Enhanced Experience
 
-* 情绪可视化分析
-* 正念练习模块
-* 积分体系 + 头像系统
-* Peer Chat 双向评价系统
+- Emotion Visualization & Analytics
+- Mindfulness Practice Module
+- Points System & Avatar Customization
+- Peer Chat Two-Way Rating System
 
-### 🔴 Phase 3（生态构建）
+## 🔴 Phase 3 – Ecosystem Expansion
 
-* 反向树洞
-* AI 风格商店
-* 情感成长曲线
-* 社区排名与勋章系统
+- Reverse Tree Hole Feature
+- AI Style Marketplace
+- Emotional Growth Curve
+- Community Rankings & Badge System
 
 ---
-### VIP 体系
+## 💎 VIP System
 
-* unlock AI 分析模式
+- Unlock Advanced AI Analytic Mode
 
-# 🚀 快速开始 (Getting Started)
+# 🚀 Getting Started
 
-## 环境要求
+## Environment requirements
 
 * Python 3.9+
 * Node.js 16+
 * PostgreSQL
-* Qdrant (可选，用于向量检索)
+* Qdrant (optional)
 
-## 安装步骤
+## Installation
 
-### 1. 克隆项目
+We have deployed our platform on Render, please refer to https://emoticonnection.onrender.com
+
+Installation is only needed if the Website above is down.
+
+### 1. clone the repo
 
 ```bash
 git clone https://github.com/your-repo/emotionconnect.git
 cd emotionconnect
 ```
 
-### 2. 后端设置 (Backend)
+### 2. Backend settings
 
 ```bash
 cd backend
-# 创建虚拟环境
+# create virtual env
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 安装依赖
+# install requirements
 pip install -r requirements.txt
 
-# 配置环境变量
+# setting environment variables
 cp .env.example .env
-# 编辑 .env 文件，填入 GEMINI_API_KEY 等信息
+# edit .env, fill in GEMINI_API_KEY and others...
 ```
 
-### 3. 运行后端
+### 3. Run the backend
 
 ```bash
 uvicorn app.main:app --reload
 ```
-API 文档地址: http://localhost:8000/docs
+API docs: http://localhost:8000/docs
 
-### 4. 前端设置 (Frontend)
+### 4. Frontend application
 
 ```bash
 cd frontend
@@ -337,19 +350,7 @@ npm start (alternative: npm run dev)
 
 ---
 
-# 🤝 贡献指南 (Contributing)
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 提交 Pull Request
-
----
-
-# 📄 许可证 (License)
+# 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
