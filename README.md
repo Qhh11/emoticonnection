@@ -10,7 +10,7 @@ Through a dual support system of **AI + Peer (real human) chat**, emotion analyt
 
 # 📂 Table of Contents
 
-1. [Project Overview](#project-overview)
+1. [Project Overview](#🧭-Project-Overview)
 2. [Core Feature Modules](#core-feature-modules)
    * [Emotion Diary](#1-emotion-diary)
    * [AI Chat](#2-ai-chat)
@@ -18,7 +18,6 @@ Through a dual support system of **AI + Peer (real human) chat**, emotion analyt
    * [Anonymous Community – Emotion Hub](#4-anonymous-community--emotion-hub)
    * [Emotion Insight & Visualization](#5-emotion-insight--visualization)
    * [Points & Personalization System](#6-points--personalization-system)
-   * [VIP System](#vip-system)
 3. [User System](#user-system)
 4. [Safety & Ethical Design](#safety--ethical-design)
 5. [Recommended User Journey](#recommended-user-journey)
