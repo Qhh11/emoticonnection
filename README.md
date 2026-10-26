@@ -1,5 +1,17 @@
 # 📘 EmotionConnect 
 
+**EmotiConnection** is a collaborative web application combining emotional journaling, AI conversations, and real-time peer support.
+
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Backend | Python, FastAPI, WebSockets |
+| Data and AI | MongoDB, Google Gemini, Weaviate |
+
+Start with [QUICKSTART.md](QUICKSTART.md) for setup and [EMOTICONNECTION_GUIDE_DETAIL.md](EMOTICONNECTION_GUIDE_DETAIL.md) for the detailed guide. Supply your own service credentials through local environment configuration.
+
+This public migration excludes database backups and replaces known credentials throughout Git history. Original team attribution is retained; the source project is [EmotiConnection on LRZ GitLab](https://gitlab.lrz.de/genai/emoticonnection). The feature overview below describes the team's application; deployment and external AI services have not been retested during migration.
+
 EmotionConnect is an **emotional support application designed for young people and students**.  
 
 Through a dual support system of **AI + Peer (real human) chat**, emotion analytics, anonymous community features, and a gamified points system, the app provides users with a safe, anonymous, and warm online emotional companionship experience.

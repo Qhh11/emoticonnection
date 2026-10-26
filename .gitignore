@@ -29,6 +29,10 @@ pip-delete-this-directory.txt
 # Environment variables
 .env
 .env.local
+.env.*
+!.env.example
+database/backup/
+*.bson
 
 # Logs
 *.log
